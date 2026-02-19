@@ -114,6 +114,7 @@ async function initAuth() {
     await Promise.all([
         loadHome(),
         loadDocuments(),
+        loadMedia(),
         loadTeam(),
         loadPerTechActivity(),
         loadBilling(),
@@ -621,6 +622,158 @@ function openDrillPanelForTech(memberId, name) {
 }
 
 // ============================================
+// PHOTOS & VIDEOS
+// ============================================
+
+var teamMedia = [];
+
+async function loadMedia() {
+    // Query documents table for media files (category = 'photo' or 'video')
+    var result = await sb.from('documents')
+        .select('*, users!documents_uploaded_by_fkey(first_name, last_name)')
+        .eq('team_id', currentTeam.id)
+        .in('category', ['photo', 'video'])
+        .order('created_at', { ascending: false });
+
+    teamMedia = result.data || [];
+    renderMediaGrid(teamMedia);
+
+    var indicator = document.getElementById('media-storage-indicator');
+    if (indicator) indicator.textContent = teamMedia.length + ' files uploaded · Unlimited on Business plan.';
+}
+
+function renderMediaGrid(items) {
+    var grid = document.getElementById('media-grid');
+    if (!grid) return;
+
+    if (items.length === 0) {
+        grid.innerHTML = '<div style="padding:48px 20px;text-align:center;color:var(--text-muted,#7c736a);width:100%;">No photos or videos uploaded yet.</div>';
+        return;
+    }
+
+    var photoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>';
+    var videoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><polygon points="12,8 26,16 12,24"/></svg>';
+
+    grid.innerHTML = items.map(function(m) {
+        var isVideo = m.category === 'video' || (m.file_type && m.file_type.startsWith('video/'));
+        var mediaType = isVideo ? 'video' : 'photo';
+        var thumbClass = isVideo ? 'media-thumb media-thumb-video' : 'media-thumb';
+        var svg = isVideo ? videoSvg : photoSvg;
+        var ext = m.file_name.split('.').pop().toUpperCase();
+        var sizeMB = (m.file_size / (1024 * 1024)).toFixed(1);
+        var date = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        var uploaderName = m.users ? (m.users.first_name || '').charAt(0).toUpperCase() + (m.users.first_name || '').slice(1) + ' ' + ((m.users.last_name || '').charAt(0) || '') + '.' : '';
+        var title = m.notes || m.file_name;
+        var site = m.project_tag ? '<div class="media-meta">Site: ' + escapeHtml(m.project_tag) + '</div>' : '';
+
+        return '<div class="media-card" data-media="' + mediaType + '">' +
+            '<div class="' + thumbClass + '" style="background:#e8e4df;">' + svg + '</div>' +
+            '<div class="media-info">' +
+                '<div class="media-name">' + escapeHtml(title) + '</div>' +
+                '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + (uploaderName ? ' · Uploaded by ' + escapeHtml(uploaderName) : '') + '</div>' +
+                site +
+            '</div>' +
+            '<div class="media-actions"><a href="#" class="table-action" onclick="viewMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">View</a> <a href="#" class="table-action table-action-danger" onclick="deleteMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">Delete</a></div>' +
+            '</div>';
+    }).join('');
+}
+
+function searchMedia(query) {
+    var q = query.toLowerCase();
+    if (!q) {
+        renderMediaGrid(teamMedia);
+        return;
+    }
+    var filtered = teamMedia.filter(function(m) {
+        return m.file_name.toLowerCase().includes(q) ||
+            (m.notes && m.notes.toLowerCase().includes(q)) ||
+            (m.project_tag && m.project_tag.toLowerCase().includes(q));
+    });
+    renderMediaGrid(filtered);
+}
+
+async function handleMediaUpload() {
+    var fileInput = document.getElementById('media-file-input');
+    var titleInput = document.getElementById('media-title');
+    var projectInput = document.getElementById('media-project');
+    var notesInput = document.getElementById('media-notes');
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+        showToast('Please select a file.', 'error');
+        return;
+    }
+
+    var file = fileInput.files[0];
+    if (file.size > 200 * 1024 * 1024) {
+        showToast('File exceeds 200MB limit.', 'error');
+        return;
+    }
+
+    var isVideo = file.type.startsWith('video/');
+    var category = isVideo ? 'video' : 'photo';
+    var storagePath = 'teams/' + currentTeam.id + '/media/' + Date.now() + '_' + file.name;
+
+    try {
+        var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
+        if (uploadResult.error) throw uploadResult.error;
+
+        var ext = file.name.split('.').pop().toLowerCase();
+        var insertResult = await sb.from('documents').insert({
+            uploaded_by: currentUser.id,
+            team_id: currentTeam.id,
+            file_name: file.name,
+            file_type: file.type || (isVideo ? 'video/' + ext : 'image/' + ext),
+            file_size: file.size,
+            storage_path: storagePath,
+            category: category,
+            project_tag: projectInput.value.trim() || null,
+            notes: titleInput.value.trim() || notesInput.value.trim() || null,
+            status: 'ready'
+        });
+        if (insertResult.error) throw insertResult.error;
+
+        showToast(file.name + ' uploaded successfully.');
+        closeModal('media-upload-modal');
+
+        fileInput.value = '';
+        titleInput.value = '';
+        projectInput.value = '';
+        notesInput.value = '';
+
+        await loadMedia();
+    } catch (err) {
+        console.error('Media upload error:', err);
+        showToast('Failed to upload: ' + err.message, 'error');
+    }
+}
+
+async function viewMedia(id, storagePath) {
+    try {
+        var signedResult = await sb.storage.from('documents').createSignedUrl(storagePath, 3600);
+        if (signedResult.error) throw signedResult.error;
+        window.open(signedResult.data.signedUrl, '_blank');
+    } catch (err) {
+        console.error('View media error:', err);
+        showToast('Failed to open file.', 'error');
+    }
+}
+
+async function deleteMedia(id, storagePath) {
+    if (!confirm('Delete this file? This cannot be undone.')) return;
+
+    try {
+        await sb.storage.from('documents').remove([storagePath]);
+        var dbResult = await sb.from('documents').delete().eq('id', id);
+        if (dbResult.error) throw dbResult.error;
+        showToast('File deleted.');
+        await loadMedia();
+    } catch (err) {
+        console.error('Delete media error:', err);
+        showToast('Failed to delete file.', 'error');
+    }
+}
+
+// ============================================
 // SUBSCRIPTION & BILLING
 // ============================================
 
@@ -851,6 +1004,9 @@ function timeAgo(date) {
 document.addEventListener('DOMContentLoaded', function() {
     // Upload document button
     document.getElementById('upload-submit-btn').addEventListener('click', handleDocUpload);
+
+    // Upload media button
+    document.getElementById('media-upload-btn').addEventListener('click', handleMediaUpload);
 
     // Invite team member
     document.getElementById('invite-send-btn').addEventListener('click', handleInvite);

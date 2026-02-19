@@ -78,7 +78,7 @@
             <p class="dash-sub">Upload photos and videos of your job sites, progress, or issues. Arrival AI uses these for visual context when answering your questions.</p>
         </div>
 
-        <div class="upload-zone" onclick="document.getElementById('media-input').click()">
+        <div class="upload-zone" id="media-upload-zone" onclick="document.getElementById('media-input').click()">
             <input type="file" id="media-input" style="display:none;" multiple accept="image/*,video/*">
             <svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="40" height="32" rx="6"/><circle cx="16" cy="19" r="5"/><path d="M44 30l-10-11-8 9.5-5-4.5L4 38"/></svg>
             <p class="upload-text">Drop photos or videos here, or click to browse</p>
@@ -86,54 +86,14 @@
         </div>
 
         <div class="filter-tabs" style="margin-bottom:24px;">
-            <button class="filter-tab active" onclick="activateTab(this)">All</button>
-            <button class="filter-tab" onclick="activateTab(this)">Photos</button>
-            <button class="filter-tab" onclick="activateTab(this)">Videos</button>
+            <button class="filter-tab active" onclick="filterMediaIndiv(this,'all')">All</button>
+            <button class="filter-tab" onclick="filterMediaIndiv(this,'photo')">Photos</button>
+            <button class="filter-tab" onclick="filterMediaIndiv(this,'video')">Videos</button>
         </div>
 
-        <div class="media-grid">
-            <div class="media-card">
-                <div class="media-thumb" style="background:#e8e4df;">
-                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>
-                </div>
-                <div class="media-info">
-                    <div class="media-name">Condenser unit — before</div>
-                    <div class="media-meta">JPG · 2.4 MB · Feb 15</div>
-                </div>
-                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
-            </div>
-            <div class="media-card">
-                <div class="media-thumb media-thumb-video" style="background:#e8e4df;">
-                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><polygon points="12,8 26,16 12,24"/></svg>
-                </div>
-                <div class="media-info">
-                    <div class="media-name">Ductwork walkthrough</div>
-                    <div class="media-meta">MP4 · 18.1 MB · Feb 14 · 0:42</div>
-                </div>
-                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
-            </div>
-            <div class="media-card">
-                <div class="media-thumb" style="background:#e8e4df;">
-                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>
-                </div>
-                <div class="media-info">
-                    <div class="media-name">Panel board wiring</div>
-                    <div class="media-meta">JPG · 3.1 MB · Feb 12</div>
-                </div>
-                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
-            </div>
-            <div class="media-card">
-                <div class="media-thumb" style="background:#e8e4df;">
-                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>
-                </div>
-                <div class="media-info">
-                    <div class="media-name">Job site — 445 Oak St</div>
-                    <div class="media-meta">PNG · 4.7 MB · Feb 8</div>
-                </div>
-                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
-            </div>
+        <div class="media-grid" id="media-grid">
         </div>
-        <div class="storage-indicator" style="margin-top:24px;">4 files uploaded <span class="plan-badge">Pro</span></div>
+        <div class="storage-indicator" id="media-storage-indicator" style="margin-top:24px;">0 files uploaded <span class="plan-badge">Free</span></div>
     </div>
 
     <!-- SUBSCRIPTION & BILLING -->
