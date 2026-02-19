@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arrival — My Account</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+<div id="toast-container" style="position:fixed;top:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
+
+<aside class="sidebar">
+    <div class="sidebar-top">
+        <a href="#" class="sidebar-logo" onclick="showPage('documents'); return false;"><img src="logo.svg" alt="Arrival" style="height: 80px;"></a>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="#" class="sidebar-link active" onclick="showPage('documents'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2h8l4 4v10a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z"/><path d="M12 2v4h4"/></svg>
+            My Documents
+        </a>
+        <a href="#" class="sidebar-link" onclick="showPage('photos'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="14" height="12" rx="2"/><circle cx="6.5" cy="7.5" r="1.5"/><path d="M16 12l-3.5-4L9 12.5 7 10l-5 5"/></svg>
+            Photos & Videos
+        </a>
+        <a href="#" class="sidebar-link" onclick="showPage('billing'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2 8h14"/></svg>
+            Subscription & Billing
+        </a>
+        <a href="#" class="sidebar-link" onclick="showPage('settings'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="3"/><path d="M9 1v2M9 15v2M1 9h2M15 9h2M3.3 3.3l1.4 1.4M13.3 13.3l1.4 1.4M3.3 14.7l1.4-1.4M13.3 4.7l1.4-1.4"/></svg>
+            Account Settings
+        </a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="#" class="sidebar-link" onclick="return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="7"/><path d="M6 9h6M9 6v6"/></svg>
+            Help Centre
+        </a>
+        <a id="sidebar-logout" class='sidebar-link sidebar-logout' href='#' onclick="handleLogout(); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H4a2 2 0 00-2 2v12a2 2 0 002 2h2M10 14l4-4-4-4M7 10h7"/></svg>
+            Log Out
+        </a>
+    </div>
+</aside>
+
+<main class="main-content">
+
+    <!-- MY DOCUMENTS -->
+    <div class="dash-page active" id="page-documents">
+        <div class="dash-header">
+            <h1>Your Documents</h1>
+            <p class="dash-sub">Upload manuals, specs, or reference material. Query them from the Arrival app on any job.</p>
+        </div>
+
+        <div id="upload-zone" class="upload-zone" onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" style="display:none;" multiple accept=".pdf,.jpg,.jpeg,.png,.docx">
+            <svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><path d="M24 32V16M16 22l8-8 8 8"/><rect x="4" y="4" width="40" height="40" rx="8"/></svg>
+            <p class="upload-text">Drop files here or click to browse</p>
+            <p class="upload-formats">PDF, JPG, PNG, DOCX — Max 50MB per file</p>
+        </div>
+
+        <div class="table-wrapper">
+            <table class="dash-table">
+                <thead><tr><th>File Name</th><th>Type</th><th>Status</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                <tbody id="documents-tbody"></tbody>
+            </table>
+        </div>
+        <div id="storage-indicator" class="storage-indicator">0 / 20 documents used <span id="plan-badge" class="plan-badge">Free</span></div>
+    </div>
+
+    <!-- PHOTOS & VIDEOS -->
+    <div class="dash-page" id="page-photos">
+        <div class="dash-header">
+            <h1>Photos & Videos</h1>
+            <p class="dash-sub">Upload photos and videos of your job sites, progress, or issues. Arrival AI uses these for visual context when answering your questions.</p>
+        </div>
+
+        <div class="upload-zone" onclick="document.getElementById('media-input').click()">
+            <input type="file" id="media-input" style="display:none;" multiple accept="image/*,video/*">
+            <svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="40" height="32" rx="6"/><circle cx="16" cy="19" r="5"/><path d="M44 30l-10-11-8 9.5-5-4.5L4 38"/></svg>
+            <p class="upload-text">Drop photos or videos here, or click to browse</p>
+            <p class="upload-formats">JPG, PNG, HEIC, MP4, MOV — Max 200MB per file</p>
+        </div>
+
+        <div class="filter-tabs" style="margin-bottom:24px;">
+            <button class="filter-tab active" onclick="activateTab(this)">All</button>
+            <button class="filter-tab" onclick="activateTab(this)">Photos</button>
+            <button class="filter-tab" onclick="activateTab(this)">Videos</button>
+        </div>
+
+        <div class="media-grid">
+            <div class="media-card">
+                <div class="media-thumb" style="background:#e8e4df;">
+                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>
+                </div>
+                <div class="media-info">
+                    <div class="media-name">Condenser unit — before</div>
+                    <div class="media-meta">JPG · 2.4 MB · Feb 15</div>
+                </div>
+                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
+            </div>
+            <div class="media-card">
+                <div class="media-thumb media-thumb-video" style="background:#e8e4df;">
+                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><polygon points="12,8 26,16 12,24"/></svg>
+                </div>
+                <div class="media-info">
+                    <div class="media-name">Ductwork walkthrough</div>
+                    <div class="media-meta">MP4 · 18.1 MB · Feb 14 · 0:42</div>
+                </div>
+                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
+            </div>
+            <div class="media-card">
+                <div class="media-thumb" style="background:#e8e4df;">
+                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>
+                </div>
+                <div class="media-info">
+                    <div class="media-name">Panel board wiring</div>
+                    <div class="media-meta">JPG · 3.1 MB · Feb 12</div>
+                </div>
+                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
+            </div>
+            <div class="media-card">
+                <div class="media-thumb" style="background:#e8e4df;">
+                    <svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>
+                </div>
+                <div class="media-info">
+                    <div class="media-name">Job site — 445 Oak St</div>
+                    <div class="media-meta">PNG · 4.7 MB · Feb 8</div>
+                </div>
+                <div class="media-actions"><a href="#" class="table-action">View</a> <a href="#" class="table-action table-action-danger">Delete</a></div>
+            </div>
+        </div>
+        <div class="storage-indicator" style="margin-top:24px;">4 files uploaded <span class="plan-badge">Pro</span></div>
+    </div>
+
+    <!-- SUBSCRIPTION & BILLING -->
+    <div class="dash-page" id="page-billing">
+        <div class="dash-header"><h1>Subscription & Billing</h1></div>
+
+        <div class="plan-card">
+            <div class="plan-card-info">
+                <div id="billing-plan-name" class="plan-card-name">Free Plan</div>
+                <div id="billing-plan-price" class="plan-card-price">$0/month</div>
+                <div id="billing-plan-detail" class="plan-card-detail"></div>
+            </div>
+            <div class="plan-card-actions">
+                <button id="billing-upgrade-btn" class="btn btn-primary">Upgrade to Pro</button>
+                <button id="billing-cancel-btn" class="btn btn-outline btn-cancel" onclick="openModal('cancel-modal')" style="display:none;">Cancel Subscription</button>
+            </div>
+        </div>
+
+        <div id="billing-payment-section" class="dash-section" style="display:none;">
+            <h2>Payment Method</h2>
+            <div class="payment-row">
+                <div class="visa-badge">VISA</div>
+                <span>Visa ending in 4242</span>
+                <button class="btn btn-sm btn-outline" style="margin-left:auto;">Update</button>
+            </div>
+        </div>
+
+        <div id="billing-invoice-section" class="dash-section" style="display:none;">
+            <h2>Invoice History</h2>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Download</th></tr></thead>
+                    <tbody>
+                        <tr><td>Feb 1, 2026</td><td>$25.00</td><td><span class="status-paid">Paid</span></td><td><a href="#" class="table-action">PDF</a></td></tr>
+                        <tr><td>Jan 1, 2026</td><td>$25.00</td><td><span class="status-paid">Paid</span></td><td><a href="#" class="table-action">PDF</a></td></tr>
+                        <tr><td>Dec 1, 2025</td><td>$25.00</td><td><span class="status-paid">Paid</span></td><td><a href="#" class="table-action">PDF</a></td></tr>
+                        <tr><td>Nov 1, 2025</td><td>$25.00</td><td><span class="status-paid">Paid</span></td><td><a href="#" class="table-action">PDF</a></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACCOUNT SETTINGS -->
+    <div class="dash-page" id="page-settings">
+        <div class="dash-header"><h1>Account Settings</h1></div>
+
+        <div class="settings-card">
+            <h2>Profile</h2>
+            <div class="settings-form">
+                <div class="form-row">
+                    <div class="form-group"><label>First Name</label><input id="settings-first-name" type="text" value=""></div>
+                    <div class="form-group"><label>Last Name</label><input id="settings-last-name" type="text" value=""></div>
+                </div>
+                <div class="form-group"><label>Email</label><input id="settings-email" type="email" value="" disabled></div>
+                <div class="form-row">
+                    <div class="form-group"><label>Primary Trade</label><select id="settings-trade"><option value="hvac">HVAC</option><option value="plumbing">Plumbing</option><option value="electrical">Electrical</option><option value="general_construction">General Contracting</option><option value="appliance_repair">Appliance Repair</option><option value="other">Other</option></select></div>
+                    <div class="form-group"><label>Experience Level</label><select id="settings-experience"><option value="apprentice">Apprentice</option><option value="1_3_years">1–3 Years</option><option value="3_10_years">3–10 Years</option><option value="10_plus_years">10+ Years</option><option value="diy_homeowner">DIY / Homeowner</option></select></div>
+                </div>
+                <button id="settings-save-btn" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Password</h2>
+            <div class="settings-form">
+                <div class="form-row">
+                    <div class="form-group"><label>New Password</label><input id="settings-new-password" type="password" placeholder="••••••••"></div>
+                    <div class="form-group"><label>Confirm</label><input id="settings-confirm-password" type="password" placeholder="••••••••"></div>
+                </div>
+                <button id="settings-password-btn" class="btn btn-primary">Update Password</button>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Preferences</h2>
+            <div class="pref-row">
+                <div class="pref-info"><strong>Preferred units</strong><span>Imperial or Metric</span></div>
+                <div id="pref-units" class="toggle-group"><button class="toggle-btn active" data-value="imperial" onclick="toggleBtn(this)">Imperial</button><button class="toggle-btn" data-value="metric" onclick="toggleBtn(this)">Metric</button></div>
+            </div>
+            <div class="pref-row">
+                <div class="pref-info"><strong>Explanation depth</strong><span>How detailed should AI responses be?</span></div>
+                <div class="radio-group"><label class="radio-opt"><input type="radio" name="depth" value="brief"> Brief</label><label class="radio-opt"><input type="radio" name="depth" value="standard" checked> Standard</label><label class="radio-opt"><input type="radio" name="depth" value="detailed"> Detailed</label></div>
+            </div>
+            <div class="pref-row">
+                <div class="pref-info"><strong>Voice output</strong><span>Hear AI responses read aloud</span></div>
+                <div id="pref-voice" class="toggle-switch" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            </div>
+        </div>
+
+        <div class="settings-card settings-danger">
+            <h2>Danger Zone</h2>
+            <p>Permanently delete your account and all associated data.</p>
+            <button class="btn btn-danger" onclick="openModal('delete-modal')">Delete My Account</button>
+        </div>
+    </div>
+
+</main>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="cancel-modal" onclick="if(event.target===this)closeModal('cancel-modal')">
+    <div class="modal">
+        <h2>Cancel Subscription</h2>
+        <p>Are you sure? Your account will revert to Free at the end of this billing period.</p>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('cancel-modal')">Keep Subscription</button><button id="cancel-confirm-btn" class="btn btn-danger">Cancel Subscription</button></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="delete-modal" onclick="if(event.target===this)closeModal('delete-modal')">
+    <div class="modal">
+        <h2>Delete Account</h2>
+        <p>This will permanently delete your account, all conversations, and all uploaded documents. This cannot be undone.</p>
+        <div class="form-group"><label>Type DELETE to confirm</label><input id="delete-confirm-input" type="text" placeholder="DELETE"></div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('delete-modal')">Cancel</button><button id="delete-confirm-btn" class="btn btn-danger">Delete My Account</button></div>
+    </div>
+</div>
+
+<script>
+function showPage(id) {
+    document.querySelectorAll('.dash-page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+    if(event && event.target) event.target.closest('.sidebar-link')?.classList.add('active');
+    window.scrollTo(0,0);
+}
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function activateTab(el) {
+    el.parentElement.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+}
+function toggleBtn(el) {
+    el.parentElement.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
