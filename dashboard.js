@@ -226,34 +226,64 @@ async function deleteDocument(docId, storagePath) {
 
 function loadBilling() {
     var plan = currentSubscription ? currentSubscription.plan : 'free';
-    var price = PLAN_PRICES[plan] || '$0/month';
 
-    document.getElementById('billing-plan-name').textContent = capitalize(plan) + ' Plan';
-    document.getElementById('billing-plan-price').textContent = price;
-
+    // Billing detail text (next billing date)
     var detailEl = document.getElementById('billing-plan-detail');
     if (currentSubscription && currentSubscription.current_period_end) {
         var endDate = new Date(currentSubscription.current_period_end);
-        detailEl.textContent = 'Next billing date: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        detailEl.textContent = 'You are on the ' + capitalize(plan) + ' plan. Next billing date: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     } else if (plan === 'free') {
-        detailEl.textContent = '';
+        detailEl.textContent = 'You are on the Free plan. Choose a plan below to unlock more features.';
     }
 
-    // Upgrade button text
-    var upgradeBtn = document.getElementById('billing-upgrade-btn');
+    // Highlight current plan card
+    var cards = ['free', 'pro', 'business'];
+    cards.forEach(function(p) {
+        var card = document.getElementById('plan-card-' + p);
+        if (card) card.classList.toggle('plan-active', p === plan);
+    });
+
+    // Update button states for each plan card
+    var btnFree = document.getElementById('billing-btn-free');
+    var btnPro = document.getElementById('billing-btn-pro');
+    var btnBiz = document.getElementById('billing-btn-biz');
+
     if (plan === 'free') {
-        upgradeBtn.textContent = 'Upgrade to Pro';
+        btnFree.textContent = 'Current Plan';
+        btnFree.disabled = true;
+        btnFree.className = 'btn btn-outline';
+        btnPro.textContent = 'Upgrade to Pro';
+        btnPro.disabled = false;
+        btnPro.className = 'btn btn-primary';
+        btnBiz.textContent = 'Upgrade to Business';
+        btnBiz.disabled = false;
+        btnBiz.className = 'btn btn-primary';
     } else if (plan === 'pro') {
-        upgradeBtn.textContent = 'Upgrade to Business';
-    } else {
-        upgradeBtn.textContent = 'Manage Plan';
+        btnFree.textContent = 'Downgrade';
+        btnFree.disabled = true;
+        btnFree.className = 'btn btn-outline';
+        btnPro.textContent = 'Current Plan';
+        btnPro.disabled = true;
+        btnPro.className = 'btn btn-outline';
+        btnBiz.textContent = 'Upgrade to Business';
+        btnBiz.disabled = false;
+        btnBiz.className = 'btn btn-primary';
+    } else if (plan === 'business') {
+        btnFree.textContent = 'Downgrade';
+        btnFree.disabled = true;
+        btnFree.className = 'btn btn-outline';
+        btnPro.textContent = 'Downgrade';
+        btnPro.disabled = true;
+        btnPro.className = 'btn btn-outline';
+        btnBiz.textContent = 'Current Plan';
+        btnBiz.disabled = true;
+        btnBiz.className = 'btn btn-outline';
     }
 
-    // Show cancel button for paid plans
-    var cancelBtn = document.getElementById('billing-cancel-btn');
-    cancelBtn.style.display = (plan !== 'free') ? '' : 'none';
+    // Show cancel + payment + invoice sections for paid plans
+    var cancelSection = document.getElementById('billing-cancel-section');
+    if (cancelSection) cancelSection.style.display = (plan !== 'free') ? '' : 'none';
 
-    // Show payment and invoice sections for paid plans
     document.getElementById('billing-payment-section').style.display = (plan !== 'free') ? '' : 'none';
     document.getElementById('billing-invoice-section').style.display = (plan !== 'free') ? '' : 'none';
 }
@@ -592,6 +622,30 @@ function capitalize(str) {
 // STRIPE BILLING HELPERS
 // ============================================
 
+async function startCheckout(targetPlan) {
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        showToast('Redirecting to checkout...');
+        var response = await fetch('/.netlify/functions/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ plan: targetPlan, userId: currentUser.id, email: currentUser.email })
+        });
+
+        var data = await response.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            showToast(data.error || 'Failed to start checkout.', 'error');
+        }
+    } catch (err) {
+        console.error('Checkout error:', err);
+        showToast('Something went wrong. Please try again.', 'error');
+    }
+}
+
 async function openBillingPortal() {
     try {
         var session = await sb.auth.getSession();
@@ -665,33 +719,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Delete account
     document.getElementById('delete-confirm-btn').addEventListener('click', handleDeleteAccount);
 
-    // Billing — Upgrade button
-    document.getElementById('billing-upgrade-btn').addEventListener('click', async function() {
-        var plan = currentSubscription ? currentSubscription.plan : 'free';
-        var targetPlan = (plan === 'free' || plan === 'pro') ? 'pro' : 'business';
-        if (plan === 'pro') targetPlan = 'business';
+    // Billing — Upgrade to Pro
+    document.getElementById('billing-btn-pro').addEventListener('click', function() {
+        startCheckout('pro');
+    });
 
-        try {
-            var session = await sb.auth.getSession();
-            var token = session.data.session.access_token;
-
-            showToast('Redirecting to checkout...');
-            var response = await fetch('/.netlify/functions/create-checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ plan: targetPlan, userId: currentUser.id, email: currentUser.email })
-            });
-
-            var data = await response.json();
-            if (data.url) {
-                window.location.href = data.url;
-            } else {
-                showToast(data.error || 'Failed to start checkout.', 'error');
-            }
-        } catch (err) {
-            console.error('Checkout error:', err);
-            showToast('Something went wrong. Please try again.', 'error');
-        }
+    // Billing — Upgrade to Business
+    document.getElementById('billing-btn-biz').addEventListener('click', function() {
+        startCheckout('business');
     });
 
     // Billing — Cancel subscription (opens Stripe portal)

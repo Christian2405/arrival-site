@@ -102,18 +102,84 @@
 
     <!-- SUBSCRIPTION & BILLING -->
     <div class="dash-page" id="page-billing">
-        <div class="dash-header"><h1>Subscription & Billing</h1></div>
+        <div class="dash-header">
+            <h1>Subscription & Billing</h1>
+            <p class="dash-sub" id="billing-plan-detail"></p>
+        </div>
 
-        <div class="plan-card">
-            <div class="plan-card-info">
-                <div id="billing-plan-name" class="plan-card-name">Free Plan</div>
-                <div id="billing-plan-price" class="plan-card-price">$0/month</div>
-                <div id="billing-plan-detail" class="plan-card-detail"></div>
+        <!-- Plan Cards Grid -->
+        <div class="billing-plans-grid">
+            <!-- Free -->
+            <div class="pricing-card" id="plan-card-free">
+                <div class="pricing-header"><h3>Free</h3></div>
+                <div class="pricing-subtitle">Try Arrival. No commitment.</div>
+                <div class="pricing-price">$0</div>
+                <div class="pricing-desc">Free for everyone</div>
+                <div class="pricing-cta">
+                    <button id="billing-btn-free" class="btn btn-outline" disabled>Current Plan</button>
+                </div>
+                <hr class="pricing-divider">
+                <div class="pricing-features">
+                    <div class="pricing-feature">10 queries per day</div>
+                    <div class="pricing-feature">5 camera snaps per day</div>
+                    <div class="pricing-feature">Voice + Text</div>
+                    <div class="pricing-feature">All trades supported</div>
+                    <div class="pricing-feature">24-hour memory</div>
+                    <div class="pricing-feature dim">No document uploads</div>
+                    <div class="pricing-feature dim">Community support only</div>
+                </div>
             </div>
-            <div class="plan-card-actions">
-                <button id="billing-upgrade-btn" class="btn btn-primary">Upgrade to Pro</button>
-                <button id="billing-cancel-btn" class="btn btn-outline btn-cancel" onclick="openModal('cancel-modal')" style="display:none;">Cancel Subscription</button>
+
+            <!-- Pro -->
+            <div class="pricing-card" id="plan-card-pro">
+                <div class="pricing-badge">Most Popular</div>
+                <div class="pricing-header"><h3>Pro</h3></div>
+                <div class="pricing-subtitle">For independent techs and small crews.</div>
+                <div class="pricing-price">$25 <span>/month</span></div>
+                <div class="pricing-desc">Per person billed monthly</div>
+                <div class="pricing-cta">
+                    <button id="billing-btn-pro" class="btn btn-primary">Upgrade to Pro</button>
+                </div>
+                <hr class="pricing-divider">
+                <div class="pricing-inherits">Everything in Free, plus:</div>
+                <div class="pricing-features">
+                    <div class="pricing-feature">Unlimited queries</div>
+                    <div class="pricing-feature">Unlimited camera snaps</div>
+                    <div class="pricing-feature">Unlimited memory</div>
+                    <div class="pricing-feature">Unlimited document uploads</div>
+                    <div class="pricing-feature">Personal usage stats</div>
+                    <div class="pricing-feature">Email support</div>
+                    <div class="pricing-feature">Priority support</div>
+                    <div class="pricing-feature">Early access to new features</div>
+                </div>
             </div>
+
+            <!-- Business -->
+            <div class="pricing-card" id="plan-card-business">
+                <div class="pricing-header"><h3>Business</h3></div>
+                <div class="pricing-subtitle">For teams and contractors.</div>
+                <div class="pricing-price">$250 <span>/month</span></div>
+                <div class="pricing-desc">Flat rate. 10 seats included.</div>
+                <div class="pricing-cta">
+                    <button id="billing-btn-biz" class="btn btn-primary">Upgrade to Business</button>
+                </div>
+                <hr class="pricing-divider">
+                <div class="pricing-inherits">Everything in Pro, plus:</div>
+                <div class="pricing-features">
+                    <div class="pricing-feature">10 seats included</div>
+                    <div class="pricing-feature">Unlimited queries per seat</div>
+                    <div class="pricing-feature">Team shared memory</div>
+                    <div class="pricing-feature">Shared team library</div>
+                    <div class="pricing-feature">Admin dashboard & analytics</div>
+                    <div class="pricing-feature">Priority support + phone</div>
+                    <div class="pricing-feature">Central billing</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cancel button for paid plans -->
+        <div id="billing-cancel-section" style="display:none; margin-top:16px; text-align:center;">
+            <button id="billing-cancel-btn" class="btn btn-outline btn-cancel" onclick="openModal('cancel-modal')">Cancel Subscription</button>
         </div>
 
         <div id="billing-payment-section" class="dash-section" style="display:none;">
@@ -128,7 +194,6 @@
             <h2>Invoice History</h2>
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">View and download invoices from the billing portal.</p>
             <button class="btn btn-sm btn-outline table-action" style="font-size:14px;">View Invoices</button>
-            </div>
         </div>
     </div>
 
