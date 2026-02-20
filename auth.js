@@ -12,27 +12,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- DEV MODE ---
 const IS_DEV = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
 
-// --- PROTECTED PAGES ---
-const PROTECTED_PAGES = ['dashboard-individual', 'dashboard-business'];
-
-// Store reference to original showPage before overriding
+// Store reference to original showPage
 const _originalShowPage = window.showPage;
-
-// Override showPage with route protection
-window.showPage = function(pageId) {
-    if (PROTECTED_PAGES.includes(pageId)) {
-        sb.auth.getUser().then(({ data: { user } }) => {
-            if (!user && !IS_DEV) {
-                _originalShowPage('login');
-                showToast('Please sign in to access your dashboard.', 'error');
-            } else {
-                _originalShowPage(pageId);
-            }
-        });
-    } else {
-        _originalShowPage(pageId);
-    }
-};
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -166,10 +147,7 @@ async function handleSignup(event) {
         if (subResult.error) throw subResult.error;
 
         // 4. Redirect to individual dashboard
-        updateNavForAuth(result.data.user);
-        showToast('Account created successfully!');
-        _originalShowPage('dashboard-individual');
-        loadIndividualDashboard(result.data.user);
+        window.location.href = '/dashboard-individual';
 
     } catch (error) {
         console.error('Signup error:', error);
@@ -217,17 +195,11 @@ async function handleLogin(event) {
             .eq('status', 'active')
             .limit(1);
 
-        updateNavForAuth(result.data.user);
-
         if (tmResult.data && tmResult.data.length > 0) {
-            _originalShowPage('dashboard-business');
-            loadBusinessDashboard(result.data.user, tmResult.data[0].team_id);
+            window.location.href = '/dashboard-business';
         } else {
-            _originalShowPage('dashboard-individual');
-            loadIndividualDashboard(result.data.user);
+            window.location.href = '/dashboard-individual';
         }
-
-        showToast('Welcome back!');
 
     } catch (error) {
         console.error('Login error:', error);
@@ -311,9 +283,7 @@ async function handlePasswordUpdate(event) {
 
 async function handleLogout() {
     await sb.auth.signOut();
-    updateNavForAuth(null);
-    _originalShowPage('home');
-    showToast('Signed out successfully.');
+    window.location.href = '/';
 }
 
 // ============================================
@@ -337,86 +307,12 @@ async function navigateToDashboard() {
         .limit(1);
 
     if (tmResult.data && tmResult.data.length > 0) {
-        _originalShowPage('dashboard-business');
-        loadBusinessDashboard(user, tmResult.data[0].team_id);
+        window.location.href = '/dashboard-business';
     } else {
-        _originalShowPage('dashboard-individual');
-        loadIndividualDashboard(user);
+        window.location.href = '/dashboard-individual';
     }
 }
 
-// ============================================
-// DASHBOARD POPULATION
-// ============================================
-
-async function loadIndividualDashboard(user) {
-    var result = await sb
-        .from('users')
-        .select('first_name, last_name, primary_trade, account_type')
-        .eq('id', user.id)
-        .single();
-
-    if (result.data) {
-        document.getElementById('dashboard-user-name').textContent = result.data.first_name || 'User';
-        document.getElementById('dashboard-user-trade').textContent =
-            (result.data.primary_trade || '').replace(/_/g, ' ');
-        document.getElementById('dashboard-user-plan').textContent = result.data.account_type || 'free';
-    }
-}
-
-async function loadBusinessDashboard(user, teamId) {
-    // Fetch team info
-    var teamResult = await sb
-        .from('teams')
-        .select('name, max_seats')
-        .eq('id', teamId)
-        .single();
-
-    if (teamResult.data) {
-        document.getElementById('business-team-name').textContent = teamResult.data.name;
-    }
-
-    // Fetch team members
-    var membersResult = await sb
-        .from('team_members')
-        .select('email, role, status, user_id')
-        .eq('team_id', teamId);
-
-    if (membersResult.data) {
-        document.getElementById('business-member-count').textContent = membersResult.data.length;
-        document.getElementById('business-seats-used').textContent = membersResult.data.length;
-
-        var tbody = document.getElementById('team-members-tbody');
-        tbody.innerHTML = membersResult.data.map(function(m) {
-            return '<tr>' +
-                '<td>' + m.email.split('@')[0] + '</td>' +
-                '<td>' + m.email + '</td>' +
-                '<td style="text-transform: capitalize;">' + m.role + '</td>' +
-                '<td><span class="status-badge status-' + m.status + '">' + m.status + '</span></td>' +
-                '</tr>';
-        }).join('');
-    }
-
-    // Fetch team documents
-    var docsResult = await sb
-        .from('documents')
-        .select('file_name, category, uploaded_by, created_at')
-        .eq('team_id', teamId)
-        .order('created_at', { ascending: false });
-
-    if (docsResult.data && docsResult.data.length > 0) {
-        document.getElementById('business-doc-count').textContent = docsResult.data.length;
-        var docTbody = document.getElementById('team-documents-tbody');
-        docTbody.innerHTML = docsResult.data.map(function(d) {
-            return '<tr>' +
-                '<td>' + d.file_name + '</td>' +
-                '<td style="text-transform: capitalize;">' + d.category.replace(/_/g, ' ') + '</td>' +
-                '<td>' + (d.uploaded_by || '').substring(0, 8) + '...</td>' +
-                '<td>' + new Date(d.created_at).toLocaleDateString() + '</td>' +
-                '</tr>';
-        }).join('');
-    }
-}
 
 // ============================================
 // DEV BYPASS
@@ -472,10 +368,7 @@ async function devSkipAsPro() {
         // Ensure account_type is pro
         await sb.from('users').update({ account_type: 'pro' }).eq('id', result.data.user.id);
 
-        updateNavForAuth(result.data.user);
-        _originalShowPage('dashboard-individual');
-        loadIndividualDashboard(result.data.user);
-        showToast('Signed in as Pro test user');
+        window.location.href = '/dashboard-individual';
 
     } catch (err) {
         console.error('Dev skip pro error:', err);
@@ -569,10 +462,7 @@ async function devSkipAsBusinessAdmin() {
 
         var teamId = tmResult.data && tmResult.data[0] ? tmResult.data[0].team_id : null;
 
-        updateNavForAuth(result.data.user);
-        _originalShowPage('dashboard-business');
-        if (teamId) loadBusinessDashboard(result.data.user, teamId);
-        showToast('Signed in as Business Admin test user');
+        window.location.href = '/dashboard-business';
 
     } catch (err) {
         console.error('Dev skip business error:', err);
