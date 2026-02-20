@@ -108,15 +108,9 @@ async function loadDocuments() {
     document.getElementById('storage-indicator').innerHTML =
         docs.length + ' / ' + limit + ' documents used <span id="plan-badge" class="plan-badge">' + capitalize(plan) + '</span>';
 
-    // Gate uploads for free users
+    // Gate uploads if limit reached
     var uploadZone = document.getElementById('upload-zone');
-    if (plan === 'free') {
-        uploadZone.innerHTML = '<svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><path d="M24 32V16M16 22l8-8 8 8"/><rect x="4" y="4" width="40" height="40" rx="8"/></svg>' +
-            '<p class="upload-text">Upgrade to Pro to upload documents</p>' +
-            '<p class="upload-formats"><a href="/pricing" style="color:var(--accent,#b5935a);text-decoration:underline;">View plans</a></p>';
-        uploadZone.onclick = null;
-        uploadZone.style.cursor = 'default';
-    } else if (docs.length >= limit) {
+    if (docs.length >= limit) {
         uploadZone.innerHTML = '<svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><path d="M24 32V16M16 22l8-8 8 8"/><rect x="4" y="4" width="40" height="40" rx="8"/></svg>' +
             '<p class="upload-text">Document limit reached</p>' +
             '<p class="upload-formats">Upgrade your plan to upload more documents.</p>';
@@ -128,12 +122,6 @@ async function loadDocuments() {
 async function handleFileUpload(event) {
     var files = event.target.files;
     if (!files || files.length === 0) return;
-
-    var plan = currentProfile ? currentProfile.account_type : 'free';
-    if (plan === 'free') {
-        showToast('Upgrade to Pro to upload documents.', 'error');
-        return;
-    }
 
     var total = files.length;
     var uploaded = 0;
