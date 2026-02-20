@@ -457,12 +457,20 @@ async function handleMediaUpload(event) {
             continue;
         }
 
+        showToast('Uploading ' + file.name + '...');
+
         var isVideo = file.type.startsWith('video/');
         var category = isVideo ? 'video' : 'photo';
-        var storagePath = currentUser.id + '/media/' + Date.now() + '_' + file.name;
+        var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        var storagePath = currentUser.id + '/media/' + Date.now() + '_' + safeName;
 
         try {
-            var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
+            console.log('Uploading to path:', storagePath, 'size:', file.size, 'type:', file.type);
+            var uploadResult = await sb.storage.from('documents').upload(storagePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+            console.log('Upload result:', JSON.stringify(uploadResult));
             if (uploadResult.error) throw uploadResult.error;
 
             var ext = file.name.split('.').pop().toLowerCase();
@@ -476,12 +484,13 @@ async function handleMediaUpload(event) {
                 category: category,
                 status: 'ready'
             });
+            console.log('DB insert result:', JSON.stringify(insertResult));
             if (insertResult.error) throw insertResult.error;
 
-            showToast(file.name + ' uploaded successfully.');
+            showToast(file.name + ' uploaded!');
         } catch (err) {
             console.error('Media upload error:', err);
-            showToast('Failed to upload ' + file.name + ': ' + err.message, 'error');
+            showToast('Failed: ' + (err.message || err.statusCode || JSON.stringify(err)), 'error');
         }
     }
 
