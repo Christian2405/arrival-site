@@ -416,7 +416,7 @@ async function loadMedia() {
     if (indicator) indicator.innerHTML = userMedia.length + ' files uploaded <span class="plan-badge">' + capitalize(plan) + '</span>';
 }
 
-function renderMediaGrid(items) {
+async function renderMediaGrid(items) {
     var grid = document.getElementById('media-grid');
     if (!grid) return;
 
@@ -425,21 +425,38 @@ function renderMediaGrid(items) {
         return;
     }
 
-    var photoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>';
-    var videoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><polygon points="12,8 26,16 12,24"/></svg>';
+    var videoPlaySvg = '<svg width="28" height="28" viewBox="0 0 28 28" fill="white" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));"><polygon points="10,6 24,14 10,22"/></svg>';
+
+    // Get signed URLs for all items in parallel
+    var paths = items.map(function(m) { return m.storage_path; });
+    var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
+    var urlMap = {};
+    if (signedResults.data) {
+        signedResults.data.forEach(function(r) {
+            if (r.signedUrl) urlMap[r.path] = r.signedUrl;
+        });
+    }
 
     grid.innerHTML = items.map(function(m) {
         var isVideo = m.category === 'video' || (m.file_type && m.file_type.startsWith('video/'));
         var mediaType = isVideo ? 'video' : 'photo';
-        var thumbClass = isVideo ? 'media-thumb media-thumb-video' : 'media-thumb';
-        var svg = isVideo ? videoSvg : photoSvg;
         var ext = m.file_name.split('.').pop().toUpperCase();
         var sizeMB = (m.file_size / (1024 * 1024)).toFixed(1);
         var date = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         var title = m.notes || m.file_name;
+        var url = urlMap[m.storage_path] || '';
+
+        var thumbHtml;
+        if (url && !isVideo) {
+            thumbHtml = '<div class="media-thumb" style="background:#e8e4df;overflow:hidden;"><img src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display=\'none\'"></div>';
+        } else if (url && isVideo) {
+            thumbHtml = '<div class="media-thumb media-thumb-video" style="background:#e8e4df;overflow:hidden;position:relative;"><video src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" muted preload="metadata" onerror="this.style.display=\'none\'"></video>' + videoPlaySvg + '</div>';
+        } else {
+            thumbHtml = '<div class="media-thumb" style="background:#e8e4df;"><svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/></svg></div>';
+        }
 
         return '<div class="media-card" data-media="' + mediaType + '">' +
-            '<div class="' + thumbClass + '" style="background:#e8e4df;">' + svg + '</div>' +
+            thumbHtml +
             '<div class="media-info">' +
                 '<div class="media-name">' + escapeHtml(title) + '</div>' +
                 '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + '</div>' +
