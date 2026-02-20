@@ -1,16 +1,56 @@
 const Stripe = require('stripe');
 const { createClient } = require('@supabase/supabase-js');
+const { Resend } = require('resend');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Price IDs to identify plan type
 const PRICE_PRO = 'price_1T2wkcAO3BMpwX672CsLrhdQ';
 const PRICE_BIZ_BASE = 'price_1T2wlnAO3BMpwX67HZQKSk6R';
 const PRICE_BIZ_SEAT = 'price_1T2wmDAO3BMpwX67JSkM2fkF';
+
+const FROM_EMAIL = 'Arrival <noreply@arrivalcompany.com>';
+
+// ============================================
+// EMAIL HELPER
+// ============================================
+
+function emailBase(content) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>body{margin:0;padding:0;background:#f5f3ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}.wrapper{max-width:600px;margin:0 auto;padding:40px 20px}.card{background:#fff;border-radius:16px;padding:48px 40px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.logo{font-family:Georgia,serif;font-size:28px;font-weight:700;color:#1a1a18;margin-bottom:32px;font-style:italic}h1{font-family:Georgia,serif;font-size:24px;font-weight:700;color:#1a1a18;margin:0 0 16px}p{font-size:15px;line-height:1.7;color:#4a4640;margin:0 0 16px}.btn{display:inline-block;background:#1a1a18;color:#fff!important;padding:14px 32px;border-radius:100px;text-decoration:none;font-size:15px;font-weight:600;margin:8px 0 24px}.highlight{background:#f5f3ef;border-radius:12px;padding:20px 24px;margin:20px 0}.highlight-label{font-size:13px;color:#7c736a;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:4px}.highlight-value{font-size:20px;font-weight:700;color:#1a1a18}.divider{border:none;border-top:1px solid #e8e4df;margin:28px 0}.footer{text-align:center;padding:24px 0;font-size:13px;color:#7c736a}.footer a{color:#7c736a;text-decoration:underline}.feature-list{list-style:none;padding:0;margin:16px 0}.feature-list li{font-size:15px;color:#4a4640;padding:6px 0}.feature-list li::before{content:'✓';color:#4caf50;font-weight:700;margin-right:10px}</style></head><body><div class="wrapper"><div class="card"><div class="logo">arrival</div>${content}</div><div class="footer"><p>&copy; ${new Date().getFullYear()} Arrival — Your AI expert in the field.</p><p><a href="https://arrivalcompany.com">arrivalcompany.com</a></p></div></div></body></html>`;
+}
+
+async function sendEmail(to, subject, content) {
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: to,
+      subject: subject,
+      html: emailBase(content)
+    });
+    console.log('Email sent to', to, ':', subject, result);
+  } catch (err) {
+    console.error('Email send error:', err);
+    // Don't throw — email failure shouldn't break the webhook
+  }
+}
+
+async function getUserInfo(userId) {
+  const { data } = await supabase
+    .from('users')
+    .select('first_name, email')
+    .eq('id', userId)
+    .single();
+  return data || {};
+}
+
+// ============================================
+// WEBHOOK HANDLER
+// ============================================
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -66,7 +106,6 @@ exports.handler = async (event) => {
 
         // For business plan: create team if needed
         if (plan === 'business') {
-          // Check if user already has a team
           const { data: existingTeam } = await supabase
             .from('team_members')
             .select('team_id')
@@ -76,7 +115,6 @@ exports.handler = async (event) => {
             .single();
 
           if (!existingTeam) {
-            // Get user info for team name
             const { data: userInfo } = await supabase
               .from('users')
               .select('first_name, last_name, primary_trade')
@@ -85,7 +123,6 @@ exports.handler = async (event) => {
 
             const teamName = (userInfo?.first_name || 'My') + "'s Team";
 
-            // Create team
             const { data: newTeam } = await supabase
               .from('teams')
               .insert({
@@ -98,7 +135,6 @@ exports.handler = async (event) => {
               .single();
 
             if (newTeam) {
-              // Add owner as team member
               await supabase
                 .from('team_members')
                 .insert({
@@ -112,6 +148,32 @@ exports.handler = async (event) => {
           }
         }
 
+        // 📧 Send subscription confirmed email
+        const user = await getUserInfo(userId);
+        if (user.email) {
+          const planName = plan === 'business' ? 'Business' : 'Pro';
+          const price = plan === 'business' ? '$250/month' : '$25/month';
+          const dashUrl = plan === 'business'
+            ? 'https://arrivalcompany.com/dashboard-business'
+            : 'https://arrivalcompany.com/dashboard-individual';
+          const features = plan === 'business'
+            ? '<ul class="feature-list"><li>10 team seats included</li><li>Unlimited queries per seat</li><li>Shared team library</li><li>Admin dashboard &amp; analytics</li><li>Priority support + phone</li></ul>'
+            : '<ul class="feature-list"><li>Unlimited AI queries</li><li>Unlimited camera snaps</li><li>Unlimited document uploads</li><li>Priority support</li><li>Early access to new features</li></ul>';
+
+          await sendEmail(user.email, `You're now on ${planName}! 🎉`, `
+            <h1>You're on the ${planName} plan!</h1>
+            <p>Thanks for upgrading, ${user.first_name || 'there'}. Your subscription is now active and you have full access to all ${planName} features.</p>
+            <div class="highlight">
+              <div class="highlight-label">Your plan</div>
+              <div class="highlight-value">${planName} &mdash; ${price}</div>
+            </div>
+            ${features}
+            <a href="${dashUrl}" class="btn">Go to Dashboard</a>
+            <hr class="divider">
+            <p style="font-size:13px;color:#7c736a;">You can manage your subscription anytime from the Billing page in your dashboard.</p>
+          `);
+        }
+
         console.log('Checkout completed: user=' + userId + ', plan=' + plan);
         break;
       }
@@ -121,7 +183,6 @@ exports.handler = async (event) => {
         const subscription = stripeEvent.data.object;
         const subId = subscription.id;
 
-        // Find user by stripe_subscription_id
         const { data: sub } = await supabase
           .from('subscriptions')
           .select('user_id')
@@ -134,13 +195,11 @@ exports.handler = async (event) => {
           break;
         }
 
-        // Map Stripe status to our status
         let status = 'active';
         if (subscription.status === 'past_due') status = 'past_due';
         if (subscription.status === 'canceled') status = 'canceled';
         if (subscription.status === 'unpaid') status = 'unpaid';
 
-        // Update subscription status and period end
         const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
         await supabase
           .from('subscriptions')
@@ -159,7 +218,6 @@ exports.handler = async (event) => {
           const extraSeats = seatItem.quantity || 0;
           const totalSeats = 10 + extraSeats;
 
-          // Find user's team and update max_seats
           const { data: teamMember } = await supabase
             .from('team_members')
             .select('team_id')
@@ -212,6 +270,24 @@ exports.handler = async (event) => {
           .update({ account_type: 'free' })
           .eq('id', sub.user_id);
 
+        // 📧 Send cancellation email
+        const cancelUser = await getUserInfo(sub.user_id);
+        if (cancelUser.email) {
+          await sendEmail(cancelUser.email, 'Your subscription has been cancelled', `
+            <h1>Subscription cancelled</h1>
+            <p>Hi ${cancelUser.first_name || 'there'}, your paid subscription has ended and your account has been moved to the Free plan.</p>
+            <p>You'll still have access to the free features — 10 queries per day, voice + text, and all trades.</p>
+            <div class="highlight">
+              <div class="highlight-label">Current plan</div>
+              <div class="highlight-value">Free &mdash; $0/month</div>
+            </div>
+            <p>Changed your mind? You can upgrade again anytime.</p>
+            <a href="https://arrivalcompany.com/dashboard-individual" class="btn">Re-subscribe</a>
+            <hr class="divider">
+            <p style="font-size:13px;color:#7c736a;">We'd love to know why you left. Reply to this email with any feedback.</p>
+          `);
+        }
+
         console.log('Subscription canceled: user=' + sub.user_id);
         break;
       }
@@ -233,6 +309,19 @@ exports.handler = async (event) => {
             .from('subscriptions')
             .update({ status: 'past_due' })
             .eq('user_id', sub.user_id);
+
+          // 📧 Send payment failed email
+          const failUser = await getUserInfo(sub.user_id);
+          if (failUser.email) {
+            await sendEmail(failUser.email, 'Payment failed — action required', `
+              <h1>Payment failed</h1>
+              <p>Hi ${failUser.first_name || 'there'}, we weren't able to process your latest payment. Your subscription is now past due.</p>
+              <p>Please update your payment method to keep your access. If we can't collect payment, your account will be downgraded to the Free plan.</p>
+              <a href="https://arrivalcompany.com/dashboard-individual" class="btn">Update Payment Method</a>
+              <hr class="divider">
+              <p style="font-size:13px;color:#7c736a;">If you believe this is a mistake, reply to this email and we'll help sort it out.</p>
+            `);
+          }
 
           console.log('Payment failed: user=' + sub.user_id);
         }

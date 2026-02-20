@@ -146,7 +146,14 @@ async function handleSignup(event) {
         });
         if (subResult.error) throw subResult.error;
 
-        // 4. Redirect to individual dashboard
+        // 4. Send welcome email (fire-and-forget)
+        fetch('/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
+        }).catch(function(err) { console.error('Welcome email error:', err); });
+
+        // 5. Redirect to individual dashboard
         window.location.href = '/dashboard-individual';
 
     } catch (error) {
