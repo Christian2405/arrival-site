@@ -1133,6 +1133,154 @@ p { line-height: 1.7; color: var(--text-dark); }
 }
 
 /* ============================================
+   IN-APP BILLING (Payment Method + Invoices)
+   ============================================ */
+
+.payment-method-card {
+    background: white;
+    border: 1px solid var(--bg-border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.payment-method-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 15px;
+}
+
+.card-brand-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: white;
+    min-width: 56px;
+}
+
+.card-brand-visa { background: #1a1f71; }
+.card-brand-mastercard { background: #eb001b; }
+.card-brand-amex { background: #006fcf; }
+.card-brand-discover { background: #ff6000; }
+.card-brand-default { background: var(--text-dark); }
+
+.card-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.card-number {
+    font-weight: 600;
+    color: var(--text-dark);
+    font-size: 15px;
+}
+
+.card-expiry {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.card-update-form {
+    background: white;
+    border: 1px solid var(--bg-border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-top: 16px;
+}
+
+.card-element-wrapper {
+    padding: 14px 16px;
+    border: 1px solid var(--bg-border);
+    border-radius: 6px;
+    background: white;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card-element-wrapper.StripeElement--focus {
+    border-color: var(--text-dark);
+    box-shadow: 0 0 0 3px rgba(42, 38, 34, 0.08);
+}
+
+.card-element-wrapper.StripeElement--invalid {
+    border-color: var(--accent-red);
+}
+
+/* Invoice table */
+.invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--bg-border);
+}
+
+.invoice-table thead { background: #faf9f7; }
+
+.invoice-table th {
+    text-align: left;
+    padding: 14px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-light);
+    border-bottom: 1px solid var(--bg-border);
+    font-family: var(--font-body);
+}
+
+.invoice-table td {
+    padding: 14px 20px;
+    font-size: 14px;
+    color: var(--text-dark);
+    border-bottom: 1px solid var(--bg-border);
+}
+
+.invoice-table tbody tr:last-child td { border-bottom: none; }
+.invoice-table tbody tr:hover { background: #faf9f7; }
+
+.invoice-download {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dark);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.invoice-download:hover { color: var(--text-muted); }
+
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+    color: transparent !important;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+/* ============================================
    SETTINGS
    ============================================ */
 

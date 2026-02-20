@@ -184,16 +184,28 @@
 
         <div id="billing-payment-section" class="dash-section" style="display:none;">
             <h2>Payment Method</h2>
-            <div class="payment-row">
-                <span style="color:var(--text-muted);">Manage your payment method through the billing portal.</span>
-                <button class="btn btn-sm btn-outline" style="margin-left:auto;">Manage</button>
+            <div id="payment-method-display" class="payment-method-card">
+                <div id="payment-method-info" class="payment-method-info">
+                    <span style="color:var(--text-muted);">Loading payment method...</span>
+                </div>
+                <button id="change-card-btn" class="btn btn-sm btn-outline" style="display:none;">Change Card</button>
+            </div>
+            <div id="card-update-form" class="card-update-form" style="display:none;">
+                <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">Enter your new card details below.</p>
+                <div id="card-element" class="card-element-wrapper"></div>
+                <div id="card-errors" style="color:var(--accent-red);font-size:13px;margin-top:8px;"></div>
+                <div style="display:flex;gap:12px;margin-top:16px;">
+                    <button id="save-card-btn" class="btn btn-primary btn-sm">Save Card</button>
+                    <button id="cancel-card-btn" class="btn btn-outline btn-sm">Cancel</button>
+                </div>
             </div>
         </div>
 
         <div id="billing-invoice-section" class="dash-section" style="display:none;">
             <h2>Invoice History</h2>
-            <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">View and download invoices from the billing portal.</p>
-            <button class="btn btn-sm btn-outline table-action" style="font-size:14px;">View Invoices</button>
+            <div id="invoice-list-wrapper">
+                <p style="color:var(--text-muted);font-size:14px;">Loading invoices...</p>
+            </div>
         </div>
     </div>
 
@@ -290,6 +302,7 @@ function toggleBtn(el) {
     el.classList.add('active');
 }
 </script>
+<script src="https://js.stripe.com/v3/"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="dashboard.js"></script>
 </body>

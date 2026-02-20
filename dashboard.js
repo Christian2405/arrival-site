@@ -224,6 +224,11 @@ async function deleteDocument(docId, storagePath) {
 // SUBSCRIPTION & BILLING
 // ============================================
 
+// Stripe Elements state
+var stripeInstance = null;
+var cardElement = null;
+var setupClientSecret = null;
+
 function loadBilling() {
     var plan = currentSubscription ? currentSubscription.plan : 'free';
 
@@ -286,6 +291,254 @@ function loadBilling() {
 
     document.getElementById('billing-payment-section').style.display = (plan !== 'free') ? '' : 'none';
     document.getElementById('billing-invoice-section').style.display = (plan !== 'free') ? '' : 'none';
+
+    // Load billing details from Stripe (invoices + payment method)
+    if (plan !== 'free') {
+        loadBillingDetails();
+    }
+}
+
+async function loadBillingDetails() {
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        var response = await fetch('/.netlify/functions/get-billing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({})
+        });
+
+        var data = await response.json();
+        if (!response.ok) {
+            console.error('Get billing error:', data.error);
+            return;
+        }
+
+        // Render payment method
+        renderPaymentMethod(data.paymentMethod);
+
+        // Render invoices
+        renderInvoices(data.invoices || []);
+
+    } catch (err) {
+        console.error('Load billing details error:', err);
+    }
+}
+
+function renderPaymentMethod(pm) {
+    var infoEl = document.getElementById('payment-method-info');
+    var changeBtn = document.getElementById('change-card-btn');
+
+    if (pm && pm.last4) {
+        var brandClass = 'card-brand-default';
+        var brandLabel = pm.brand ? pm.brand.toUpperCase() : 'CARD';
+        if (pm.brand === 'visa') brandClass = 'card-brand-visa';
+        else if (pm.brand === 'mastercard') brandClass = 'card-brand-mastercard';
+        else if (pm.brand === 'amex') brandClass = 'card-brand-amex';
+        else if (pm.brand === 'discover') brandClass = 'card-brand-discover';
+
+        var expStr = (pm.expMonth < 10 ? '0' : '') + pm.expMonth + '/' + pm.expYear;
+        infoEl.innerHTML = '<span class="card-brand-badge ' + brandClass + '">' + escapeHtml(brandLabel) + '</span>' +
+            '<div class="card-details">' +
+            '<span class="card-number">&bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; ' + escapeHtml(pm.last4) + '</span>' +
+            '<span class="card-expiry">Expires ' + expStr + '</span>' +
+            '</div>';
+        changeBtn.style.display = '';
+    } else {
+        infoEl.innerHTML = '<span style="color:var(--text-muted);">No payment method on file.</span>';
+        changeBtn.style.display = '';
+        changeBtn.textContent = 'Add Card';
+    }
+}
+
+function renderInvoices(invoices) {
+    var wrapper = document.getElementById('invoice-list-wrapper');
+
+    if (!invoices || invoices.length === 0) {
+        wrapper.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">No invoices yet.</p>';
+        return;
+    }
+
+    var rows = invoices.map(function(inv) {
+        var date = new Date(inv.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        var statusHtml = inv.status === 'paid'
+            ? '<span class="status-paid">Paid</span>'
+            : '<span style="color:var(--text-muted);">' + capitalize(inv.status || 'unknown') + '</span>';
+        var downloadHtml = inv.pdf
+            ? '<a href="' + inv.pdf + '" target="_blank" class="invoice-download">Download</a>'
+            : '—';
+        return '<tr>' +
+            '<td>' + escapeHtml(inv.number || '—') + '</td>' +
+            '<td>' + date + '</td>' +
+            '<td>$' + inv.amount + ' ' + inv.currency + '</td>' +
+            '<td>' + statusHtml + '</td>' +
+            '<td>' + downloadHtml + '</td>' +
+            '</tr>';
+    }).join('');
+
+    wrapper.innerHTML = '<div class="table-wrapper"><table class="invoice-table">' +
+        '<thead><tr><th>Invoice</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
+}
+
+// ============================================
+// STRIPE ELEMENTS — Card Update
+// ============================================
+
+function initStripeElements() {
+    if (stripeInstance) return;
+    if (typeof Stripe === 'undefined') {
+        console.error('Stripe.js not loaded');
+        return;
+    }
+    stripeInstance = Stripe('pk_live_51T2waTAO3BMpwX67aWYd3cxZFLJbqCFGjG3GPaVFqNjHQr23e3VxRYkfBavqK4JBGSb5lkkJtpDjITfZS5i2GzpE00jQKw6qlp');
+}
+
+async function showCardForm() {
+    initStripeElements();
+    if (!stripeInstance) return;
+
+    var formDiv = document.getElementById('card-update-form');
+    formDiv.style.display = '';
+
+    // Create or re-mount card element
+    if (!cardElement) {
+        var elements = stripeInstance.elements();
+        cardElement = elements.create('card', {
+            style: {
+                base: {
+                    fontSize: '15px',
+                    color: '#2a2622',
+                    fontFamily: "'DM Sans', sans-serif",
+                    '::placeholder': { color: '#9a9590' }
+                },
+                invalid: { color: '#c45a3c' }
+            }
+        });
+    }
+    cardElement.mount('#card-element');
+
+    // Get SetupIntent client secret
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        var response = await fetch('/.netlify/functions/update-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ action: 'create_setup_intent' })
+        });
+
+        var data = await response.json();
+        if (data.clientSecret) {
+            setupClientSecret = data.clientSecret;
+        } else {
+            showToast(data.error || 'Failed to initialize card form.', 'error');
+            formDiv.style.display = 'none';
+        }
+    } catch (err) {
+        console.error('SetupIntent error:', err);
+        showToast('Failed to initialize card form.', 'error');
+        formDiv.style.display = 'none';
+    }
+}
+
+async function saveNewCard() {
+    if (!stripeInstance || !cardElement || !setupClientSecret) {
+        showToast('Card form not ready. Please try again.', 'error');
+        return;
+    }
+
+    var saveBtn = document.getElementById('save-card-btn');
+    saveBtn.classList.add('btn-loading');
+    saveBtn.disabled = true;
+
+    try {
+        var result = await stripeInstance.confirmCardSetup(setupClientSecret, {
+            payment_method: { card: cardElement }
+        });
+
+        if (result.error) {
+            document.getElementById('card-errors').textContent = result.error.message;
+            saveBtn.classList.remove('btn-loading');
+            saveBtn.disabled = false;
+            return;
+        }
+
+        // Set the new payment method as default
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        var response = await fetch('/.netlify/functions/update-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ action: 'set_default', paymentMethodId: result.setupIntent.payment_method })
+        });
+
+        var data = await response.json();
+        if (data.success) {
+            showToast('Payment method updated.');
+            renderPaymentMethod(data.paymentMethod);
+            hideCardForm();
+        } else {
+            showToast(data.error || 'Failed to update payment method.', 'error');
+        }
+    } catch (err) {
+        console.error('Save card error:', err);
+        showToast('Something went wrong. Please try again.', 'error');
+    }
+
+    saveBtn.classList.remove('btn-loading');
+    saveBtn.disabled = false;
+}
+
+function hideCardForm() {
+    var formDiv = document.getElementById('card-update-form');
+    formDiv.style.display = 'none';
+    document.getElementById('card-errors').textContent = '';
+    setupClientSecret = null;
+    if (cardElement) cardElement.clear();
+}
+
+// ============================================
+// CANCEL SUBSCRIPTION (in-app)
+// ============================================
+
+async function handleCancelSubscription() {
+    var cancelBtn = document.getElementById('cancel-confirm-btn');
+    cancelBtn.classList.add('btn-loading');
+    cancelBtn.disabled = true;
+
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        var response = await fetch('/.netlify/functions/cancel-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({})
+        });
+
+        var data = await response.json();
+        if (data.success) {
+            closeModal('cancel-modal');
+            var cancelDate = new Date(data.cancelAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            showToast('Subscription cancelled. Access continues until ' + cancelDate + '.');
+            // Update the billing detail text
+            var detailEl = document.getElementById('billing-plan-detail');
+            detailEl.textContent = 'Your subscription has been cancelled. You have access until ' + cancelDate + '.';
+        } else {
+            showToast(data.error || 'Failed to cancel subscription.', 'error');
+        }
+    } catch (err) {
+        console.error('Cancel error:', err);
+        showToast('Something went wrong. Please try again.', 'error');
+    }
+
+    cancelBtn.classList.remove('btn-loading');
+    cancelBtn.disabled = false;
+    closeModal('cancel-modal');
 }
 
 // ============================================
@@ -646,30 +899,6 @@ async function startCheckout(targetPlan) {
     }
 }
 
-async function openBillingPortal() {
-    try {
-        var session = await sb.auth.getSession();
-        var token = session.data.session.access_token;
-
-        showToast('Opening billing portal...');
-        var response = await fetch('/.netlify/functions/create-portal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ userId: currentUser.id })
-        });
-
-        var data = await response.json();
-        if (data.url) {
-            window.location.href = data.url;
-        } else {
-            showToast(data.error || 'Failed to open billing portal.', 'error');
-        }
-    } catch (err) {
-        console.error('Portal error:', err);
-        showToast('Something went wrong. Please try again.', 'error');
-    }
-}
-
 function checkCheckoutSuccess() {
     if (window.location.search.includes('checkout=success')) {
         var plan = currentSubscription ? currentSubscription.plan : 'pro';
@@ -729,29 +958,29 @@ document.addEventListener('DOMContentLoaded', function() {
         startCheckout('business');
     });
 
-    // Billing — Cancel subscription (opens Stripe portal)
-    document.getElementById('cancel-confirm-btn') && document.getElementById('cancel-confirm-btn').addEventListener('click', async function() {
-        closeModal('cancel-modal');
-        await openBillingPortal();
-    });
+    // Billing — Cancel subscription (in-app)
+    var cancelConfirmBtn = document.getElementById('cancel-confirm-btn');
+    if (cancelConfirmBtn) {
+        cancelConfirmBtn.addEventListener('click', handleCancelSubscription);
+    }
 
-    // Billing — Payment update (opens Stripe portal)
-    var paymentBtns = document.querySelectorAll('#billing-payment-section .btn');
-    paymentBtns.forEach(function(btn) {
-        btn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            await openBillingPortal();
-        });
-    });
+    // Billing — Change/Add Card button
+    var changeCardBtn = document.getElementById('change-card-btn');
+    if (changeCardBtn) {
+        changeCardBtn.addEventListener('click', function() { showCardForm(); });
+    }
 
-    // Billing — Invoice links (opens Stripe portal)
-    var invoiceLinks = document.querySelectorAll('#billing-invoice-section .table-action');
-    invoiceLinks.forEach(function(link) {
-        link.addEventListener('click', async function(e) {
-            e.preventDefault();
-            await openBillingPortal();
-        });
-    });
+    // Billing — Save new card
+    var saveCardBtn = document.getElementById('save-card-btn');
+    if (saveCardBtn) {
+        saveCardBtn.addEventListener('click', function() { saveNewCard(); });
+    }
+
+    // Billing — Cancel card update
+    var cancelCardBtn = document.getElementById('cancel-card-btn');
+    if (cancelCardBtn) {
+        cancelCardBtn.addEventListener('click', function() { hideCardForm(); });
+    }
 
     // Media upload handler
     document.getElementById('media-input').addEventListener('change', handleMediaUpload);
