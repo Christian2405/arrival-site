@@ -178,7 +178,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $25/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="showToast('Coming soon.')">Add Seats</button></div>
+            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $250/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button></div>
         </div>
 
         <div class="dash-section">
@@ -215,23 +215,15 @@
         <div class="dash-section" id="billing-payment-section">
             <h2>Payment Method</h2>
             <div class="payment-row">
-                <div class="visa-badge">VISA</div>
-                <span>Visa ending in 4242</span>
-                <button class="btn btn-sm btn-outline" style="margin-left:auto;" id="billing-update-payment-btn">Update</button>
+                <span style="color:var(--text-muted);">Manage your payment method through the billing portal.</span>
+                <button class="btn btn-sm btn-outline" style="margin-left:auto;" id="billing-update-payment-btn">Manage</button>
             </div>
         </div>
 
         <div class="dash-section" id="billing-invoice-section">
             <h2>Invoice History</h2>
-            <div class="table-wrapper">
-                <table class="dash-table">
-                    <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Download</th></tr></thead>
-                    <tbody>
-                        <tr><td>Feb 1, 2026</td><td>Business Plan — Monthly</td><td>$250.00</td><td><span class="status-paid">Paid</span></td><td><a href="#" class="table-action">PDF</a></td></tr>
-                        <tr><td>Jan 1, 2026</td><td>Business Plan — Monthly</td><td>$250.00</td><td><span class="status-paid">Paid</span></td><td><a href="#" class="table-action">PDF</a></td></tr>
-                    </tbody>
-                </table>
-            </div>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">View and download invoices from the billing portal.</p>
+            <button class="btn btn-sm btn-outline table-action" style="font-size:14px;">View Invoices</button>
         </div>
     </div>
 

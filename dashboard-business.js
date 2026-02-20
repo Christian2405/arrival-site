@@ -11,6 +11,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // State
 let currentUser = null;
 let currentProfile = null;
+let currentSubscription = null;
 let currentTeam = null;
 let currentTeamMembership = null;
 let teamMembers = [];
@@ -92,6 +93,10 @@ async function initAuth() {
     // Load profile
     var profileResult = await sb.from('users').select('*').eq('id', currentUser.id).single();
     if (profileResult.data) currentProfile = profileResult.data;
+
+    // Load subscription
+    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
+    if (subResult.data) currentSubscription = subResult.data;
 
     // Find team membership
     var memberResult = await sb.from('team_members')
@@ -462,7 +467,7 @@ function updateSeatIndicator() {
     var maxSeats = currentTeam.max_seats || 10;
     var el = document.getElementById('team-seat-indicator');
     if (el) {
-        el.innerHTML = usedSeats + ' / ' + maxSeats + ' seats used. Additional seats: $25/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="showToast(\'Coming soon.\')">Add Seats</button>';
+        el.innerHTML = usedSeats + ' / ' + maxSeats + ' seats used. Additional seats: $250/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button>';
     }
 }
 
@@ -779,12 +784,106 @@ async function deleteMedia(id, storagePath) {
 
 function loadBilling() {
     var seatCount = teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length;
-    var maxSeats = currentTeam.max_seats || 10;
+    var maxSeats = currentTeam ? (currentTeam.max_seats || 10) : 10;
+    var extraSeats = Math.max(0, maxSeats - 10);
+    var extraCost = extraSeats * 250;
+    var total = 250 + extraCost;
 
     document.getElementById('billing-plan-name').textContent = 'Business Plan';
     document.getElementById('billing-plan-price').textContent = '$250/month';
-    document.getElementById('billing-seats-detail').textContent = maxSeats + ' seats included, ' + Math.max(0, seatCount - maxSeats) + ' additional seats';
-    document.getElementById('billing-total').textContent = 'Monthly total: $250.00';
+    document.getElementById('billing-seats-detail').textContent = '10 base seats' + (extraSeats > 0 ? ' + ' + extraSeats + ' extra ($' + extraCost + '/mo)' : '') + ', ' + seatCount + ' in use';
+    document.getElementById('billing-total').textContent = 'Monthly total: $' + total.toFixed(2);
+
+    // Show next billing date if available
+    if (currentSubscription && currentSubscription.current_period_end) {
+        var endDate = new Date(currentSubscription.current_period_end);
+        var el = document.getElementById('billing-next-date');
+        if (el) el.textContent = 'Next billing: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+}
+
+async function openBillingPortal() {
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        showToast('Opening billing portal...');
+        var response = await fetch('/.netlify/functions/create-portal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ userId: currentUser.id })
+        });
+
+        var data = await response.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            showToast(data.error || 'Failed to open billing portal.', 'error');
+        }
+    } catch (err) {
+        console.error('Portal error:', err);
+        showToast('Something went wrong.', 'error');
+    }
+}
+
+async function handleAddSeats() {
+    var countStr = prompt('How many extra seats to add? ($250/month each)', '1');
+    var count = parseInt(countStr, 10);
+    if (!count || count < 1) return;
+
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        showToast('Adding seats...');
+        var response = await fetch('/.netlify/functions/update-seats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ action: 'add', count: count })
+        });
+
+        var data = await response.json();
+        if (data.success) {
+            showToast(count + ' seat(s) added. Total: ' + data.newSeatCount + ' seats.');
+            if (currentTeam) currentTeam.max_seats = data.newSeatCount;
+            loadBilling();
+            updateSeatIndicator();
+        } else {
+            showToast(data.error || 'Failed to add seats.', 'error');
+        }
+    } catch (err) {
+        showToast('Failed to add seats.', 'error');
+    }
+}
+
+async function handleRemoveSeats() {
+    var countStr = prompt('How many seats to remove?', '1');
+    var count = parseInt(countStr, 10);
+    if (!count || count < 1) return;
+
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        showToast('Removing seats...');
+        var response = await fetch('/.netlify/functions/update-seats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ action: 'remove', count: count })
+        });
+
+        var data = await response.json();
+        if (data.success) {
+            showToast(count + ' seat(s) removed. Total: ' + data.newSeatCount + ' seats.');
+            if (currentTeam) currentTeam.max_seats = data.newSeatCount;
+            loadBilling();
+            updateSeatIndicator();
+        } else {
+            showToast(data.error || 'Failed to remove seats.', 'error');
+        }
+    } catch (err) {
+        showToast('Failed to remove seats.', 'error');
+    }
 }
 
 // ============================================
@@ -1026,29 +1125,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // Delete account
     document.getElementById('delete-confirm-btn').addEventListener('click', handleDeleteAccount);
 
-    // Billing buttons — coming soon
-    document.getElementById('billing-add-seats-btn').addEventListener('click', function() {
-        showToast('Coming soon — seat management will be available shortly.');
-    });
-    document.getElementById('billing-remove-seats-btn').addEventListener('click', function() {
-        showToast('Coming soon — seat management will be available shortly.');
-    });
+    // Billing — Add/Remove seats
+    document.getElementById('billing-add-seats-btn').addEventListener('click', handleAddSeats);
+    document.getElementById('billing-remove-seats-btn').addEventListener('click', handleRemoveSeats);
+
+    // Billing — Cancel subscription (opens portal)
     document.getElementById('billing-cancel-btn').addEventListener('click', function() {
         openModal('cancel-modal');
     });
-    document.getElementById('cancel-confirm-btn').addEventListener('click', function() {
-        showToast('Coming soon — cancellation will be available shortly.');
+    document.getElementById('cancel-confirm-btn').addEventListener('click', async function() {
         closeModal('cancel-modal');
-    });
-    document.getElementById('billing-update-payment-btn').addEventListener('click', function() {
-        showToast('Coming soon.');
+        await openBillingPortal();
     });
 
-    // Invoice PDF links — coming soon
+    // Billing — Update payment (opens portal)
+    document.getElementById('billing-update-payment-btn').addEventListener('click', async function() {
+        await openBillingPortal();
+    });
+
+    // Billing — Invoice links (opens portal)
     document.querySelectorAll('#billing-invoice-section .table-action').forEach(function(link) {
-        link.addEventListener('click', function(e) {
+        link.addEventListener('click', async function(e) {
             e.preventDefault();
-            showToast('Coming soon.');
+            await openBillingPortal();
         });
     });
 

@@ -15,7 +15,7 @@ let currentSubscription = null;
 
 // Document limits by plan
 const DOC_LIMITS = { free: 3, pro: 20, business: 50, enterprise: 200 };
-const PLAN_PRICES = { free: '$0/month', pro: '$25/month', business: '$79/month', enterprise: 'Custom' };
+const PLAN_PRICES = { free: '$0/month', pro: '$25/month', business: '$250/month', enterprise: 'Custom' };
 
 // ============================================
 // TOAST
@@ -48,6 +48,7 @@ async function initAuth() {
     loadMedia();
     loadBilling();
     loadSettings();
+    checkCheckoutSuccess();
 }
 
 async function loadProfile() {
@@ -588,6 +589,42 @@ function capitalize(str) {
 }
 
 // ============================================
+// STRIPE BILLING HELPERS
+// ============================================
+
+async function openBillingPortal() {
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        showToast('Opening billing portal...');
+        var response = await fetch('/.netlify/functions/create-portal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ userId: currentUser.id })
+        });
+
+        var data = await response.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            showToast(data.error || 'Failed to open billing portal.', 'error');
+        }
+    } catch (err) {
+        console.error('Portal error:', err);
+        showToast('Something went wrong. Please try again.', 'error');
+    }
+}
+
+function checkCheckoutSuccess() {
+    if (window.location.search.includes('checkout=success')) {
+        var plan = currentSubscription ? currentSubscription.plan : 'pro';
+        showToast('Subscription activated! Welcome to ' + capitalize(plan) + '.');
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+}
+
+// ============================================
 // DRAG & DROP
 // ============================================
 
@@ -628,30 +665,56 @@ document.addEventListener('DOMContentLoaded', function() {
     // Delete account
     document.getElementById('delete-confirm-btn').addEventListener('click', handleDeleteAccount);
 
-    // Billing buttons — coming soon
-    document.getElementById('billing-upgrade-btn').addEventListener('click', function() {
-        showToast('Coming soon — upgrade will be available shortly.');
-    });
-    document.getElementById('cancel-confirm-btn') && document.getElementById('cancel-confirm-btn').addEventListener('click', function() {
-        showToast('Coming soon — cancellation will be available shortly.');
-        closeModal('cancel-modal');
+    // Billing — Upgrade button
+    document.getElementById('billing-upgrade-btn').addEventListener('click', async function() {
+        var plan = currentSubscription ? currentSubscription.plan : 'free';
+        var targetPlan = (plan === 'free' || plan === 'pro') ? 'pro' : 'business';
+        if (plan === 'pro') targetPlan = 'business';
+
+        try {
+            var session = await sb.auth.getSession();
+            var token = session.data.session.access_token;
+
+            showToast('Redirecting to checkout...');
+            var response = await fetch('/.netlify/functions/create-checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ plan: targetPlan, userId: currentUser.id, email: currentUser.email })
+            });
+
+            var data = await response.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                showToast(data.error || 'Failed to start checkout.', 'error');
+            }
+        } catch (err) {
+            console.error('Checkout error:', err);
+            showToast('Something went wrong. Please try again.', 'error');
+        }
     });
 
-    // Payment update — coming soon
+    // Billing — Cancel subscription (opens Stripe portal)
+    document.getElementById('cancel-confirm-btn') && document.getElementById('cancel-confirm-btn').addEventListener('click', async function() {
+        closeModal('cancel-modal');
+        await openBillingPortal();
+    });
+
+    // Billing — Payment update (opens Stripe portal)
     var paymentBtns = document.querySelectorAll('#billing-payment-section .btn');
     paymentBtns.forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
+        btn.addEventListener('click', async function(e) {
             e.preventDefault();
-            showToast('Coming soon.');
+            await openBillingPortal();
         });
     });
 
-    // Invoice download — coming soon
+    // Billing — Invoice links (opens Stripe portal)
     var invoiceLinks = document.querySelectorAll('#billing-invoice-section .table-action');
     invoiceLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
+        link.addEventListener('click', async function(e) {
             e.preventDefault();
-            showToast('Coming soon.');
+            await openBillingPortal();
         });
     });
 
