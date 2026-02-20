@@ -78,6 +78,7 @@ async function loadDocuments() {
         .select('*')
         .eq('uploaded_by', currentUser.id)
         .is('team_id', null)
+        .not('category', 'in', '("photo","video")')
         .order('created_at', { ascending: false });
 
     var docs = result.data || [];

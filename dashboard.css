@@ -259,6 +259,12 @@ p { line-height: 1.7; color: var(--text-dark); }
     width: fit-content;
 }
 
+/* Invisible spacer matching the exact height of .pricing-badge */
+.billing-plans-grid .pricing-badge-spacer {
+    height: 30px;
+    margin-bottom: 20px;
+}
+
 .billing-plans-grid .pricing-header h3 {
     font-size: 32px;
     font-family: var(--font-heading);
