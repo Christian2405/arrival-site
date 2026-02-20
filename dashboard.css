@@ -1459,3 +1459,40 @@ p { line-height: 1.7; color: var(--text-dark); }
     border-color: var(--accent, #b5935a);
     background: rgba(181, 147, 90, 0.05);
 }
+
+/* ============================================
+   UPLOAD OVERLAY (full-screen spinner)
+   ============================================ */
+
+.upload-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(42, 38, 34, 0.45);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.upload-overlay.active {
+    display: flex;
+}
+
+.upload-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(255,255,255,0.25);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.upload-overlay-text {
+    font-family: var(--font-body);
+    font-size: 16px;
+    font-weight: 500;
+    color: white;
+    text-align: center;
+}

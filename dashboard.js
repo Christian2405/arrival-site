@@ -134,23 +134,32 @@ async function handleFileUpload(event) {
         return;
     }
 
+    var total = files.length;
+    var uploaded = 0;
+    var failed = 0;
+
+    showUploadOverlay('Uploading ' + total + ' document' + (total > 1 ? 's' : '') + '...');
+
     for (var i = 0; i < files.length; i++) {
         var file = files[i];
         if (file.size > 50 * 1024 * 1024) {
+            failed++;
             showToast(file.name + ' exceeds 50MB limit.', 'error');
             continue;
+        }
+
+        if (total > 1) {
+            showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
         }
 
         var storagePath = currentUser.id + '/' + Date.now() + '_' + file.name;
 
         try {
-            // Upload to storage
             var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
             if (uploadResult.error) throw uploadResult.error;
 
-            // Insert DB row
             var ext = file.name.split('.').pop().toLowerCase();
-            var category = 'equipment_manuals'; // default category
+            var category = 'equipment_manuals';
             var insertResult = await sb.from('documents').insert({
                 uploaded_by: currentUser.id,
                 team_id: null,
@@ -163,14 +172,20 @@ async function handleFileUpload(event) {
             });
             if (insertResult.error) throw insertResult.error;
 
-            showToast(file.name + ' uploaded successfully.');
+            uploaded++;
         } catch (err) {
             console.error('Upload error:', err);
+            failed++;
             showToast('Failed to upload ' + file.name + ': ' + err.message, 'error');
         }
     }
 
-    // Clear input and reload
+    hideUploadOverlay();
+
+    if (uploaded > 0) {
+        showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded!');
+    }
+
     event.target.value = '';
     await loadDocuments();
 }
@@ -446,18 +461,39 @@ function filterMediaIndiv(el, type) {
     });
 }
 
+function showUploadOverlay(text) {
+    var overlay = document.getElementById('upload-overlay');
+    var textEl = document.getElementById('upload-overlay-text');
+    if (textEl) textEl.textContent = text || 'Uploading...';
+    if (overlay) overlay.classList.add('active');
+}
+
+function hideUploadOverlay() {
+    var overlay = document.getElementById('upload-overlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
 async function handleMediaUpload(event) {
     var files = event.target.files;
     if (!files || files.length === 0) return;
 
+    var total = files.length;
+    var uploaded = 0;
+    var failed = 0;
+
+    showUploadOverlay('Uploading ' + total + ' file' + (total > 1 ? 's' : '') + '...');
+
     for (var i = 0; i < files.length; i++) {
         var file = files[i];
         if (file.size > 200 * 1024 * 1024) {
+            failed++;
             showToast(file.name + ' exceeds 200MB limit.', 'error');
             continue;
         }
 
-        showToast('Uploading ' + file.name + '...');
+        if (total > 1) {
+            showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
+        }
 
         var isVideo = file.type.startsWith('video/');
         var category = isVideo ? 'video' : 'photo';
@@ -465,12 +501,10 @@ async function handleMediaUpload(event) {
         var storagePath = currentUser.id + '/media/' + Date.now() + '_' + safeName;
 
         try {
-            console.log('Uploading to path:', storagePath, 'size:', file.size, 'type:', file.type);
             var uploadResult = await sb.storage.from('documents').upload(storagePath, file, {
                 cacheControl: '3600',
                 upsert: false
             });
-            console.log('Upload result:', JSON.stringify(uploadResult));
             if (uploadResult.error) throw uploadResult.error;
 
             var ext = file.name.split('.').pop().toLowerCase();
@@ -484,14 +518,20 @@ async function handleMediaUpload(event) {
                 category: category,
                 status: 'ready'
             });
-            console.log('DB insert result:', JSON.stringify(insertResult));
             if (insertResult.error) throw insertResult.error;
 
-            showToast(file.name + ' uploaded!');
+            uploaded++;
         } catch (err) {
             console.error('Media upload error:', err);
-            showToast('Failed: ' + (err.message || err.statusCode || JSON.stringify(err)), 'error');
+            failed++;
+            showToast('Failed: ' + (err.message || JSON.stringify(err)), 'error');
         }
+    }
+
+    hideUploadOverlay();
+
+    if (uploaded > 0) {
+        showToast(uploaded + ' file' + (uploaded > 1 ? 's' : '') + ' uploaded!');
     }
 
     event.target.value = '';
