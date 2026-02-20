@@ -182,10 +182,6 @@ async function handleFileUpload(event) {
 
     hideUploadOverlay();
 
-    if (uploaded > 0) {
-        showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded!');
-    }
-
     event.target.value = '';
     await loadDocuments();
 }
@@ -529,10 +525,6 @@ async function handleMediaUpload(event) {
     }
 
     hideUploadOverlay();
-
-    if (uploaded > 0) {
-        showToast(uploaded + ' file' + (uploaded > 1 ? 's' : '') + ' uploaded!');
-    }
 
     event.target.value = '';
     await loadMedia();
