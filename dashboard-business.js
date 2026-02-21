@@ -98,15 +98,28 @@ async function initAuth() {
     var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
 
-    // Find team membership
-    var memberResult = await sb.from('team_members')
-        .select('*, teams(*)')
-        .eq('user_id', currentUser.id)
-        .eq('status', 'active')
-        .limit(1)
-        .single();
+    // Find team membership (retry if coming from checkout — webhook may still be processing)
+    var isCheckoutReturn = window.location.search.includes('checkout=success');
+    var memberResult = null;
+    var maxAttempts = isCheckoutReturn ? 10 : 1;
 
-    if (!memberResult.data) {
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+        memberResult = await sb.from('team_members')
+            .select('*, teams(*)')
+            .eq('user_id', currentUser.id)
+            .eq('status', 'active')
+            .limit(1)
+            .single();
+
+        if (memberResult.data) break;
+
+        if (attempt < maxAttempts - 1) {
+            // Wait 2 seconds before retrying (webhook may still be processing)
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+        }
+    }
+
+    if (!memberResult || !memberResult.data) {
         // Not a business team member — redirect to individual dashboard
         window.location.href = '/dashboard-individual.html';
         return;
@@ -125,6 +138,12 @@ async function initAuth() {
         loadBilling(),
         loadSettings()
     ]);
+
+    // Show checkout success toast and clean URL
+    if (isCheckoutReturn) {
+        showToast('Subscription activated! Welcome to Business.');
+        window.history.replaceState({}, '', window.location.pathname);
+    }
 }
 
 // ============================================
