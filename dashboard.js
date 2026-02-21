@@ -44,6 +44,14 @@ async function initAuth() {
     }
     currentUser = result.data.session.user;
     await loadProfile();
+
+    // Redirect business users to the business dashboard
+    var plan = currentProfile ? currentProfile.account_type : 'free';
+    if (plan === 'business') {
+        window.location.href = '/dashboard-business';
+        return;
+    }
+
     loadDocuments();
     loadMedia();
     loadBilling();
