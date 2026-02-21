@@ -19,45 +19,35 @@ let teamDocs = [];
 
 // Category display labels
 const CATEGORY_LABELS = {
-    equipment_manuals: 'Equipment Manuals',
-    wiring_diagrams: 'Wiring Diagrams',
-    parts_lists: 'Parts Lists',
-    technical_bulletins: 'Technical Bulletins',
-    warranty_docs: 'Warranty Documentation',
-    spec_sheets: 'Spec Sheets',
-    building_plans: 'Building Plans',
-    engineering_reports: 'Engineering Reports',
-    site_surveys: 'Site Surveys',
-    permits: 'Permits',
-    inspection_reports: 'Inspection Reports',
-    project_specs: 'Project Specifications',
-    scope_of_work: 'Scope of Work',
-    material_specs: 'Material Submittals',
-    local_codes: 'Local Codes',
-    safety_data_sheets: 'Safety Data Sheets',
-    osha_docs: 'OSHA Compliance',
-    inspection_checklists: 'Inspection Checklists',
-    sops: 'SOPs',
+    manufacturer_manuals: 'Manufacturer Manuals',
+    equipment_spec_sheets: 'Equipment Spec Sheets',
+    company_sops: 'Company SOPs',
     safety_protocols: 'Safety Protocols',
-    installation_checklists: 'Installation Checklists',
+    diagnostic_workflows: 'Diagnostic Workflows',
     training_materials: 'Training Materials',
-    maintenance_guides: 'Maintenance Procedures',
-    client_docs: 'Client Documentation',
-    service_reports: 'Service Reports',
-    site_requirements: 'Site Requirements'
+    building_plans: 'Building Plans',
+    parts_lists: 'Parts Lists',
+    // Legacy categories (backward compat)
+    equipment_manuals: 'Manufacturer Manuals',
+    spec_sheets: 'Equipment Spec Sheets',
+    sops: 'Company SOPs',
+    wiring_diagrams: 'Manufacturer Manuals',
+    technical_bulletins: 'Manufacturer Manuals',
+    warranty_docs: 'Manufacturer Manuals'
 };
 
 // Map category DB values to filter tab categories
 var CATEGORY_FILTERS = {
-    equipment_manuals: 'equipment', wiring_diagrams: 'equipment', parts_lists: 'equipment',
-    technical_bulletins: 'equipment', warranty_docs: 'equipment', spec_sheets: 'equipment',
-    building_plans: 'building', engineering_reports: 'building', site_surveys: 'building',
-    permits: 'building', inspection_reports: 'building', project_specs: 'building',
-    scope_of_work: 'building', material_specs: 'building',
-    local_codes: 'codes', safety_data_sheets: 'codes', osha_docs: 'codes', inspection_checklists: 'codes',
-    sops: 'company', safety_protocols: 'company', installation_checklists: 'company',
-    training_materials: 'company', maintenance_guides: 'company',
-    client_docs: 'client', service_reports: 'client', site_requirements: 'client'
+    manufacturer_manuals: 'manuals', equipment_manuals: 'manuals', wiring_diagrams: 'manuals',
+    technical_bulletins: 'manuals', warranty_docs: 'manuals',
+    equipment_spec_sheets: 'specs', spec_sheets: 'specs',
+    company_sops: 'sops', sops: 'sops', installation_checklists: 'sops', maintenance_guides: 'sops',
+    safety_protocols: 'safety', safety_data_sheets: 'safety', osha_docs: 'safety',
+    diagnostic_workflows: 'diagnostics', inspection_checklists: 'diagnostics',
+    training_materials: 'training',
+    building_plans: 'plans', engineering_reports: 'plans', site_surveys: 'plans',
+    permits: 'plans', project_specs: 'plans', scope_of_work: 'plans', material_specs: 'plans',
+    parts_lists: 'parts'
 };
 
 // Member being targeted for removal (store ID)
@@ -136,6 +126,7 @@ async function initAuth() {
         loadMedia(),
         loadTeam(),
         loadPerTechActivity(),
+        loadAnalytics(),
         loadBilling(),
         loadSettings()
     ]);
@@ -242,6 +233,24 @@ async function loadActivityFeed() {
     feed.innerHTML = items.map(function(item) {
         return '<div class="activity-item">' + item.html + ' <span class="activity-time">' + timeAgo(item.time) + '</span></div>';
     }).join('');
+}
+
+// ============================================
+// TEAM ANALYTICS
+// ============================================
+
+async function loadAnalytics() {
+    // Stub — analytics data will be populated when query tracking is implemented
+    // For now, display zero-state in all analytics tables
+    var totalEl = document.getElementById('analytics-total-queries');
+    var topicsEl = document.getElementById('analytics-unique-topics');
+    var unansweredEl = document.getElementById('analytics-unanswered');
+    var avgEl = document.getElementById('analytics-avg-per-tech');
+
+    if (totalEl) totalEl.textContent = '0';
+    if (topicsEl) topicsEl.textContent = '0';
+    if (unansweredEl) unansweredEl.textContent = '0';
+    if (avgEl) avgEl.textContent = '0';
 }
 
 // ============================================

@@ -29,6 +29,18 @@
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="14" height="12" rx="2"/><circle cx="6.5" cy="7.5" r="1.5"/><path d="M16 12l-3.5-4L9 12.5 7 10l-5 5"/></svg>
             Photos & Videos
         </a>
+        <a href="#" class="sidebar-link" onclick="showPage('chat-history'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h12v10H6l-3 3V3z"/></svg>
+            Chat History
+        </a>
+        <a href="#" class="sidebar-link" onclick="showPage('saved-answers'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 2h8a1 1 0 011 1v14l-5-3-5 3V3a1 1 0 011-1z"/></svg>
+            Saved Answers
+        </a>
+        <a href="#" class="sidebar-link" onclick="showPage('quick-tools'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>
+            Quick Tools
+        </a>
         <a href="#" class="sidebar-link" onclick="showPage('billing'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2 8h14"/></svg>
             Subscription & Billing
@@ -72,7 +84,7 @@
                 <tbody id="documents-tbody"></tbody>
             </table>
         </div>
-        <div id="storage-indicator" class="storage-indicator">0 / 20 documents used <span id="plan-badge" class="plan-badge">Free</span></div>
+        <div id="storage-indicator" class="storage-indicator">0 / 50 documents used <span id="plan-badge" class="plan-badge">Pro</span></div>
     </div>
 
     <!-- PHOTOS & VIDEOS -->
@@ -97,7 +109,7 @@
 
         <div class="media-grid" id="media-grid">
         </div>
-        <div class="storage-indicator" id="media-storage-indicator" style="margin-top:24px;">0 files uploaded <span class="plan-badge">Free</span></div>
+        <div class="storage-indicator" id="media-storage-indicator" style="margin-top:24px;">0 files uploaded <span class="plan-badge">Pro</span></div>
     </div>
 
     <!-- SUBSCRIPTION & BILLING -->
@@ -109,49 +121,24 @@
 
         <!-- Plan Cards Grid -->
         <div class="billing-plans-grid">
-            <!-- Free -->
-            <div class="pricing-card" id="plan-card-free">
-                <div class="pricing-badge-spacer"></div>
-                <div class="pricing-header"><h3>Free</h3></div>
-                <div class="pricing-subtitle">Try Arrival. No commitment.</div>
-                <div class="pricing-price">$0</div>
-                <div class="pricing-desc">Free for everyone</div>
-                <div class="pricing-cta">
-                    <button id="billing-btn-free" class="btn btn-outline" disabled>Current Plan</button>
-                </div>
-                <hr class="pricing-divider">
-                <div class="pricing-features">
-                    <div class="pricing-feature">10 queries per day</div>
-                    <div class="pricing-feature">5 camera snaps per day</div>
-                    <div class="pricing-feature">Voice + Text</div>
-                    <div class="pricing-feature">All trades supported</div>
-                    <div class="pricing-feature">24-hour memory</div>
-                    <div class="pricing-feature dim">No document uploads</div>
-                    <div class="pricing-feature dim">Community support only</div>
-                </div>
-            </div>
-
             <!-- Pro -->
             <div class="pricing-card" id="plan-card-pro">
                 <div class="pricing-badge">Most Popular</div>
                 <div class="pricing-header"><h3>Pro</h3></div>
                 <div class="pricing-subtitle">For independent techs and small crews.</div>
                 <div class="pricing-price">$25 <span>/month</span></div>
-                <div class="pricing-desc">Per person billed monthly</div>
+                <div class="pricing-desc">Per person, billed monthly</div>
                 <div class="pricing-cta">
                     <button id="billing-btn-pro" class="btn btn-primary">Upgrade to Pro</button>
                 </div>
                 <hr class="pricing-divider">
-                <div class="pricing-inherits">Everything in Free, plus:</div>
                 <div class="pricing-features">
-                    <div class="pricing-feature">25 queries per day</div>
-                    <div class="pricing-feature">Unlimited camera snaps</div>
-                    <div class="pricing-feature">Unlimited memory</div>
-                    <div class="pricing-feature">Unlimited document uploads</div>
-                    <div class="pricing-feature">Personal usage stats</div>
+                    <div class="pricing-feature">Voice + Text + Camera</div>
+                    <div class="pricing-feature">Up to 50 documents</div>
+                    <div class="pricing-feature">Chat history</div>
+                    <div class="pricing-feature">Saved answers</div>
+                    <div class="pricing-feature">Quick tools &amp; calculators</div>
                     <div class="pricing-feature">Email support</div>
-                    <div class="pricing-feature">Priority support</div>
-                    <div class="pricing-feature">Early access to new features</div>
                 </div>
             </div>
 
@@ -161,20 +148,20 @@
                 <div class="pricing-header"><h3>Business</h3></div>
                 <div class="pricing-subtitle">For teams and contractors.</div>
                 <div class="pricing-price">$250 <span>/month</span></div>
-                <div class="pricing-desc">Flat rate. 10 seats included.</div>
+                <div class="pricing-desc">10 seats included. +$25/seat after.</div>
                 <div class="pricing-cta">
                     <button id="billing-btn-biz" class="btn btn-primary">Upgrade to Business</button>
                 </div>
                 <hr class="pricing-divider">
                 <div class="pricing-inherits">Everything in Pro, plus:</div>
                 <div class="pricing-features">
-                    <div class="pricing-feature">10 seats included</div>
-                    <div class="pricing-feature">Unlimited queries per seat</div>
-                    <div class="pricing-feature">Team shared memory</div>
-                    <div class="pricing-feature">Shared team library</div>
-                    <div class="pricing-feature">Admin dashboard & analytics</div>
-                    <div class="pricing-feature">Priority support + phone</div>
-                    <div class="pricing-feature">Central billing</div>
+                    <div class="pricing-feature">Unlimited documents</div>
+                    <div class="pricing-feature">Categorised document library</div>
+                    <div class="pricing-feature">Proactive Mode</div>
+                    <div class="pricing-feature">Team analytics</div>
+                    <div class="pricing-feature">Training gap reports</div>
+                    <div class="pricing-feature">Role-based access</div>
+                    <div class="pricing-feature">Priority support</div>
                 </div>
             </div>
         </div>
@@ -207,6 +194,73 @@
             <h2>Invoice History</h2>
             <div id="invoice-list-wrapper">
                 <p style="color:var(--text-muted);font-size:14px;">Loading invoices...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHAT HISTORY -->
+    <div class="dash-page" id="page-chat-history">
+        <div class="dash-header">
+            <h1>Chat History</h1>
+            <p class="dash-sub">Browse and search your past conversations with Arrival.</p>
+        </div>
+        <div class="table-wrapper">
+            <table class="dash-table">
+                <thead><tr><th>Date</th><th>Preview</th><th>Topic</th></tr></thead>
+                <tbody id="chat-history-tbody">
+                    <tr><td colspan="3" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No conversations yet. Start using Arrival to see your chat history here.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SAVED ANSWERS -->
+    <div class="dash-page" id="page-saved-answers">
+        <div class="dash-header">
+            <h1>Saved Answers</h1>
+            <p class="dash-sub">Answers you've bookmarked for quick reference on the job.</p>
+        </div>
+        <div class="table-wrapper">
+            <table class="dash-table">
+                <thead><tr><th>Question</th><th>Date Saved</th><th>Topic</th></tr></thead>
+                <tbody id="saved-answers-tbody">
+                    <tr><td colspan="3" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No saved answers yet. Bookmark answers in the Arrival app to access them here.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- QUICK TOOLS -->
+    <div class="dash-page" id="page-quick-tools">
+        <div class="dash-header">
+            <h1>Quick Tools</h1>
+            <p class="dash-sub">Common trade calculators and reference tools at your fingertips.</p>
+        </div>
+        <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px;">
+            <div class="card" style="padding: 28px; cursor: default;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Wire Gauge Calculator</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Calculate the correct wire gauge for amperage, distance, and voltage drop.</p>
+                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
+            </div>
+            <div class="card" style="padding: 28px; cursor: default;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Voltage Drop Calculator</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Determine voltage drop for a given wire size, load, and run length.</p>
+                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
+            </div>
+            <div class="card" style="padding: 28px; cursor: default;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Ohm's Law Calculator</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Quick voltage, current, resistance, and power calculations.</p>
+                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
+            </div>
+            <div class="card" style="padding: 28px; cursor: default;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Pipe Sizing Tool</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Size pipes based on flow rate, pressure, and material type.</p>
+                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
+            </div>
+            <div class="card" style="padding: 28px; cursor: default;">
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Refrigerant PT Chart</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Pressure-temperature lookup for common refrigerants (R-410A, R-22, R-134a).</p>
+                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
             </div>
         </div>
     </div>
@@ -271,7 +325,7 @@
 <div class="modal-overlay" id="cancel-modal" onclick="if(event.target===this)closeModal('cancel-modal')">
     <div class="modal">
         <h2>Cancel Subscription</h2>
-        <p>Are you sure? Your account will revert to Free at the end of this billing period.</p>
+        <p>Are you sure? Your account will be deactivated at the end of this billing period.</p>
         <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('cancel-modal')">Keep Subscription</button><button id="cancel-confirm-btn" class="btn btn-danger">Cancel Subscription</button></div>
     </div>
 </div>

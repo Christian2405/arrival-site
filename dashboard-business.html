@@ -33,6 +33,10 @@
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="6" r="3"/><path d="M1 16c0-3 3-5 6-5s6 2 6 5"/><circle cx="14" cy="5" r="2"/><path d="M14 9c2 0 4 1.5 4 3.5"/></svg>
             Team Activity
         </a>
+        <a href="#" class="sidebar-link" onclick="showPage('analytics'); return false;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16V10M9 16V4M14 16V8"/></svg>
+            Team Analytics
+        </a>
         <a href="#" class="sidebar-link" onclick="showPage('billing'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2 8h14"/></svg>
             Subscription & Billing
@@ -75,12 +79,28 @@
                 <div class="stat-label">Team queries this week</div>
                 <div class="stat-value" id="home-stat-queries">0</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Unanswered queries</div>
+                <div class="stat-value" id="home-stat-unanswered">0</div>
+            </div>
         </div>
 
         <div class="dash-section">
             <div class="quick-actions">
                 <button class="btn btn-primary" onclick="showPage('docs')">Upload Documents</button>
                 <button class="btn btn-outline" onclick="openModal('invite-modal')">Invite Team Member</button>
+            </div>
+        </div>
+
+        <div class="dash-section">
+            <h2>Top 5 Questions This Week</h2>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Question</th><th>Times Asked</th><th>Topic</th></tr></thead>
+                    <tbody id="home-top-questions-tbody">
+                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No queries this week yet.</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -112,11 +132,14 @@
             </div>
             <div class="filter-tabs">
                 <button class="filter-tab active" onclick="filterDocs(this,'all')">All</button>
-                <button class="filter-tab" onclick="filterDocs(this,'equipment')">Equipment</button>
-                <button class="filter-tab" onclick="filterDocs(this,'building')">Building & Project</button>
-                <button class="filter-tab" onclick="filterDocs(this,'codes')">Codes</button>
-                <button class="filter-tab" onclick="filterDocs(this,'company')">Company</button>
-                <button class="filter-tab" onclick="filterDocs(this,'client')">Client & Site</button>
+                <button class="filter-tab" onclick="filterDocs(this,'manuals')">Manufacturer Manuals</button>
+                <button class="filter-tab" onclick="filterDocs(this,'specs')">Equipment Spec Sheets</button>
+                <button class="filter-tab" onclick="filterDocs(this,'sops')">Company SOPs</button>
+                <button class="filter-tab" onclick="filterDocs(this,'safety')">Safety Protocols</button>
+                <button class="filter-tab" onclick="filterDocs(this,'diagnostics')">Diagnostic Workflows</button>
+                <button class="filter-tab" onclick="filterDocs(this,'training')">Training Materials</button>
+                <button class="filter-tab" onclick="filterDocs(this,'plans')">Building Plans</button>
+                <button class="filter-tab" onclick="filterDocs(this,'parts')">Parts Lists</button>
             </div>
         </div>
 
@@ -178,7 +201,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $250/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button></div>
+            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $25/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button></div>
         </div>
 
         <div class="dash-section">
@@ -187,6 +210,95 @@
                 <table class="dash-table" id="pertech-table">
                     <thead><tr><th>Name</th><th>Queries This Period</th><th>Most Common Topic</th><th>Documents Queried</th></tr></thead>
                     <tbody id="pertech-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TEAM ANALYTICS ========== -->
+    <div class="dash-page" id="page-analytics">
+        <div class="dash-header">
+            <h1>Team Analytics</h1>
+            <p class="dash-sub">Track query patterns, identify training gaps, and measure your team's usage.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total queries (this period)</div>
+                <div class="stat-value" id="analytics-total-queries">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Unique topics</div>
+                <div class="stat-value" id="analytics-unique-topics">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Unanswered queries</div>
+                <div class="stat-value" id="analytics-unanswered">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg queries per tech</div>
+                <div class="stat-value" id="analytics-avg-per-tech">0</div>
+            </div>
+        </div>
+
+        <div class="dash-section">
+            <h2>Most Asked Questions</h2>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Question</th><th>Times Asked</th><th>Topic</th></tr></thead>
+                    <tbody id="analytics-top-questions-tbody">
+                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No data yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dash-section">
+            <h2>Most Queried Documents</h2>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Document</th><th>Category</th><th>Times Referenced</th></tr></thead>
+                    <tbody id="analytics-top-docs-tbody">
+                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No data yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dash-section">
+            <h2>Training Gaps</h2>
+            <p class="dash-sub" style="margin-bottom:16px;">Topics where your team is asking questions with low confidence or repeated errors.</p>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Topic</th><th>Low-Confidence Queries</th><th>Techs Affected</th></tr></thead>
+                    <tbody id="analytics-training-gaps-tbody">
+                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No training gaps identified yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dash-section">
+            <h2>Query Volume Per Tech</h2>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Name</th><th>Total Queries</th><th>This Week</th><th>Most Common Topic</th></tr></thead>
+                    <tbody id="analytics-per-tech-tbody">
+                        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">No data yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dash-section">
+            <h2>Unanswered Queries Log</h2>
+            <p class="dash-sub" style="margin-bottom:16px;">Questions Arrival couldn't confidently answer. Consider uploading relevant documentation.</p>
+            <div class="table-wrapper">
+                <table class="dash-table">
+                    <thead><tr><th>Date</th><th>Tech</th><th>Question</th><th>Suggested Action</th></tr></thead>
+                    <tbody id="analytics-unanswered-tbody">
+                        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">No unanswered queries.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -323,42 +435,14 @@
             <label>Category (required)</label>
             <select id="upload-category">
                 <option value="">Select category...</option>
-                <optgroup label="Equipment & Manufacturer Docs">
-                    <option value="equipment_manuals">Equipment Manuals</option>
-                    <option value="wiring_diagrams">Wiring Diagrams</option>
-                    <option value="parts_lists">Parts Lists</option>
-                    <option value="technical_bulletins">Technical Bulletins</option>
-                    <option value="warranty_docs">Warranty Documentation</option>
-                    <option value="spec_sheets">Spec Sheets</option>
-                </optgroup>
-                <optgroup label="Building & Project Documentation">
-                    <option value="building_plans">Building Plans</option>
-                    <option value="engineering_reports">Engineering Reports</option>
-                    <option value="site_surveys">Site Surveys</option>
-                    <option value="permits">Permits</option>
-                    <option value="inspection_reports">Inspection Reports</option>
-                    <option value="project_specs">Project Specifications</option>
-                    <option value="scope_of_work">Scope of Work</option>
-                    <option value="material_specs">Material Submittals</option>
-                </optgroup>
-                <optgroup label="Codes & Compliance">
-                    <option value="local_codes">Local Code Amendments</option>
-                    <option value="safety_data_sheets">Safety Data Sheets</option>
-                    <option value="osha_docs">OSHA Compliance</option>
-                    <option value="inspection_checklists">Inspection Checklists</option>
-                </optgroup>
-                <optgroup label="Company Procedures">
-                    <option value="sops">SOPs</option>
-                    <option value="safety_protocols">Safety Protocols</option>
-                    <option value="installation_checklists">Installation Checklists</option>
-                    <option value="training_materials">Training Materials</option>
-                    <option value="maintenance_guides">Maintenance Procedures</option>
-                </optgroup>
-                <optgroup label="Client & Site Information">
-                    <option value="client_docs">Client Documentation</option>
-                    <option value="service_reports">Service Reports</option>
-                    <option value="site_requirements">Client Requirements</option>
-                </optgroup>
+                <option value="manufacturer_manuals">Manufacturer Manuals</option>
+                <option value="equipment_spec_sheets">Equipment Spec Sheets</option>
+                <option value="company_sops">Company SOPs</option>
+                <option value="safety_protocols">Safety Protocols</option>
+                <option value="diagnostic_workflows">Diagnostic Workflows</option>
+                <option value="training_materials">Training Materials</option>
+                <option value="building_plans">Building Plans</option>
+                <option value="parts_lists">Parts Lists</option>
             </select>
         </div>
         <div class="form-group"><label>Project / Site (optional)</label><input type="text" id="upload-project" placeholder="e.g. 445 Oak St, Johnson Residence"></div>

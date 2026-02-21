@@ -14,8 +14,8 @@ let currentProfile = null;
 let currentSubscription = null;
 
 // Document limits by plan
-const DOC_LIMITS = { free: 3, pro: 20, business: 50, enterprise: 200 };
-const PLAN_PRICES = { free: '$0/month', pro: '$25/month', business: '$250/month', enterprise: 'Custom' };
+const DOC_LIMITS = { pro: 50, business: 999, enterprise: 999 };
+const PLAN_PRICES = { pro: '$25/month', business: '$250/month', enterprise: 'Custom' };
 
 // ============================================
 // TOAST
@@ -47,7 +47,7 @@ async function initAuth() {
 
     // Redirect business users to the business dashboard
     // Only redirect if not already bounced back (prevents infinite loop)
-    var plan = currentProfile ? currentProfile.account_type : 'free';
+    var plan = currentProfile ? currentProfile.account_type : 'pro';
     if (plan === 'business' && !window.location.search.includes('stay=true')) {
         window.location.href = '/dashboard-business';
         return;
@@ -91,8 +91,8 @@ async function loadDocuments() {
         .order('created_at', { ascending: false });
 
     var docs = result.data || [];
-    var plan = currentProfile ? currentProfile.account_type : 'free';
-    var limit = DOC_LIMITS[plan] || 20;
+    var plan = currentProfile ? currentProfile.account_type : 'pro';
+    var limit = DOC_LIMITS[plan] || 50;
     var tbody = document.getElementById('documents-tbody');
 
     if (docs.length === 0) {
@@ -228,43 +228,29 @@ var cardElement = null;
 var setupClientSecret = null;
 
 function loadBilling() {
-    var plan = currentSubscription ? currentSubscription.plan : 'free';
+    var plan = currentSubscription ? currentSubscription.plan : 'pro';
 
     // Billing detail text (next billing date)
     var detailEl = document.getElementById('billing-plan-detail');
     if (currentSubscription && currentSubscription.current_period_end) {
         var endDate = new Date(currentSubscription.current_period_end);
         detailEl.textContent = 'You are on the ' + capitalize(plan) + ' plan. Next billing date: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    } else if (plan === 'free') {
-        detailEl.textContent = 'You are on the Free plan. Choose a plan below to unlock more features.';
+    } else {
+        detailEl.textContent = 'You are on the ' + capitalize(plan) + ' plan. Choose a plan below to change your subscription.';
     }
 
     // Highlight current plan card
-    var cards = ['free', 'pro', 'business'];
+    var cards = ['pro', 'business'];
     cards.forEach(function(p) {
         var card = document.getElementById('plan-card-' + p);
         if (card) card.classList.toggle('plan-active', p === plan);
     });
 
     // Update button states for each plan card
-    var btnFree = document.getElementById('billing-btn-free');
     var btnPro = document.getElementById('billing-btn-pro');
     var btnBiz = document.getElementById('billing-btn-biz');
 
-    if (plan === 'free') {
-        btnFree.textContent = 'Current Plan';
-        btnFree.disabled = true;
-        btnFree.className = 'btn btn-outline';
-        btnPro.textContent = 'Upgrade to Pro';
-        btnPro.disabled = false;
-        btnPro.className = 'btn btn-primary';
-        btnBiz.textContent = 'Upgrade to Business';
-        btnBiz.disabled = false;
-        btnBiz.className = 'btn btn-primary';
-    } else if (plan === 'pro') {
-        btnFree.textContent = 'Downgrade';
-        btnFree.disabled = true;
-        btnFree.className = 'btn btn-outline';
+    if (plan === 'pro') {
         btnPro.textContent = 'Current Plan';
         btnPro.disabled = true;
         btnPro.className = 'btn btn-outline';
@@ -272,9 +258,6 @@ function loadBilling() {
         btnBiz.disabled = false;
         btnBiz.className = 'btn btn-primary';
     } else if (plan === 'business') {
-        btnFree.textContent = 'Downgrade';
-        btnFree.disabled = true;
-        btnFree.className = 'btn btn-outline';
         btnPro.textContent = 'Downgrade';
         btnPro.disabled = true;
         btnPro.className = 'btn btn-outline';
@@ -283,17 +266,15 @@ function loadBilling() {
         btnBiz.className = 'btn btn-outline';
     }
 
-    // Show cancel + payment + invoice sections for paid plans
+    // Show cancel + payment + invoice sections
     var cancelSection = document.getElementById('billing-cancel-section');
-    if (cancelSection) cancelSection.style.display = (plan !== 'free') ? '' : 'none';
+    if (cancelSection) cancelSection.style.display = '';
 
-    document.getElementById('billing-payment-section').style.display = (plan !== 'free') ? '' : 'none';
-    document.getElementById('billing-invoice-section').style.display = (plan !== 'free') ? '' : 'none';
+    document.getElementById('billing-payment-section').style.display = '';
+    document.getElementById('billing-invoice-section').style.display = '';
 
     // Load billing details from Stripe (invoices + payment method)
-    if (plan !== 'free') {
-        loadBillingDetails();
-    }
+    loadBillingDetails();
 }
 
 async function loadBillingDetails() {
@@ -693,7 +674,7 @@ async function loadMedia() {
     userMedia = result.data || [];
     renderMediaGrid(userMedia);
 
-    var plan = currentProfile ? currentProfile.account_type : 'free';
+    var plan = currentProfile ? currentProfile.account_type : 'pro';
     var indicator = document.getElementById('media-storage-indicator');
     if (indicator) indicator.innerHTML = userMedia.length + ' files uploaded <span class="plan-badge">' + capitalize(plan) + '</span>';
 }
