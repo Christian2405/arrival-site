@@ -107,10 +107,9 @@ exports.handler = async (event) => {
         // For business plan: create team if needed
         if (plan === 'business') {
           const { data: existingTeam } = await supabase
-            .from('team_members')
-            .select('team_id')
-            .eq('user_id', userId)
-            .eq('role', 'owner')
+            .from('teams')
+            .select('id')
+            .eq('owner_id', userId)
             .limit(1)
             .single();
 
@@ -123,27 +122,38 @@ exports.handler = async (event) => {
 
             const teamName = (userInfo?.first_name || 'My') + "'s Team";
 
-            const { data: newTeam } = await supabase
+            const { data: newTeam, error: teamError } = await supabase
               .from('teams')
               .insert({
                 name: teamName,
-                owner_user_id: userId,
-                trade: userInfo?.primary_trade || 'general_construction',
+                owner_id: userId,
+                primary_trade: userInfo?.primary_trade || 'general_construction',
                 max_seats: 10
               })
               .select('id')
               .single();
 
+            if (teamError) {
+              console.error('Failed to create team:', teamError);
+            }
+
             if (newTeam) {
-              await supabase
+              const userEmail = (await supabase.auth.admin.getUserById(userId)).data?.user?.email;
+              const { error: memberError } = await supabase
                 .from('team_members')
                 .insert({
                   team_id: newTeam.id,
                   user_id: userId,
-                  email: (await supabase.auth.admin.getUserById(userId)).data?.user?.email,
-                  role: 'owner',
+                  email: userEmail,
+                  role: 'admin',
                   status: 'active'
                 });
+
+              if (memberError) {
+                console.error('Failed to create team member:', memberError);
+              } else {
+                console.log('Team created:', newTeam.id, 'with owner:', userId);
+              }
             }
           }
         }
@@ -218,19 +228,18 @@ exports.handler = async (event) => {
           const extraSeats = seatItem.quantity || 0;
           const totalSeats = 10 + extraSeats;
 
-          const { data: teamMember } = await supabase
-            .from('team_members')
-            .select('team_id')
-            .eq('user_id', sub.user_id)
-            .eq('role', 'owner')
+          const { data: ownerTeam } = await supabase
+            .from('teams')
+            .select('id')
+            .eq('owner_id', sub.user_id)
             .limit(1)
             .single();
 
-          if (teamMember) {
+          if (ownerTeam) {
             await supabase
               .from('teams')
               .update({ max_seats: totalSeats })
-              .eq('id', teamMember.team_id);
+              .eq('id', ownerTeam.id);
           }
         }
 
