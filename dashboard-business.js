@@ -121,7 +121,8 @@ async function initAuth() {
 
     if (!memberResult || !memberResult.data) {
         // Not a business team member — redirect to individual dashboard
-        window.location.href = '/dashboard-individual.html';
+        // Add stay=true to prevent redirect loop
+        window.location.href = '/dashboard-individual?stay=true';
         return;
     }
 

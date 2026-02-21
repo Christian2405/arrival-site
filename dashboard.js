@@ -46,8 +46,9 @@ async function initAuth() {
     await loadProfile();
 
     // Redirect business users to the business dashboard
+    // Only redirect if not already bounced back (prevents infinite loop)
     var plan = currentProfile ? currentProfile.account_type : 'free';
-    if (plan === 'business') {
+    if (plan === 'business' && !window.location.search.includes('stay=true')) {
         window.location.href = '/dashboard-business';
         return;
     }
