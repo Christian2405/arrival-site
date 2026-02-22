@@ -719,7 +719,8 @@ p {
 .pricing-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 32px;
+    grid-template-rows: repeat(9, auto);
+    gap: 0 32px;
 }
 
 .pricing-grid-2 {
@@ -737,8 +738,9 @@ p {
     padding: 52px 44px;
     position: relative;
     text-align: left;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 9;
 }
 
 .pricing-featured {
@@ -787,7 +789,6 @@ p {
     font-size: 15px;
     color: var(--text-muted);
     margin-bottom: 32px;
-    min-height: 46px;
 }
 
 .pricing-featured .pricing-subtitle {
@@ -1608,6 +1609,12 @@ p {
 
     .pricing-grid {
         grid-template-columns: 1fr;
+        grid-template-rows: none;
+    }
+
+    .pricing-card {
+        grid-row: auto;
+        grid-template-rows: none;
     }
 
     .pricing-featured {
