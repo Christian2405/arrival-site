@@ -787,6 +787,7 @@ p {
     font-size: 15px;
     color: var(--text-muted);
     margin-bottom: 32px;
+    min-height: 46px;
 }
 
 .pricing-featured .pricing-subtitle {
@@ -822,7 +823,6 @@ p {
 }
 
 .pricing-cta {
-    margin-top: auto;
     margin-bottom: 32px;
 }
 
