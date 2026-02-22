@@ -822,6 +822,7 @@ p {
 }
 
 .pricing-cta {
+    margin-top: auto;
     margin-bottom: 32px;
 }
 
@@ -1487,6 +1488,50 @@ p {
     padding: 24px 40px;
     text-align: center;
     border-top: 1px solid var(--bg-border);
+}
+
+/* ============================================
+   SCROLL REVEAL ANIMATIONS
+   ============================================ */
+
+.reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal.reveal-left {
+    transform: translateX(-40px);
+}
+
+.reveal.reveal-right {
+    transform: translateX(40px);
+}
+
+.reveal.reveal-scale {
+    transform: scale(0.95);
+}
+
+.reveal.active {
+    opacity: 1;
+    transform: none;
+}
+
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+.reveal-delay-6 { transition-delay: 0.6s; }
+.reveal-delay-7 { transition-delay: 0.7s; }
+.reveal-delay-8 { transition-delay: 0.8s; }
+
+@media (prefers-reduced-motion: reduce) {
+    .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
 }
 
 /* ============================================
