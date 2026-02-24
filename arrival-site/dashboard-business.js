@@ -422,6 +422,10 @@ async function handleDocUpload() {
 
         var formData = new FormData();
         formData.append('file', file);
+        formData.append('category', category);
+        if (currentTeam && currentTeam.id) {
+            formData.append('team_id', currentTeam.id);
+        }
 
         var controller = new AbortController();
         var uploadTimeout = setTimeout(function() { controller.abort(); }, 120000);
