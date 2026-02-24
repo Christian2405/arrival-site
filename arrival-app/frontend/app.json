@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Arrival",
+    "slug": "arrival",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "arrival",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFF5"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Arrival uses the camera to see equipment and help diagnose issues.",
+        "NSMicrophoneUsageDescription": "Arrival uses the microphone for hands-free voice commands."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFF5"
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Arrival needs camera access to see equipment and help diagnose issues."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Arrival needs microphone access for voice commands."
+        }
+      ],
+      "expo-web-browser"
+    ]
+  }
+}

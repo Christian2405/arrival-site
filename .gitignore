@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native builds
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.kotlin/
+*.orig.*
+
+# Metro
+.metro-health-check*
+
+# macOS
+.DS_Store
+*.pem
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# TypeScript
+*.tsbuildinfo
+
+# Generated native folders
+ios/
+android/
+
+# IDE
+.vscode/
+.idea/
+
+# Video output files
+*.mp4
