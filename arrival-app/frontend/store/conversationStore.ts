@@ -9,6 +9,7 @@ export interface Message {
   audio?: string;
   source?: string;
   confidence?: 'high' | 'medium' | 'low';
+  alertType?: 'warning' | 'critical';
   timestamp: Date;
 }
 

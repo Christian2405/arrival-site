@@ -103,6 +103,58 @@ export default function HomeScreen() {
 
   const messages = currentConversation?.messages || [];
 
+  // --- Job Mode: Periodic frame analysis ---
+  const jobModeProcessing = useRef(false);
+
+  useEffect(() => {
+    if (!jobMode || !permission?.granted) return;
+
+    const analyzeInterval = setInterval(async () => {
+      // Skip if already processing a frame or a chat message
+      if (jobModeProcessing.current || isProcessing || isRecording) return;
+
+      jobModeProcessing.current = true;
+      try {
+        const frameBase64 = await captureFrame();
+        if (!frameBase64) {
+          jobModeProcessing.current = false;
+          return;
+        }
+
+        const result = await aiAPI.analyzeFrame(frameBase64);
+
+        if (result.alert && result.message) {
+          // Ensure a conversation exists before adding messages
+          if (!currentConversation) createNewConversation();
+
+          const alertMessage: Message = {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: result.message,
+            alertType: result.severity === 'critical' ? 'critical' : 'warning',
+            source: 'Job Mode Analysis',
+            timestamp: new Date(),
+          };
+          addMessage(alertMessage);
+
+          // Play TTS for the alert so worker hears it through earbuds
+          try {
+            const ttsResponse = await aiAPI.textToSpeech(result.message, demoMode);
+            if (ttsResponse.audio_base64) await playAudio(ttsResponse.audio_base64);
+          } catch (e) {
+            console.log('Job Mode TTS error:', e);
+          }
+        }
+      } catch (error) {
+        console.log('Job Mode analysis error:', error);
+      } finally {
+        jobModeProcessing.current = false;
+      }
+    }, 8000);
+
+    return () => clearInterval(analyzeInterval);
+  }, [jobMode, permission?.granted, isProcessing, isRecording]);
+
   // --- Keyboard height (instant, no animation) ---
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -743,9 +795,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   thinkingDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.accentMuted,
   },
   thinkingText: {

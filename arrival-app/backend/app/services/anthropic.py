@@ -1,7 +1,9 @@
 """
 LLM service using Anthropic Claude API with vision support.
+Supports memory injection, RAG context, and Job Mode frame analysis.
 """
 
+import json
 import anthropic
 
 from app import config
@@ -11,9 +13,12 @@ async def chat_with_claude(
     message: str,
     image_base64: str | None = None,
     conversation_history: list[dict] | None = None,
+    user_memories: list[str] | None = None,
+    rag_context: list[dict] | None = None,
 ) -> dict:
     """
     Send a message (optionally with an image) to Claude and get a response.
+    Injects user memories and RAG document context into the system prompt.
     Returns: { response, source, confidence }
     """
     if not config.ANTHROPIC_API_KEY:
@@ -50,15 +55,123 @@ async def chat_with_claude(
     content_parts.append({"type": "text", "text": message})
     messages.append({"role": "user", "content": content_parts})
 
+    # Build enhanced system prompt with memories + RAG context
+    system_prompt = config.SYSTEM_PROMPT
+
+    if user_memories:
+        memory_block = "\n".join(f"- {m}" for m in user_memories)
+        system_prompt += f"""
+
+## User Context (from previous conversations)
+{memory_block}
+
+Use this context to personalize your response. Reference their equipment, trade, or past issues when relevant."""
+
+    if rag_context:
+        context_block = ""
+        for ctx in rag_context:
+            score_pct = f"{ctx['score']:.0%}" if ctx.get('score') else ""
+            context_block += f"\n### From: {ctx['filename']}"
+            if score_pct:
+                context_block += f" (relevance: {score_pct})"
+            context_block += f"\n{ctx['text']}\n"
+        system_prompt += f"""
+
+## Relevant Documents
+The following excerpts are from the user's uploaded documents. Reference them when answering.
+{context_block}
+When you use information from these documents, cite the filename as your source."""
+
     response = client.messages.create(
         model=config.ANTHROPIC_MODEL,
         max_tokens=1024,
-        system=config.SYSTEM_PROMPT,
+        system=system_prompt,
         messages=messages,
     )
 
+    # Determine source attribution
+    source = "Claude AI Analysis"
+    if rag_context:
+        filenames = list(set(ctx["filename"] for ctx in rag_context))
+        source = f"Claude AI + {', '.join(filenames[:2])}"
+        if len(filenames) > 2:
+            source += f" (+{len(filenames) - 2} more)"
+
     return {
         "response": response.content[0].text,
-        "source": "Claude AI Analysis",
+        "source": source,
         "confidence": "high",
     }
+
+
+async def analyze_frame(image_base64: str) -> dict:
+    """
+    Analyze a camera frame for Job Mode.
+    Returns { alert: bool, message: str|None, severity: str|None }
+    Claude only responds substantively if something notable is detected.
+    """
+    if not config.ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY not set.")
+
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+
+    analysis_prompt = """You are a job site safety and quality monitor for trade workers.
+
+Analyze this camera frame from a trade worker's job site. ONLY respond if you see something notable:
+- Safety hazard (exposed wires, missing PPE, water near electrical, gas leak indicators)
+- Incorrect installation (wrong fittings, reversed polarity, improper support)
+- Visible damage or wear that needs attention
+- Code violation visible in the frame
+- Equipment issue the worker might not have noticed
+
+If you see NOTHING notable or the image is unclear/dark/blurry, respond with exactly: OK
+
+If you DO see something notable, respond with a JSON object:
+{"severity": "warning", "message": "Brief, actionable alert (1-2 sentences)"}
+
+Use "warning" for general notices, "critical" for safety hazards.
+Be concise — the worker is on a job site and will hear this via text-to-speech."""
+
+    messages = [{
+        "role": "user",
+        "content": [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": image_base64,
+                },
+            },
+            {"type": "text", "text": "Analyze this job site frame."},
+        ],
+    }]
+
+    response = client.messages.create(
+        model=config.ANTHROPIC_MODEL,
+        max_tokens=256,
+        system=analysis_prompt,
+        messages=messages,
+    )
+
+    text = response.content[0].text.strip()
+
+    # "OK" means nothing notable
+    if text == "OK" or text.lower().startswith("ok"):
+        return {"alert": False, "message": None, "severity": None}
+
+    # Try to parse JSON response
+    try:
+        data = json.loads(text)
+        return {
+            "alert": True,
+            "message": data.get("message", text),
+            "severity": data.get("severity", "warning"),
+        }
+    except json.JSONDecodeError:
+        # Claude responded with plain text instead of JSON — treat as warning
+        return {
+            "alert": True,
+            "message": text,
+            "severity": "warning",
+        }

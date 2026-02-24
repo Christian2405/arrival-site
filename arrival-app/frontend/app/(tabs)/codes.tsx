@@ -14,7 +14,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/Colors';
 import { useAuthStore } from '../../store/authStore';
 import { useDocumentsStore, Document, CODE_CATEGORIES } from '../../store/documentsStore';
 import { getTierLimits } from '../../constants/Tiers';
@@ -94,10 +93,16 @@ export default function CodesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color="#2A2622" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Codes</Text>
-        <View style={styles.backBtn} />
+        <View style={styles.headerRight}>
+          {codeDocs.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{codeDocs.length}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Team toggle (business only) */}
@@ -127,18 +132,18 @@ export default function CodesScreen() {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={Colors.textSecondary} />
+          <Ionicons name="search" size={16} color="#A09A93" />
           <TextInput
             style={styles.searchInput}
             placeholder="Search codes & diagnostics..."
-            placeholderTextColor={Colors.textLight}
+            placeholderTextColor="#C7C2BC"
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color="#C7C2BC" />
             </TouchableOpacity>
           )}
         </View>
@@ -147,12 +152,12 @@ export default function CodesScreen() {
       {/* Content */}
       {loading && !refreshing ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={Colors.accent} />
+          <ActivityIndicator size="large" color="#2A2622" />
         </View>
       ) : filteredDocs.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="document-text-outline" size={48} color={Colors.textLight} />
+            <Ionicons name="document-text-outline" size={40} color="#C7C2BC" />
           </View>
           <Text style={styles.emptyTitle}>
             {searchQuery ? 'No Results' : viewMode === 'team' ? 'No Team Codes' : 'No Codes Yet'}
@@ -160,7 +165,7 @@ export default function CodesScreen() {
           <Text style={styles.emptySubtitle}>
             {searchQuery
               ? 'Try a different search term.'
-              : 'Upload diagnostic workflows and code documents on the Arrival website to reference them here.'}
+              : 'Upload diagnostic workflows and code\ndocuments on the Arrival website to\nreference them here.'}
           </Text>
         </View>
       ) : (
@@ -170,12 +175,12 @@ export default function CodesScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2A2622" />
           }
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.codeCard} onPress={() => openDocument(item)}>
+            <TouchableOpacity style={styles.codeCard} onPress={() => openDocument(item)} activeOpacity={0.6}>
               <View style={styles.codeIcon}>
-                <Ionicons name="document-text" size={22} color={Colors.accent} />
+                <Ionicons name="document-text" size={20} color="#2A2622" />
               </View>
               <View style={styles.codeInfo}>
                 <Text style={styles.codeTitle} numberOfLines={1}>{item.file_name}</Text>
@@ -184,16 +189,17 @@ export default function CodesScreen() {
                     <Text style={styles.categoryText}>{categoryLabel(item.category)}</Text>
                   </View>
                   <Text style={styles.metaText}>{formatFileSize(item.file_size)}</Text>
+                  <Text style={styles.metaDot}>&middot;</Text>
                   <Text style={styles.metaText}>{formatDate(item.created_at)}</Text>
                 </View>
                 {item.team_id && (
                   <View style={styles.teamTag}>
-                    <Ionicons name="people" size={10} color="#4A90D9" />
+                    <Ionicons name="people-outline" size={11} color="#A09A93" />
                     <Text style={styles.teamTagText}>Team</Text>
                   </View>
                 )}
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
             </TouchableOpacity>
           )}
         />
@@ -205,27 +211,43 @@ export default function CodesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F3F0EB',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    flex: 1,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#2A2622',
+    letterSpacing: -0.5,
+    marginLeft: 4,
+  },
+  headerRight: {
+    width: 36,
+    alignItems: 'center',
+  },
+  countBadge: {
+    backgroundColor: '#2A2622',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  countText: {
+    color: '#FFF',
+    fontSize: 12,
     fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.3,
   },
 
   // Toggle
@@ -235,7 +257,7 @@ const styles = StyleSheet.create({
   },
   toggleBar: {
     flexDirection: 'row',
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 3,
   },
@@ -246,17 +268,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleBtnActive: {
-    backgroundColor: Colors.accent,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    backgroundColor: '#2A2622',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
     elevation: 2,
   },
   toggleText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: '#A09A93',
   },
   toggleTextActive: {
     color: '#FFF',
@@ -265,23 +287,26 @@ const styles = StyleSheet.create({
   // Search
   searchContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 14,
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+    height: 42,
     gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: Colors.text,
+    color: '#2A2622',
     paddingVertical: 0,
     letterSpacing: -0.2,
   },
@@ -299,57 +324,60 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    paddingBottom: 60,
+    paddingBottom: 80,
   },
   emptyIconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: Colors.accentMuted,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.text,
+    color: '#2A2622',
     marginBottom: 8,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: '#A09A93',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 28,
   },
 
   // List
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+    paddingTop: 4,
+    gap: 8,
   },
   codeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
   codeIcon: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: '#F3F0EB',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -360,40 +388,45 @@ const styles = StyleSheet.create({
   codeTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
+    color: '#2A2622',
+    marginBottom: 5,
     letterSpacing: -0.2,
   },
   codeMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     flexWrap: 'wrap',
   },
   categoryBadge: {
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: '#F3F0EB',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 5,
   },
   categoryText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: Colors.accent,
+    fontWeight: '700',
+    color: '#A09A93',
+    letterSpacing: 0.2,
   },
   metaText: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: '#C7C2BC',
+  },
+  metaDot: {
+    fontSize: 12,
+    color: '#C7C2BC',
   },
   teamTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 5,
   },
   teamTagText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#4A90D9',
+    color: '#A09A93',
   },
 });

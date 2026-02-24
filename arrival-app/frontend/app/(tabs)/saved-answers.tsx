@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/Colors';
 import { useSavedAnswersStore, SavedAnswer } from '../../store/savedAnswersStore';
 
 export default function SavedAnswersScreen() {
@@ -57,6 +56,13 @@ export default function SavedAnswersScreen() {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Monochrome confidence: dark for high, medium gray for medium, light for low
+  const getConfidenceColor = (confidence: string): string => {
+    if (confidence === 'high') return '#2A2622';
+    if (confidence === 'medium') return '#A09A93';
+    return '#C7C2BC';
   };
 
   return (
@@ -161,12 +167,7 @@ export default function SavedAnswersScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
-            const confidenceColor =
-              item.confidence === 'high'
-                ? '#34C759'
-                : item.confidence === 'medium'
-                ? '#E8A84C'
-                : '#C75450';
+            const confidenceColor = getConfidenceColor(item.confidence || 'low');
             const isExpanded = expandedId === item.id;
 
             return (
@@ -197,7 +198,7 @@ export default function SavedAnswersScreen() {
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={styles.deleteBtn}
                     >
-                      <Ionicons name="trash-outline" size={16} color="#C75450" />
+                      <Ionicons name="trash-outline" size={15} color="#A09A93" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: '#2A2622',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -396,10 +397,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
   answerTop: {
     flexDirection: 'row',
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   answerTradeBadge: {
-    backgroundColor: '#D4842A12',
+    backgroundColor: '#F3F0EB',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 5,
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
   answerTradeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#D4842A',
+    color: '#2A2622',
     letterSpacing: 0.2,
   },
   answerDate: {
@@ -459,7 +460,7 @@ const styles = StyleSheet.create({
   },
   readMore: {
     fontSize: 12,
-    color: Colors.accent,
+    color: '#2A2622',
     fontWeight: '600',
     marginTop: 8,
   },
@@ -469,9 +470,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   confidenceDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   confidenceText: {
     fontSize: 11,
@@ -480,10 +481,10 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   deleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#C7545010',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F0EB',
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -34,6 +34,13 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
 
+# --- Mem0 (User Memory) ---
+MEM0_API_KEY = os.getenv("MEM0_API_KEY", "")
+
+# --- Pinecone (RAG Vector DB) ---
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "arrival-docs")
+
 # --- System Prompt ---
 SYSTEM_PROMPT = """You are Arrival, an AI expert for trade workers (HVAC, plumbing, electrical, builders).
 

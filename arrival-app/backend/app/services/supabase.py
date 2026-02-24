@@ -85,6 +85,20 @@ async def upload_document(
 
     # Return the first (and only) inserted row
     row = inserted[0] if isinstance(inserted, list) else inserted
+
+    # Index for RAG (non-blocking — upload succeeds even if indexing fails)
+    try:
+        from app.services.rag import index_document
+        await index_document(
+            document_id=row.get("id", ""),
+            user_id=user_id,
+            filename=filename,
+            file_bytes=file_bytes,
+            content_type=content_type,
+        )
+    except Exception as e:
+        print(f"[supabase] RAG indexing failed (non-blocking): {e}")
+
     return {
         "id": row.get("id", storage_path),
         "filename": filename,
@@ -176,5 +190,12 @@ async def delete_document(
             params={"id": f"eq.{document_id}"},
         )
         del_resp.raise_for_status()
+
+    # Remove vectors from RAG index (non-blocking)
+    try:
+        from app.services.rag import delete_document_vectors
+        await delete_document_vectors(document_id, user_id)
+    except Exception as e:
+        print(f"[supabase] RAG vector delete failed (non-blocking): {e}")
 
     return True

@@ -27,10 +27,10 @@ const TRADES = [
 ];
 
 const EXPERIENCE = [
-  { label: 'Less than 1 year', value: 'less_1_year' },
-  { label: '1-3 years', value: '1_3_years' },
-  { label: '3-5 years', value: '3_5_years' },
-  { label: '5-10 years', value: '5_10_years' },
+  { label: '< 1 year', value: 'less_1_year' },
+  { label: '1–3 years', value: '1_3_years' },
+  { label: '3–5 years', value: '3_5_years' },
+  { label: '5–10 years', value: '5_10_years' },
   { label: '10+ years', value: '10_plus_years' },
 ];
 
@@ -43,6 +43,7 @@ export default function SignupScreen() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [trade, setTrade] = useState('hvac');
   const [experience, setExperience] = useState('1_3_years');
   const [error, setError] = useState('');
@@ -85,7 +86,6 @@ export default function SignupScreen() {
         [{ text: 'OK', onPress: () => router.push('/login') }]
       );
     }
-    // If no error and no confirmation needed, navigation happens via auth state listener
   };
 
   const handleGoogleSignIn = async () => {
@@ -111,7 +111,7 @@ export default function SignupScreen() {
         >
           {/* Back button */}
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={Colors.text} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
           </TouchableOpacity>
 
           {/* Logo */}
@@ -123,6 +123,7 @@ export default function SignupScreen() {
 
           {error ? (
             <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color={Colors.error} style={{ marginTop: 1 }} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
@@ -172,15 +173,28 @@ export default function SignupScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="6+ characters"
-              placeholderTextColor={Colors.textLight}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              editable={!isLoading}
-            />
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="6+ characters"
+                placeholderTextColor={Colors.textLight}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                editable={!isLoading}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={Colors.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Trade picker */}
@@ -220,13 +234,16 @@ export default function SignupScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
+            style={[styles.button, (isLoading || googleLoading) && styles.buttonDisabled]}
             onPress={handleSignup}
             disabled={isLoading || googleLoading}
             activeOpacity={0.8}
           >
             {isLoading ? (
-              <ActivityIndicator color="#FFF" />
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#FFF" size="small" />
+                <Text style={styles.buttonText}>Creating account...</Text>
+              </View>
             ) : (
               <Text style={styles.buttonText}>Create Account</Text>
             )}
@@ -247,7 +264,10 @@ export default function SignupScreen() {
             activeOpacity={0.8}
           >
             {googleLoading ? (
-              <ActivityIndicator color={Colors.text} />
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={Colors.text} size="small" />
+                <Text style={styles.googleButtonText}>Connecting...</Text>
+              </View>
             ) : (
               <>
                 <Ionicons name="logo-google" size={18} color={Colors.text} />
@@ -273,7 +293,7 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
   },
   flex: { flex: 1 },
   scrollContent: {
@@ -285,10 +305,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.borderLight,
+    backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
   logoWrap: {
     alignItems: 'center',
@@ -302,15 +327,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   errorBox: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
+    gap: 10,
   },
   errorText: {
     color: Colors.error,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
+    flex: 1,
+    lineHeight: 21,
   },
   nameRow: {
     flexDirection: 'row',
@@ -330,7 +360,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   input: {
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 14,
@@ -339,6 +369,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     letterSpacing: -0.2,
+  },
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.text,
+    letterSpacing: -0.2,
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   chipRow: {
     flexDirection: 'row',
@@ -367,7 +417,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   button: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.buttonDark,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -383,19 +433,24 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.textOnDark,
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 22,
   },
   dividerLine: {
     flex: 1,
-    height: StyleSheet.hairlineWidth,
+    height: 1,
     backgroundColor: Colors.border,
   },
   dividerText: {
@@ -408,7 +463,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.card,
     borderRadius: 14,
     paddingVertical: 15,
     borderWidth: 1,

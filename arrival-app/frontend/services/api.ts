@@ -50,6 +50,13 @@ export const aiAPI = {
     });
     return response.data;
   },
+
+  analyzeFrame: async (imageBase64: string) => {
+    const response = await api.post('/analyze-frame', {
+      image_base64: imageBase64,
+    });
+    return response.data;
+  },
 };
 
 // --- Documents API ---

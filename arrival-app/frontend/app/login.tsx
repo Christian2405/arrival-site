@@ -9,7 +9,6 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,6 +25,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     setError('');
@@ -38,7 +38,6 @@ export default function LoginScreen() {
     if (result.error) {
       setError(result.error);
     }
-    // Navigation happens automatically via auth state listener in _layout.tsx
   };
 
   const handleGoogleSignIn = async () => {
@@ -65,7 +64,7 @@ export default function LoginScreen() {
           {/* Logo */}
           <View style={styles.logoWrap}>
             <ArrivalLogo width={180} color={Colors.text} />
-            <Text style={styles.tagline}>AI assistant for trade workers</Text>
+            <Text style={styles.tagline}>Your AI trade assistant</Text>
           </View>
 
           {/* Form */}
@@ -74,6 +73,7 @@ export default function LoginScreen() {
 
             {error ? (
               <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color={Colors.error} style={{ marginTop: 1 }} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
@@ -95,27 +95,43 @@ export default function LoginScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Your password"
-                placeholderTextColor={Colors.textLight}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                editable={!isLoading}
-                onSubmitEditing={handleLogin}
-                returnKeyType="go"
-              />
+              <View style={styles.passwordWrap}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Your password"
+                  placeholderTextColor={Colors.textLight}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  editable={!isLoading}
+                  onSubmitEditing={handleLogin}
+                  returnKeyType="go"
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={Colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+              style={[styles.button, (isLoading || googleLoading) && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading || googleLoading}
               activeOpacity={0.8}
             >
               {isLoading ? (
-                <ActivityIndicator color="#FFF" />
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#FFF" size="small" />
+                  <Text style={styles.buttonText}>Signing in...</Text>
+                </View>
               ) : (
                 <Text style={styles.buttonText}>Sign In</Text>
               )}
@@ -136,7 +152,10 @@ export default function LoginScreen() {
               activeOpacity={0.8}
             >
               {googleLoading ? (
-                <ActivityIndicator color={Colors.text} />
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={Colors.text} size="small" />
+                  <Text style={styles.googleButtonText}>Connecting...</Text>
+                </View>
               ) : (
                 <>
                   <Ionicons name="logo-google" size={18} color={Colors.text} />
@@ -163,7 +182,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
   },
   flex: { flex: 1 },
   scrollContent: {
@@ -193,15 +212,20 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   errorBox: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
+    gap: 10,
   },
   errorText: {
     color: Colors.error,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
+    flex: 1,
+    lineHeight: 21,
   },
   inputGroup: {
     marginBottom: 18,
@@ -214,7 +238,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   input: {
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 14,
@@ -224,8 +248,28 @@ const styles = StyleSheet.create({
     color: Colors.text,
     letterSpacing: -0.2,
   },
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.text,
+    letterSpacing: -0.2,
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
   button: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.buttonDark,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -241,19 +285,24 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.textOnDark,
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 22,
   },
   dividerLine: {
     flex: 1,
-    height: StyleSheet.hairlineWidth,
+    height: 1,
     backgroundColor: Colors.border,
   },
   dividerText: {
@@ -266,7 +315,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.card,
     borderRadius: 14,
     paddingVertical: 15,
     borderWidth: 1,

@@ -1,13 +1,18 @@
 """
 Chat router — POST /api/chat
 Sends a message (optionally with camera image) to Claude, returns AI response.
+Now includes: JWT auth, Mem0 memory retrieval/storage, RAG document context.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+import asyncio
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.services.demo import get_demo_chat_response
 from app.services.anthropic import chat_with_claude
+from app.services.memory import retrieve_memories, store_memory
+from app.services.rag import retrieve_context
+from app.middleware.auth import get_current_user
 
 router = APIRouter()
 
@@ -27,6 +32,7 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
+    req: Request,
     demo: bool = Query(False, description="Use demo mode (no API key needed)"),
 ):
     """
@@ -37,11 +43,30 @@ async def chat(
         if demo:
             result = get_demo_chat_response(request.message)
         else:
+            # 1. Get authenticated user
+            user = await get_current_user(req)
+            user_id = user["user_id"]
+
+            # 2. Retrieve memories for this user
+            memories = await retrieve_memories(user_id, request.message)
+
+            # 3. Retrieve relevant document context (RAG)
+            rag_context = await retrieve_context(user_id, request.message)
+
+            # 4. Call Claude with memories + RAG context
             result = await chat_with_claude(
                 message=request.message,
                 image_base64=request.image_base64,
                 conversation_history=request.conversation_history,
+                user_memories=memories,
+                rag_context=rag_context,
             )
+
+            # 5. Store new memories (fire-and-forget, non-blocking)
+            asyncio.create_task(store_memory(user_id, [
+                {"role": "user", "content": request.message},
+                {"role": "assistant", "content": result["response"]},
+            ]))
 
         return ChatResponse(
             response=result["response"],

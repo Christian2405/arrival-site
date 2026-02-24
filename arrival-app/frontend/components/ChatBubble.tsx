@@ -9,8 +9,27 @@ interface ChatBubbleProps {
   onSave?: () => void;
 }
 
+const ALERT_COLORS = {
+  warning: {
+    accent: '#D4890A',
+    bg: 'rgba(212, 137, 10, 0.12)',
+    border: '#D4890A',
+    icon: 'warning-outline' as const,
+    label: 'NOTICE',
+  },
+  critical: {
+    accent: '#C0392B',
+    bg: 'rgba(192, 57, 43, 0.12)',
+    border: '#C0392B',
+    icon: 'alert-circle-outline' as const,
+    label: 'SAFETY ALERT',
+  },
+};
+
 export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
   const isUser = message.role === 'user';
+  const isAlert = !!message.alertType;
+  const alertConfig = message.alertType ? ALERT_COLORS[message.alertType] : null;
   const [saved, setSaved] = useState(false);
 
   const handleLongPress = () => {
@@ -32,8 +51,35 @@ export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
   };
 
   const bubble = (
-    <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-      <Text style={[styles.text, isUser ? styles.userText : styles.assistantText]}>
+    <View
+      style={[
+        styles.bubble,
+        isUser ? styles.userBubble : styles.assistantBubble,
+        isAlert && alertConfig && {
+          backgroundColor: alertConfig.bg,
+          borderLeftWidth: 3,
+          borderLeftColor: alertConfig.border,
+          borderBottomLeftRadius: 14,
+        },
+      ]}
+    >
+      {/* Alert header */}
+      {isAlert && alertConfig && (
+        <View style={[styles.alertHeader, { borderBottomColor: alertConfig.border + '30' }]}>
+          <Ionicons name={alertConfig.icon} size={14} color={alertConfig.accent} />
+          <Text style={[styles.alertLabel, { color: alertConfig.accent }]}>
+            {alertConfig.label}
+          </Text>
+        </View>
+      )}
+
+      <Text
+        style={[
+          styles.text,
+          isUser ? styles.userText : styles.assistantText,
+          isAlert && alertConfig && { color: alertConfig.accent },
+        ]}
+      >
         {message.content}
       </Text>
 
@@ -79,13 +125,22 @@ export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
       {/* Avatar */}
       {!isUser && (
-        <View style={styles.avatar}>
-          <Ionicons name="sparkles" size={14} color={Colors.accent} />
+        <View
+          style={[
+            styles.avatar,
+            isAlert && alertConfig && { backgroundColor: alertConfig.accent + '20' },
+          ]}
+        >
+          <Ionicons
+            name={isAlert && alertConfig ? alertConfig.icon : 'sparkles'}
+            size={14}
+            color={isAlert && alertConfig ? alertConfig.accent : Colors.accent}
+          />
         </View>
       )}
 
       {!isUser && onSave ? (
-        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.8} delayLongPress={400}>
+        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.7} delayLongPress={300}>
           {bubble}
         </TouchableOpacity>
       ) : (
@@ -109,9 +164,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.accentMuted,
     justifyContent: 'center',
     alignItems: 'center',
@@ -137,6 +192,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  alertLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
   text: {
     fontSize: 15,
     lineHeight: 21,
@@ -161,13 +230,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   confidenceDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   confidenceLabel: {
     fontSize: 11,
     color: Colors.textSecondary,
+    textTransform: 'capitalize',
   },
   savedBadge: {
     flexDirection: 'row',

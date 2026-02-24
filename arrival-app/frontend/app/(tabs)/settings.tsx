@@ -41,8 +41,6 @@ export default function SettingsScreen() {
   const displayEmail = profile?.email || 'Sign in to sync your data';
   const plan = subscription?.plan || 'free';
   const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
-  const planColor =
-    plan === 'business' ? '#4A90D9' : plan === 'pro' ? Colors.accent : '#7C736A';
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -57,7 +55,6 @@ export default function SettingsScreen() {
     ]);
   };
 
-  // Initials for avatar
   const initials = profile
     ? `${profile.first_name?.charAt(0) || ''}${profile.last_name?.charAt(0) || ''}`
     : 'A';
@@ -71,27 +68,24 @@ export default function SettingsScreen() {
       >
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={[styles.avatar, { backgroundColor: planColor }]}>
+          <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayName}</Text>
             <Text style={styles.profileEmail}>{displayEmail}</Text>
           </View>
-          <View style={[styles.planBadge, { backgroundColor: planColor + '15' }]}>
-            <Text style={[styles.planBadgeText, { color: planColor }]}>{planLabel}</Text>
+          <View style={styles.planBadge}>
+            <Text style={styles.planBadgeText}>{planLabel}</Text>
           </View>
         </View>
 
         {/* Voice & Input */}
         <Text style={styles.sectionLabel}>Voice & Input</Text>
         <View style={styles.card}>
-          {/* Voice Output */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#4A90D912' }]}>
-                <Ionicons name="volume-high" size={17} color="#4A90D9" />
-              </View>
+              <Ionicons name="volume-high-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Voice Output</Text>
             </View>
             <Switch
@@ -105,12 +99,9 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          {/* Voice Speed */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#E8A84C12' }]}>
-                <Ionicons name="speedometer" size={17} color="#D4842A" />
-              </View>
+              <Ionicons name="speedometer-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Voice Speed</Text>
             </View>
             <View style={styles.segmentedControl}>
@@ -132,12 +123,9 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          {/* Text Size */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#7C736A12' }]}>
-                <Ionicons name="text" size={17} color="#7C736A" />
-              </View>
+              <Ionicons name="text-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Text Size</Text>
             </View>
             <View style={styles.segmentedControl}>
@@ -167,9 +155,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#AF52DE12' }]}>
-                <Ionicons name="swap-horizontal" size={17} color="#AF52DE" />
-              </View>
+              <Ionicons name="swap-horizontal-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Units</Text>
             </View>
             <View style={styles.segmentedControl}>
@@ -191,12 +177,9 @@ export default function SettingsScreen() {
         {/* App */}
         <Text style={styles.sectionLabel}>App</Text>
         <View style={styles.card}>
-          {/* Demo Mode */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#D4842A12' }]}>
-                <Ionicons name="flask" size={17} color="#D4842A" />
-              </View>
+              <Ionicons name="flask-outline" size={18} color="#2A2622" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowLabel}>Demo Mode</Text>
                 <Text style={styles.rowHint}>Uses sample responses</Text>
@@ -213,12 +196,9 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          {/* Notifications */}
           <TouchableOpacity style={styles.row} activeOpacity={0.6}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#FF3B3012' }]}>
-                <Ionicons name="notifications" size={17} color="#FF3B30" />
-              </View>
+              <Ionicons name="notifications-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Notifications</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
@@ -226,12 +206,9 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          {/* Dark Mode */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#1A1A1A12' }]}>
-                <Ionicons name="moon" size={17} color="#1A1A1A" />
-              </View>
+              <Ionicons name="moon-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Dark Mode</Text>
             </View>
             <View style={styles.comingSoonBadge}>
@@ -245,14 +222,12 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <TouchableOpacity style={styles.row} activeOpacity={0.6}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#4A90D912' }]}>
-                <Ionicons name="card" size={17} color="#4A90D9" />
-              </View>
+              <Ionicons name="card-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Subscription</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={[styles.planBadgeSmall, { backgroundColor: planColor + '15' }]}>
-                <Text style={[styles.planBadgeSmallText, { color: planColor }]}>{planLabel}</Text>
+              <View style={styles.planBadgeSmall}>
+                <Text style={styles.planBadgeSmallText}>{planLabel}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
             </View>
@@ -262,9 +237,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.row} activeOpacity={0.6}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#7C736A12' }]}>
-                <Ionicons name="help-circle" size={17} color="#7C736A" />
-              </View>
+              <Ionicons name="help-circle-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Help & Support</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
@@ -274,21 +247,17 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.row} activeOpacity={0.6}>
             <View style={styles.rowLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: '#7C736A12' }]}>
-                <Ionicons name="document-text" size={17} color="#7C736A" />
-              </View>
+              <Ionicons name="document-text-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Terms & Privacy</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
           </TouchableOpacity>
         </View>
 
-        {/* Sign Out — separate, minimal */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.6}>
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
-        {/* Version */}
         <Text style={styles.versionText}>Arrival v2.0.0</Text>
       </ScrollView>
     </SafeAreaView>
@@ -318,15 +287,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: '#2A2622',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -356,10 +326,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
+    backgroundColor: '#F3F0EB',
   },
   planBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#2A2622',
     letterSpacing: 0.3,
   },
 
@@ -381,13 +353,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 1,
+    elevation: 2,
   },
 
-  // Row
+  // Row — no icon backgrounds, just inline icons
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -399,16 +371,9 @@ const styles = StyleSheet.create({
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     flex: 1,
     marginRight: 12,
-  },
-  iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   rowLabel: {
     fontSize: 15,
@@ -424,7 +389,7 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#EBE7E2',
-    marginLeft: 62,
+    marginLeft: 48,
   },
 
   // Segmented Control
@@ -475,10 +440,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    backgroundColor: '#F3F0EB',
   },
   planBadgeSmallText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#2A2622',
   },
 
   // Sign out

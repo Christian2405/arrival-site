@@ -28,13 +28,8 @@ function formatTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function getTradeBadgeColor(trade: string): string {
-  switch (trade.toLowerCase()) {
-    case 'hvac': return '#4A90D9';
-    case 'electrical': return '#E8A84C';
-    case 'plumbing': return '#5B9BD5';
-    default: return '#7C736A';
-  }
+function getTradeBadgeColor(_trade: string): string {
+  return '#2A2622';
 }
 
 export default function HistoryScreen() {
@@ -221,10 +216,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardTop: {
     flexDirection: 'row',
@@ -265,9 +260,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   tradeDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   tradeBadgeText: {
     fontSize: 11,
