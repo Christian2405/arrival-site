@@ -275,7 +275,8 @@ async function handlePasswordUpdate(event) {
         if (result.error) throw result.error;
 
         showToast('Password updated successfully!');
-        _originalShowPage('login');
+        if (typeof _originalShowPage === 'function') _originalShowPage('login');
+        else showPage('login');
 
     } catch (error) {
         showFormError('reset-update-error', error.message || 'Failed to update password.');
@@ -360,24 +361,37 @@ async function ensureProfileExists(user) {
 // ============================================
 
 async function navigateToDashboard() {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    try {
+        // Use getSession (local, fast) instead of getUser (API call, can fail)
+        var sessionResult = await sb.auth.getSession();
+        var session = sessionResult.data.session;
 
-    if (!user) {
-        _originalShowPage('login');
-        return;
-    }
+        if (!session || !session.user) {
+            if (typeof _originalShowPage === 'function') {
+                _originalShowPage('login');
+            } else {
+                showPage('login');
+            }
+            return;
+        }
 
-    var tmResult = await sb
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .limit(1);
+        var user = session.user;
 
-    if (tmResult.data && tmResult.data.length > 0) {
-        window.location.href = '/dashboard-business';
-    } else {
+        var tmResult = await sb
+            .from('team_members')
+            .select('team_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .limit(1);
+
+        if (tmResult.data && tmResult.data.length > 0) {
+            window.location.href = '/dashboard-business';
+        } else {
+            window.location.href = '/dashboard-individual';
+        }
+    } catch (err) {
+        console.error('Dashboard navigation error:', err);
+        // Fallback — redirect to individual dashboard
         window.location.href = '/dashboard-individual';
     }
 }
@@ -575,7 +589,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Check for password reset callback in URL hash
     var hash = window.location.hash;
     if (hash.includes('type=recovery') || hash.includes('access_token')) {
-        _originalShowPage('reset-password');
+        var _showReset = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
+        _showReset('reset-password');
         document.getElementById('reset-request-form').style.display = 'none';
         document.getElementById('reset-update-form').style.display = 'flex';
     }
@@ -589,7 +604,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         } else if (event === 'SIGNED_OUT') {
             updateNavForAuth(null);
         } else if (event === 'PASSWORD_RECOVERY') {
-            _originalShowPage('reset-password');
+            var _showReset2 = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
+            _showReset2('reset-password');
             document.getElementById('reset-request-form').style.display = 'none';
             document.getElementById('reset-update-form').style.display = 'flex';
         }
