@@ -26,9 +26,9 @@ function showToast(message, type) {
     type = type || 'success';
     var container = document.getElementById('toast-container');
     var toast = document.createElement('div');
-    toast.style.cssText = 'padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;font-family:var(--font-body,DM Sans,sans-serif);box-shadow:0 4px 12px rgba(0,0,0,.15);animation:toast-in .3s ease;max-width:360px;';
-    toast.style.background = type === 'error' ? '#c0392b' : '#27ae60';
-    toast.textContent = message;
+    var icon = type === 'error' ? '✕' : '✓';
+    toast.style.cssText = 'padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;font-family:var(--font-body,DM Sans,sans-serif);box-shadow:0 4px 16px rgba(0,0,0,.18);animation:toast-in .3s ease;max-width:360px;background:#2A2622;';
+    toast.textContent = icon + '  ' + message;
     container.appendChild(toast);
     setTimeout(function() { toast.remove(); }, 4000);
 }
@@ -99,14 +99,43 @@ async function loadDocuments() {
     if (docs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No documents uploaded yet.</td></tr>';
     } else {
+        // Get signed URLs for image-type documents (for thumbnails)
+        var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        var imageDocs = docs.filter(function(d) {
+            var ext = d.file_name.split('.').pop().toLowerCase();
+            return imageExts.indexOf(ext) !== -1;
+        });
+        var thumbUrls = {};
+        if (imageDocs.length > 0) {
+            var paths = imageDocs.map(function(d) { return d.storage_path; });
+            var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
+            if (signedResults.data) {
+                signedResults.data.forEach(function(r) {
+                    if (r.signedUrl) thumbUrls[r.path] = r.signedUrl;
+                });
+            }
+        }
+
         tbody.innerHTML = docs.map(function(d) {
-            var ext = d.file_name.split('.').pop().toUpperCase();
+            var ext = d.file_name.split('.').pop().toLowerCase();
+            var extUpper = ext.toUpperCase();
             var date = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             var statusClass = d.status === 'ready' ? 'status-ready' : 'status-processing';
             var statusLabel = d.status.charAt(0).toUpperCase() + d.status.slice(1);
+
+            // Build thumbnail
+            var thumb;
+            if (thumbUrls[d.storage_path]) {
+                thumb = '<div class="doc-thumb"><img src="' + thumbUrls[d.storage_path] + '" alt=""></div>';
+            } else if (ext === 'pdf') {
+                thumb = '<div class="doc-thumb doc-thumb-pdf"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c45a3c" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">PDF</span></div>';
+            } else {
+                thumb = '<div class="doc-thumb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9590" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">' + extUpper + '</span></div>';
+            }
+
             return '<tr>' +
-                '<td class="td-name">' + escapeHtml(d.file_name) + '</td>' +
-                '<td>' + ext + '</td>' +
+                '<td class="td-name"><div class="doc-name-cell">' + thumb + '<span>' + escapeHtml(d.file_name) + '</span></div></td>' +
+                '<td>' + extUpper + '</td>' +
                 '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
                 '<td>' + date + '</td>' +
                 '<td><a href="#" class="table-action" onclick="viewDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">View</a> ' +
@@ -138,11 +167,11 @@ async function handleFileUpload(event) {
     var uploaded = 0;
     var failed = 0;
 
-    showUploadOverlay('Uploading ' + total + ' document' + (total > 1 ? 's' : '') + '...');
-
     // Get JWT for backend auth
     var session = (await sb.auth.getSession()).data.session;
     var token = session ? session.access_token : null;
+
+    showUploadOverlay('Connecting to server...');
 
     for (var i = 0; i < files.length; i++) {
         var file = files[i];
@@ -152,20 +181,24 @@ async function handleFileUpload(event) {
             continue;
         }
 
-        if (total > 1) {
-            showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
-        }
+        showUploadOverlay('Uploading' + (total > 1 ? ' ' + (i + 1) + ' of ' + total : ' ' + file.name) + '...');
 
         try {
             // Upload through backend API so RAG indexing happens automatically
             var formData = new FormData();
             formData.append('file', file);
 
+            var controller = new AbortController();
+            var uploadTimeout = setTimeout(function() { controller.abort(); }, 120000);
+
             var resp = await fetch(BACKEND_URL + '/upload', {
                 method: 'POST',
                 headers: token ? { 'Authorization': 'Bearer ' + token } : {},
                 body: formData,
+                signal: controller.signal,
             });
+
+            clearTimeout(uploadTimeout);
 
             if (!resp.ok) {
                 var errBody = await resp.text();
@@ -176,7 +209,11 @@ async function handleFileUpload(event) {
         } catch (err) {
             console.error('Upload error:', err);
             failed++;
-            showToast('Failed to upload ' + file.name + ': ' + err.message, 'error');
+            if (err.name === 'AbortError') {
+                showToast('Upload timed out — server may be starting up. Please try again.', 'error');
+            } else {
+                showToast('Failed to upload ' + file.name, 'error');
+            }
         }
     }
 
