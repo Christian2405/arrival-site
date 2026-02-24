@@ -34,7 +34,7 @@ async def upload_document(
     content_type: str,
     user_id: str,
     user_token: str,
-    category: str = "equipment_manuals",
+    category: str = "manufacturer_manuals",
     team_id: str | None = None,
 ) -> dict:
     """

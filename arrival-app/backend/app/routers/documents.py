@@ -36,7 +36,7 @@ class DeleteResponse(BaseModel):
 async def upload(
     request: Request,
     file: UploadFile = File(...),
-    category: str = Form("equipment_manuals"),
+    category: str = Form("manufacturer_manuals"),
     team_id: str | None = Form(None),
 ):
     """
