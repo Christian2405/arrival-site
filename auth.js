@@ -294,6 +294,68 @@ async function handleLogout() {
 }
 
 // ============================================
+// GOOGLE SIGN-IN
+// ============================================
+
+async function handleGoogleSignIn() {
+    try {
+        var result = await sb.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + '/auth-callback',
+                queryParams: {
+                    prompt: 'select_account'
+                }
+            }
+        });
+
+        if (result.error) throw result.error;
+        // Browser will redirect to Google — no further action needed here
+
+    } catch (error) {
+        console.error('Google sign-in error:', error);
+        showToast('Google sign-in failed. Please try again.', 'error');
+    }
+}
+
+/**
+ * Ensures a users row + subscriptions row exist for OAuth sign-ins.
+ * Called after Google sign-in callback when user may not have a profile yet.
+ */
+async function ensureProfileExists(user) {
+    try {
+        var existing = await sb.from('users').select('id').eq('id', user.id).single();
+        if (existing.data) return; // Already exists
+
+        var meta = user.user_metadata || {};
+        var fullName = meta.full_name || meta.name || '';
+        var firstName = meta.first_name || fullName.split(' ')[0] || '';
+        var lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
+        var email = user.email || '';
+
+        console.log('[Auth] Creating profile for OAuth user:', email);
+
+        await sb.from('users').insert({
+            id: user.id,
+            email: email,
+            first_name: firstName,
+            last_name: lastName,
+            primary_trade: 'other',
+            experience_level: '1_3_years',
+            account_type: 'free'
+        });
+
+        await sb.from('subscriptions').insert({
+            user_id: user.id,
+            plan: 'free',
+            status: 'active'
+        });
+    } catch (err) {
+        console.error('ensureProfileExists error:', err);
+    }
+}
+
+// ============================================
 // DASHBOARD NAVIGATION
 // ============================================
 
@@ -496,6 +558,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('reset-request-form').addEventListener('submit', handlePasswordResetRequest);
     document.getElementById('reset-update-form').addEventListener('submit', handlePasswordUpdate);
 
+    // Google sign-in buttons
+    var googleBtns = document.querySelectorAll('.google-signin-btn');
+    googleBtns.forEach(function(btn) {
+        btn.addEventListener('click', handleGoogleSignIn);
+    });
+
     // Dev bypass buttons
     if (IS_DEV) {
         var devBtns = document.getElementById('dev-bypass-buttons');
@@ -513,9 +581,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // Auth state listener
-    sb.auth.onAuthStateChange(function(event, session) {
+    sb.auth.onAuthStateChange(async function(event, session) {
         if (event === 'SIGNED_IN' && session) {
             updateNavForAuth(session.user);
+            // Ensure profile exists for OAuth users
+            await ensureProfileExists(session.user);
         } else if (event === 'SIGNED_OUT') {
             updateNavForAuth(null);
         } else if (event === 'PASSWORD_RECOVERY') {
