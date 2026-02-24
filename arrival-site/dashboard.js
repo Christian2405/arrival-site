@@ -5,6 +5,7 @@
 
 const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
+const BACKEND_URL = 'https://arrival-backend-81x7.onrender.com/api';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -139,6 +140,10 @@ async function handleFileUpload(event) {
 
     showUploadOverlay('Uploading ' + total + ' document' + (total > 1 ? 's' : '') + '...');
 
+    // Get JWT for backend auth
+    var session = (await sb.auth.getSession()).data.session;
+    var token = session ? session.access_token : null;
+
     for (var i = 0; i < files.length; i++) {
         var file = files[i];
         if (file.size > 50 * 1024 * 1024) {
@@ -151,25 +156,21 @@ async function handleFileUpload(event) {
             showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
         }
 
-        var storagePath = currentUser.id + '/' + Date.now() + '_' + file.name;
-
         try {
-            var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
-            if (uploadResult.error) throw uploadResult.error;
+            // Upload through backend API so RAG indexing happens automatically
+            var formData = new FormData();
+            formData.append('file', file);
 
-            var ext = file.name.split('.').pop().toLowerCase();
-            var category = 'equipment_manuals';
-            var insertResult = await sb.from('documents').insert({
-                uploaded_by: currentUser.id,
-                team_id: null,
-                file_name: file.name,
-                file_type: file.type || 'application/' + ext,
-                file_size: file.size,
-                storage_path: storagePath,
-                category: category,
-                status: 'ready'
+            var resp = await fetch(BACKEND_URL + '/upload', {
+                method: 'POST',
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                body: formData,
             });
-            if (insertResult.error) throw insertResult.error;
+
+            if (!resp.ok) {
+                var errBody = await resp.text();
+                throw new Error(errBody || 'Upload failed');
+            }
 
             uploaded++;
         } catch (err) {
@@ -180,6 +181,9 @@ async function handleFileUpload(event) {
     }
 
     hideUploadOverlay();
+
+    if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded & indexed.');
+    if (failed > 0 && uploaded > 0) showToast(failed + ' failed.', 'error');
 
     event.target.value = '';
     await loadDocuments();
@@ -202,13 +206,19 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        // Delete from storage
-        var storageResult = await sb.storage.from('documents').remove([storagePath]);
-        if (storageResult.error) throw storageResult.error;
+        // Delete through backend API so RAG vectors get cleaned up too
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
 
-        // Delete DB row
-        var dbResult = await sb.from('documents').delete().eq('id', docId);
-        if (dbResult.error) throw dbResult.error;
+        var resp = await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+            method: 'DELETE',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        });
+
+        if (!resp.ok) {
+            var errBody = await resp.text();
+            throw new Error(errBody || 'Delete failed');
+        }
 
         showToast('Document deleted.');
         await loadDocuments();

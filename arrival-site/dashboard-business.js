@@ -5,6 +5,7 @@
 
 const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
+const BACKEND_URL = 'https://arrival-backend-81x7.onrender.com/api';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -351,30 +352,26 @@ async function handleDocUpload() {
         return;
     }
 
-    var storagePath = 'teams/' + currentTeam.id + '/' + Date.now() + '_' + file.name;
-
     try {
-        // Upload to storage
-        var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
-        if (uploadResult.error) throw uploadResult.error;
+        // Upload through backend API so RAG indexing happens automatically
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
 
-        // Insert DB row
-        var ext = file.name.split('.').pop().toLowerCase();
-        var insertResult = await sb.from('documents').insert({
-            uploaded_by: currentUser.id,
-            team_id: currentTeam.id,
-            file_name: file.name,
-            file_type: file.type || 'application/' + ext,
-            file_size: file.size,
-            storage_path: storagePath,
-            category: category,
-            project_tag: projectInput.value.trim() || null,
-            notes: notesInput.value.trim() || null,
-            status: 'ready'
+        var formData = new FormData();
+        formData.append('file', file);
+
+        var resp = await fetch(BACKEND_URL + '/upload', {
+            method: 'POST',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+            body: formData,
         });
-        if (insertResult.error) throw insertResult.error;
 
-        showToast(file.name + ' uploaded successfully.');
+        if (!resp.ok) {
+            var errBody = await resp.text();
+            throw new Error(errBody || 'Upload failed');
+        }
+
+        showToast(file.name + ' uploaded & indexed.');
         closeModal('upload-modal');
 
         // Reset modal fields
@@ -407,11 +404,19 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        var storageResult = await sb.storage.from('documents').remove([storagePath]);
-        if (storageResult.error) throw storageResult.error;
+        // Delete through backend API so RAG vectors get cleaned up too
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
 
-        var dbResult = await sb.from('documents').delete().eq('id', docId);
-        if (dbResult.error) throw dbResult.error;
+        var resp = await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+            method: 'DELETE',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        });
+
+        if (!resp.ok) {
+            var errBody = await resp.text();
+            throw new Error(errBody || 'Delete failed');
+        }
 
         showToast('Document deleted.');
         await loadDocuments();
