@@ -7,7 +7,9 @@ const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
 const BACKEND_URL = 'https://arrival-backend-81x7.onrender.com/api';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+});
 
 // Current user state
 let currentUser = null;
@@ -17,6 +19,38 @@ let currentSubscription = null;
 // Document limits by plan
 const DOC_LIMITS = { pro: 50, business: 999, enterprise: 999 };
 const PLAN_PRICES = { pro: '$25/month', business: '$250/month', enterprise: 'Custom' };
+
+// Category display labels
+var CATEGORY_LABELS = {
+    manufacturer_manuals: 'Manufacturer Manuals',
+    equipment_spec_sheets: 'Equipment Spec Sheets',
+    company_sops: 'Company SOPs',
+    safety_protocols: 'Safety Protocols',
+    diagnostic_workflows: 'Diagnostic Workflows',
+    training_materials: 'Training Materials',
+    building_plans: 'Building Plans',
+    parts_lists: 'Parts Lists',
+    equipment_manuals: 'Manufacturer Manuals',
+    spec_sheets: 'Equipment Spec Sheets',
+    sops: 'Company SOPs',
+    wiring_diagrams: 'Manufacturer Manuals',
+    technical_bulletins: 'Manufacturer Manuals',
+    warranty_docs: 'Manufacturer Manuals'
+};
+
+// Map category DB values to filter tab categories
+var CATEGORY_FILTERS = {
+    manufacturer_manuals: 'manuals', equipment_manuals: 'manuals', wiring_diagrams: 'manuals',
+    technical_bulletins: 'manuals', warranty_docs: 'manuals',
+    equipment_spec_sheets: 'specs', spec_sheets: 'specs',
+    company_sops: 'sops', sops: 'sops', installation_checklists: 'sops', maintenance_guides: 'sops',
+    safety_protocols: 'safety', safety_data_sheets: 'safety', osha_docs: 'safety',
+    diagnostic_workflows: 'diagnostics', inspection_checklists: 'diagnostics',
+    training_materials: 'training',
+    building_plans: 'plans', engineering_reports: 'plans', site_surveys: 'plans',
+    permits: 'plans', project_specs: 'plans', scope_of_work: 'plans', material_specs: 'plans',
+    parts_lists: 'parts'
+};
 
 // ============================================
 // TOAST
@@ -97,7 +131,7 @@ async function loadDocuments() {
     var tbody = document.getElementById('documents-tbody');
 
     if (docs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No documents uploaded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No documents uploaded yet.</td></tr>';
     } else {
         // Get signed URLs for image-type documents (for thumbnails)
         var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -122,6 +156,9 @@ async function loadDocuments() {
             var date = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             var statusClass = d.status === 'ready' ? 'status-ready' : 'status-processing';
             var statusLabel = d.status.charAt(0).toUpperCase() + d.status.slice(1);
+            var catLabel = CATEGORY_LABELS[d.category] || d.category || '—';
+            var catFilter = CATEGORY_FILTERS[d.category] || 'other';
+            var project = d.project || d.notes || '—';
 
             // Build thumbnail
             var thumb;
@@ -133,9 +170,10 @@ async function loadDocuments() {
                 thumb = '<div class="doc-thumb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9590" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">' + extUpper + '</span></div>';
             }
 
-            return '<tr>' +
+            return '<tr data-cat="' + catFilter + '">' +
                 '<td class="td-name"><div class="doc-name-cell">' + thumb + '<span>' + escapeHtml(d.file_name) + '</span></div></td>' +
-                '<td>' + extUpper + '</td>' +
+                '<td><span class="cat-pill">' + escapeHtml(catLabel) + '</span></td>' +
+                '<td>' + escapeHtml(project) + '</td>' +
                 '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
                 '<td>' + date + '</td>' +
                 '<td><a href="#" class="table-action" onclick="viewDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">View</a> ' +
@@ -159,9 +197,34 @@ async function loadDocuments() {
     }
 }
 
-async function handleFileUpload(event) {
-    var files = event.target.files;
-    if (!files || files.length === 0) return;
+// Search documents
+function searchDocs(query) {
+    var q = query.toLowerCase();
+    document.querySelectorAll('#doc-table tbody tr').forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+}
+
+async function handleDocUpload() {
+    var fileInput = document.getElementById('upload-file-input');
+    var categorySelect = document.getElementById('upload-category');
+    var projectInput = document.getElementById('upload-project');
+    var notesInput = document.getElementById('upload-notes');
+
+    var files = fileInput.files;
+    if (!files || files.length === 0) {
+        showToast('Please select a file.', 'error');
+        return;
+    }
+
+    var category = categorySelect.value;
+    if (!category) {
+        showToast('Please select a category.', 'error');
+        return;
+    }
+
+    closeModal('upload-modal');
 
     var total = files.length;
     var uploaded = 0;
@@ -184,9 +247,11 @@ async function handleFileUpload(event) {
         showUploadOverlay('Uploading' + (total > 1 ? ' ' + (i + 1) + ' of ' + total : ' ' + file.name) + '...');
 
         try {
-            // Upload through backend API so RAG indexing happens automatically
             var formData = new FormData();
             formData.append('file', file);
+            formData.append('category', category);
+            if (projectInput.value.trim()) formData.append('project', projectInput.value.trim());
+            if (notesInput.value.trim()) formData.append('notes', notesInput.value.trim());
 
             var controller = new AbortController();
             var uploadTimeout = setTimeout(function() { controller.abort(); }, 120000);
@@ -222,7 +287,12 @@ async function handleFileUpload(event) {
     if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded & indexed.');
     if (failed > 0 && uploaded > 0) showToast(failed + ' failed.', 'error');
 
-    event.target.value = '';
+    // Reset modal fields
+    fileInput.value = '';
+    categorySelect.value = '';
+    projectInput.value = '';
+    notesInput.value = '';
+
     await loadDocuments();
 }
 
@@ -951,9 +1021,10 @@ function initDragDrop() {
     zone.addEventListener('drop', function(e) {
         e.preventDefault();
         zone.classList.remove('drag-over');
-        var input = document.getElementById('file-input');
-        input.files = e.dataTransfer.files;
-        input.dispatchEvent(new Event('change'));
+        // Open modal and pre-fill file input
+        openModal('upload-modal');
+        var input = document.getElementById('upload-file-input');
+        if (input) input.files = e.dataTransfer.files;
     });
 }
 
@@ -962,8 +1033,9 @@ function initDragDrop() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // File upload handler
-    document.getElementById('file-input').addEventListener('change', handleFileUpload);
+    // Upload modal submit button
+    var uploadBtn = document.getElementById('upload-submit-btn');
+    if (uploadBtn) uploadBtn.addEventListener('click', handleDocUpload);
 
     // Profile save
     document.getElementById('settings-save-btn').addEventListener('click', handleSaveProfile);

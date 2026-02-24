@@ -7,7 +7,9 @@
 const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+});
 
 // --- DEV MODE ---
 const IS_DEV = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
@@ -203,8 +205,10 @@ async function handleLogin(event) {
             .limit(1);
 
         if (tmResult.data && tmResult.data.length > 0) {
+            localStorage.setItem('arrival_dashboard', 'business');
             window.location.href = '/dashboard-business';
         } else {
+            localStorage.setItem('arrival_dashboard', 'individual');
             window.location.href = '/dashboard-individual';
         }
 
@@ -385,14 +389,17 @@ async function navigateToDashboard() {
             .limit(1);
 
         if (tmResult.data && tmResult.data.length > 0) {
+            localStorage.setItem('arrival_dashboard', 'business');
             window.location.href = '/dashboard-business';
         } else {
+            localStorage.setItem('arrival_dashboard', 'individual');
             window.location.href = '/dashboard-individual';
         }
     } catch (err) {
         console.error('Dashboard navigation error:', err);
-        // Fallback — redirect to individual dashboard
-        window.location.href = '/dashboard-individual';
+        // Fallback — use last known dashboard type, default to business
+        var lastDash = localStorage.getItem('arrival_dashboard') || 'business';
+        window.location.href = '/dashboard-' + lastDash;
     }
 }
 
