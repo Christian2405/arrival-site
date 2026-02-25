@@ -413,41 +413,34 @@ async function handleDocUpload() {
     }
 
     closeModal('upload-modal');
-    showUploadOverlay('Connecting to server...');
+    showUploadOverlay('Uploading ' + file.name + '...');
 
     try {
-        // Upload through backend API so RAG indexing happens automatically
-        var session = (await sb.auth.getSession()).data.session;
-        var token = session ? session.access_token : null;
+        // Upload directly to Supabase storage (bypasses slow backend cold starts)
+        var storagePath = 'teams/' + currentTeam.id + '/docs/' + Date.now() + '_' + file.name;
+        var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
+        if (uploadResult.error) throw uploadResult.error;
 
-        showUploadOverlay('Uploading ' + file.name + '...');
+        showUploadOverlay('Saving...');
 
-        var formData = new FormData();
-        formData.append('file', file);
-        formData.append('category', category);
-        if (currentTeam && currentTeam.id) {
-            formData.append('team_id', currentTeam.id);
-        }
-
-        var controller = new AbortController();
-        var uploadTimeout = setTimeout(function() { controller.abort(); }, 120000);
-
-        var resp = await fetch(BACKEND_URL + '/upload', {
-            method: 'POST',
-            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-            body: formData,
-            signal: controller.signal,
+        // Insert document record
+        var ext = file.name.split('.').pop().toLowerCase();
+        var insertResult = await sb.from('documents').insert({
+            uploaded_by: currentUser.id,
+            team_id: currentTeam.id,
+            file_name: file.name,
+            file_type: file.type || 'application/' + ext,
+            file_size: file.size,
+            storage_path: storagePath,
+            category: category,
+            project_tag: projectInput.value.trim() || null,
+            notes: notesInput.value.trim() || null,
+            status: 'ready'
         });
-
-        clearTimeout(uploadTimeout);
-
-        if (!resp.ok) {
-            var errBody = await resp.text();
-            throw new Error(errBody || 'Upload failed');
-        }
+        if (insertResult.error) throw insertResult.error;
 
         hideUploadOverlay();
-        showToast(file.name + ' uploaded & indexed.');
+        showToast(file.name + ' uploaded successfully.');
 
         // Reset modal fields
         fileInput.value = '';
@@ -458,14 +451,22 @@ async function handleDocUpload() {
         // Reload documents and home stats
         await loadDocuments();
         loadHome();
+
+        // Trigger RAG indexing in background (non-blocking, best-effort)
+        try {
+            var session = (await sb.auth.getSession()).data.session;
+            if (session) {
+                fetch(BACKEND_URL + '/index-document', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ document_id: insertResult.data ? insertResult.data[0].id : null, storage_path: storagePath })
+                }).catch(function() { /* RAG indexing is best-effort */ });
+            }
+        } catch (_) { /* ignore RAG errors */ }
     } catch (err) {
         console.error('Upload error:', err);
         hideUploadOverlay();
-        if (err.name === 'AbortError') {
-            showToast('Upload timed out — server may be starting up. Please try again.', 'error');
-        } else {
-            showToast('Failed to upload ' + file.name, 'error');
-        }
+        showToast('Failed to upload ' + file.name + ': ' + (err.message || 'Unknown error'), 'error');
     }
 }
 
@@ -745,6 +746,7 @@ function openDrillPanelForTech(memberId, name) {
 // ============================================
 
 var teamMedia = [];
+var mediaThumbUrls = {};
 
 async function loadMedia() {
     // Query documents table for media files (category = 'photo' or 'video')
@@ -755,6 +757,24 @@ async function loadMedia() {
         .order('created_at', { ascending: false });
 
     teamMedia = result.data || [];
+
+    // Generate signed URLs for image thumbnails
+    var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    var imageDocs = teamMedia.filter(function(m) {
+        var ext = m.file_name.split('.').pop().toLowerCase();
+        return imageExts.indexOf(ext) !== -1 && m.storage_path;
+    });
+    mediaThumbUrls = {};
+    if (imageDocs.length > 0) {
+        var paths = imageDocs.map(function(m) { return m.storage_path; });
+        var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
+        if (signedResults.data) {
+            signedResults.data.forEach(function(r) {
+                if (r.signedUrl) mediaThumbUrls[r.path] = r.signedUrl;
+            });
+        }
+    }
+
     renderMediaGrid(teamMedia);
 
     var indicator = document.getElementById('media-storage-indicator');
@@ -770,14 +790,11 @@ function renderMediaGrid(items) {
         return;
     }
 
-    var photoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>';
     var videoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><polygon points="12,8 26,16 12,24"/></svg>';
 
     grid.innerHTML = items.map(function(m) {
         var isVideo = m.category === 'video' || (m.file_type && m.file_type.startsWith('video/'));
         var mediaType = isVideo ? 'video' : 'photo';
-        var thumbClass = isVideo ? 'media-thumb media-thumb-video' : 'media-thumb';
-        var svg = isVideo ? videoSvg : photoSvg;
         var ext = m.file_name.split('.').pop().toUpperCase();
         var sizeMB = (m.file_size / (1024 * 1024)).toFixed(1);
         var date = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -785,8 +802,18 @@ function renderMediaGrid(items) {
         var title = m.notes || m.file_name;
         var site = m.project_tag ? '<div class="media-meta">Site: ' + escapeHtml(m.project_tag) + '</div>' : '';
 
+        // Show actual image thumbnail if signed URL available, otherwise SVG fallback
+        var thumbContent;
+        if (!isVideo && mediaThumbUrls[m.storage_path]) {
+            thumbContent = '<div class="media-thumb" style="background:#e8e4df;overflow:hidden;"><img src="' + mediaThumbUrls[m.storage_path] + '" alt="" style="width:100%;height:100%;object-fit:cover;"></div>';
+        } else if (isVideo) {
+            thumbContent = '<div class="media-thumb media-thumb-video" style="background:#e8e4df;">' + videoSvg + '</div>';
+        } else {
+            thumbContent = '<div class="media-thumb" style="background:#e8e4df;"><svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg></div>';
+        }
+
         return '<div class="media-card" data-media="' + mediaType + '">' +
-            '<div class="' + thumbClass + '" style="background:#e8e4df;">' + svg + '</div>' +
+            thumbContent +
             '<div class="media-info">' +
                 '<div class="media-name">' + escapeHtml(title) + '</div>' +
                 '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + (uploaderName ? ' · Uploaded by ' + escapeHtml(uploaderName) : '') + '</div>' +

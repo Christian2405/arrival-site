@@ -230,61 +230,59 @@ async function handleDocUpload() {
     var uploaded = 0;
     var failed = 0;
 
-    // Get JWT for backend auth
-    var session = (await sb.auth.getSession()).data.session;
-    var token = session ? session.access_token : null;
-
-    showUploadOverlay('Connecting to server...');
-
     for (var i = 0; i < files.length; i++) {
         var file = files[i];
-        if (file.size > 50 * 1024 * 1024) {
+        if (file.size > 100 * 1024 * 1024) {
             failed++;
-            showToast(file.name + ' exceeds 50MB limit.', 'error');
+            showToast(file.name + ' exceeds 100MB limit.', 'error');
             continue;
         }
 
         showUploadOverlay('Uploading' + (total > 1 ? ' ' + (i + 1) + ' of ' + total : ' ' + file.name) + '...');
 
         try {
-            var formData = new FormData();
-            formData.append('file', file);
-            formData.append('category', category);
-            if (projectInput.value.trim()) formData.append('project', projectInput.value.trim());
-            if (notesInput.value.trim()) formData.append('notes', notesInput.value.trim());
+            // Upload directly to Supabase storage (bypasses slow backend cold starts)
+            var storagePath = currentUser.id + '/' + Date.now() + '_' + file.name;
+            var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
+            if (uploadResult.error) throw uploadResult.error;
 
-            var controller = new AbortController();
-            var uploadTimeout = setTimeout(function() { controller.abort(); }, 120000);
-
-            var resp = await fetch(BACKEND_URL + '/upload', {
-                method: 'POST',
-                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-                body: formData,
-                signal: controller.signal,
+            var ext = file.name.split('.').pop().toLowerCase();
+            var insertResult = await sb.from('documents').insert({
+                uploaded_by: currentUser.id,
+                file_name: file.name,
+                file_type: file.type || 'application/' + ext,
+                file_size: file.size,
+                storage_path: storagePath,
+                category: category,
+                project_tag: projectInput.value.trim() || null,
+                notes: notesInput.value.trim() || null,
+                status: 'ready'
             });
-
-            clearTimeout(uploadTimeout);
-
-            if (!resp.ok) {
-                var errBody = await resp.text();
-                throw new Error(errBody || 'Upload failed');
-            }
+            if (insertResult.error) throw insertResult.error;
 
             uploaded++;
+
+            // Trigger RAG indexing in background (non-blocking, best-effort)
+            try {
+                var session = (await sb.auth.getSession()).data.session;
+                if (session && insertResult.data) {
+                    fetch(BACKEND_URL + '/index-document', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document_id: insertResult.data[0].id, storage_path: storagePath })
+                    }).catch(function() { /* RAG indexing is best-effort */ });
+                }
+            } catch (_) { /* ignore RAG errors */ }
         } catch (err) {
             console.error('Upload error:', err);
             failed++;
-            if (err.name === 'AbortError') {
-                showToast('Upload timed out — server may be starting up. Please try again.', 'error');
-            } else {
-                showToast('Failed to upload ' + file.name, 'error');
-            }
+            showToast('Failed to upload ' + file.name + ': ' + (err.message || 'Unknown error'), 'error');
         }
     }
 
     hideUploadOverlay();
 
-    if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded & indexed.');
+    if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded successfully.');
     if (failed > 0 && uploaded > 0) showToast(failed + ' failed.', 'error');
 
     // Reset modal fields
