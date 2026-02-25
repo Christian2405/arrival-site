@@ -137,12 +137,14 @@ export default function HomeScreen() {
           };
           addMessage(alertMessage);
 
-          // Play TTS for the alert so worker hears it through earbuds
-          try {
-            const ttsResponse = await aiAPI.textToSpeech(result.message, demoMode);
-            if (ttsResponse.audio_base64) await playAudio(ttsResponse.audio_base64);
-          } catch (e) {
-            console.log('Job Mode TTS error:', e);
+          // Play TTS for CRITICAL alerts so worker hears safety hazards aloud
+          if (result.severity === 'critical') {
+            try {
+              const ttsResponse = await aiAPI.textToSpeech(result.message, demoMode);
+              if (ttsResponse.audio_base64) await playAudio(ttsResponse.audio_base64);
+            } catch (e) {
+              console.log('Job Mode TTS error:', e);
+            }
           }
         }
       } catch (error) {

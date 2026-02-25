@@ -35,6 +35,8 @@ async def analyze(request: FrameRequest, req: Request):
         result = await analyze_frame(request.image_base64)
         return FrameResponse(**result)
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
