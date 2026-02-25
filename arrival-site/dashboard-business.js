@@ -292,6 +292,7 @@ async function loadDocuments() {
     var result = await sb.from('documents')
         .select('*, users!documents_uploaded_by_fkey(first_name, last_name)')
         .eq('team_id', currentTeam.id)
+        .not('category', 'in', '("photo","video")')
         .order('created_at', { ascending: false });
 
     teamDocs = result.data || [];
@@ -358,8 +359,8 @@ function renderDocTable(docs) {
             '<td>' + escapeHtml(uploaderName) + '</td>' +
             '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
             '<td>' + date + '</td>' +
-            '<td><a href="#" class="table-action' + viewDisabled + '" onclick="viewDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">View</a> ' +
-            '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">Delete</a></td>' +
+            '<td><a href="#" class="table-action' + viewDisabled + '" onclick="viewDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
+            '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
             '</tr>';
     }).join('');
 }
@@ -485,23 +486,26 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        // Delete through backend API so RAG vectors get cleaned up too
-        var session = (await sb.auth.getSession()).data.session;
-        var token = session ? session.access_token : null;
-
-        var resp = await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
-            method: 'DELETE',
-            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-        });
-
-        if (!resp.ok) {
-            var errBody = await resp.text();
-            throw new Error(errBody || 'Delete failed');
-        }
+        // Delete from storage
+        await sb.storage.from('documents').remove([storagePath]);
+        // Delete DB record
+        var dbResult = await sb.from('documents').delete().eq('id', docId);
+        if (dbResult.error) throw dbResult.error;
 
         showToast('Document deleted.');
         await loadDocuments();
         loadHome();
+
+        // Best-effort RAG cleanup via backend
+        try {
+            var session = (await sb.auth.getSession()).data.session;
+            if (session) {
+                fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + session.access_token }
+                }).catch(function() {});
+            }
+        } catch (_) {}
     } catch (err) {
         console.error('Delete error:', err);
         showToast('Failed to delete document.', 'error');
@@ -819,7 +823,7 @@ function renderMediaGrid(items) {
                 '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + (uploaderName ? ' · Uploaded by ' + escapeHtml(uploaderName) : '') + '</div>' +
                 site +
             '</div>' +
-            '<div class="media-actions"><a href="#" class="table-action" onclick="viewMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">View</a> <a href="#" class="table-action table-action-danger" onclick="deleteMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">Delete</a></div>' +
+            '<div class="media-actions"><a href="#" class="table-action" onclick="viewMedia(\'' + m.id + '\',\'' + escapeAttr(m.storage_path) + '\'); return false;">View</a> <a href="#" class="table-action table-action-danger" onclick="deleteMedia(\'' + m.id + '\',\'' + escapeAttr(m.storage_path) + '\'); return false;">Delete</a></div>' +
             '</div>';
     }).join('');
 }
@@ -1214,6 +1218,11 @@ function escapeHtml(str) {
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function escapeAttr(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function capitalize(str) {
