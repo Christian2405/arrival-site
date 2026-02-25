@@ -309,9 +309,10 @@ p { line-height: 1.7; color: var(--text-dark); }
 .billing-plans-grid .pricing-cta .btn {
     width: 100%;
     text-align: center;
-    padding: 14px 20px;
+    padding: 14px 12px;
     font-size: 14px;
     border-radius: 100px;
+    white-space: nowrap;
 }
 
 .billing-plans-grid .pricing-cta .btn:disabled {
