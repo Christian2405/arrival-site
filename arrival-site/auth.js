@@ -196,20 +196,29 @@ async function handleLogin(event) {
 
         var userId = result.data.user.id;
 
-        // Check if user has an active team membership
-        var tmResult = await sb
-            .from('team_members')
-            .select('team_id, role, status')
-            .eq('user_id', userId)
-            .eq('status', 'active')
-            .limit(1);
+        // Check user plan — free users always go to individual
+        var profileResult = await sb.from('users').select('account_type').eq('id', userId).single();
+        var accountType = profileResult.data ? profileResult.data.account_type : 'free';
 
-        if (tmResult.data && tmResult.data.length > 0) {
-            localStorage.setItem('arrival_dashboard', 'business');
-            window.location.href = '/dashboard-business';
-        } else {
+        if (accountType === 'free') {
             localStorage.setItem('arrival_dashboard', 'individual');
             window.location.href = '/dashboard-individual';
+        } else {
+            // Check if user has an active team membership
+            var tmResult = await sb
+                .from('team_members')
+                .select('team_id')
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .limit(1);
+
+            if (tmResult.data && tmResult.data.length > 0) {
+                localStorage.setItem('arrival_dashboard', 'business');
+                window.location.href = '/dashboard-business';
+            } else {
+                localStorage.setItem('arrival_dashboard', 'individual');
+                window.location.href = '/dashboard-individual';
+            }
         }
 
     } catch (error) {
@@ -381,19 +390,28 @@ async function navigateToDashboard() {
 
         var user = session.user;
 
-        var tmResult = await sb
-            .from('team_members')
-            .select('team_id')
-            .eq('user_id', user.id)
-            .eq('status', 'active')
-            .limit(1);
+        // Check user plan — free users always go to individual
+        var profileResult = await sb.from('users').select('account_type').eq('id', user.id).single();
+        var accountType = profileResult.data ? profileResult.data.account_type : 'free';
 
-        if (tmResult.data && tmResult.data.length > 0) {
-            localStorage.setItem('arrival_dashboard', 'business');
-            window.location.href = '/dashboard-business';
-        } else {
+        if (accountType === 'free') {
             localStorage.setItem('arrival_dashboard', 'individual');
             window.location.href = '/dashboard-individual';
+        } else {
+            var tmResult = await sb
+                .from('team_members')
+                .select('team_id')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .limit(1);
+
+            if (tmResult.data && tmResult.data.length > 0) {
+                localStorage.setItem('arrival_dashboard', 'business');
+                window.location.href = '/dashboard-business';
+            } else {
+                localStorage.setItem('arrival_dashboard', 'individual');
+                window.location.href = '/dashboard-individual';
+            }
         }
     } catch (err) {
         console.error('Dashboard navigation error:', err);

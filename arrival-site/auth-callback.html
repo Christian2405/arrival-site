@@ -85,18 +85,26 @@
                         });
                     }
 
-                    // Check if user has a team for routing
-                    var tmResult = await sb
-                        .from('team_members')
-                        .select('team_id')
-                        .eq('user_id', user.id)
-                        .eq('status', 'active')
-                        .limit(1);
+                    // Check user plan — free users always go to individual
+                    var userResult = await sb.from('users').select('account_type').eq('id', user.id).single();
+                    var accountType = userResult.data ? userResult.data.account_type : 'free';
 
-                    if (tmResult.data && tmResult.data.length > 0) {
-                        window.location.href = '/dashboard-business';
-                    } else {
+                    if (accountType === 'free') {
                         window.location.href = '/dashboard-individual';
+                    } else {
+                        // Check if user has a team for routing
+                        var tmResult = await sb
+                            .from('team_members')
+                            .select('team_id')
+                            .eq('user_id', user.id)
+                            .eq('status', 'active')
+                            .limit(1);
+
+                        if (tmResult.data && tmResult.data.length > 0) {
+                            window.location.href = '/dashboard-business';
+                        } else {
+                            window.location.href = '/dashboard-individual';
+                        }
                     }
                 } else if (attempts < maxAttempts) {
                     setTimeout(checkSession, 250);

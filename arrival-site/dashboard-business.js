@@ -117,6 +117,14 @@ async function initAuth() {
     var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
 
+    // Free plan users always go to individual dashboard
+    var accountType = currentProfile ? currentProfile.account_type : 'free';
+    var subPlan = currentSubscription ? currentSubscription.plan : 'free';
+    if (accountType === 'free' || subPlan === 'free') {
+        window.location.href = '/dashboard-individual';
+        return;
+    }
+
     // Find team membership (retry if coming from checkout — webhook may still be processing)
     var isCheckoutReturn = window.location.search.includes('checkout=success');
     var memberResult = null;
