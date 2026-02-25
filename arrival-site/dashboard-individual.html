@@ -359,7 +359,7 @@ function showPage(id, pushHistory) {
     }
 }
 
-window.addEventListener('hashchange', function() {
+window.addEventListener('popstate', function() {
     var hash = window.location.hash.replace('#', '') || 'documents';
     if (document.getElementById('page-' + hash)) {
         showPage(hash, false);

@@ -508,8 +508,8 @@ function showPage(id, pushHistory) {
     }
 }
 
-// Handle browser back/forward
-window.addEventListener('hashchange', function() {
+// Handle browser back/forward (popstate covers both hash changes and returning to no-hash URL)
+window.addEventListener('popstate', function() {
     var hash = window.location.hash.replace('#', '') || 'home';
     if (document.getElementById('page-' + hash)) {
         showPage(hash, false);
