@@ -488,13 +488,41 @@
 </div>
 
 <script>
-function showPage(id) {
+// Page ID to sidebar link index mapping
+var PAGE_NAV_INDEX = { home:0, docs:1, photos:2, activity:3, analytics:4, billing:5, settings:6 };
+
+function showPage(id, pushHistory) {
     document.querySelectorAll('.dash-page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-' + id).classList.add('active');
-    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-    if(event && event.target) event.target.closest('.sidebar-link')?.classList.add('active');
+    // Highlight correct sidebar link
+    document.querySelectorAll('.sidebar-nav .sidebar-link').forEach(l => l.classList.remove('active'));
+    var idx = PAGE_NAV_INDEX[id];
+    if (idx !== undefined) {
+        var links = document.querySelectorAll('.sidebar-nav .sidebar-link');
+        if (links[idx]) links[idx].classList.add('active');
+    }
     window.scrollTo(0,0);
+    // Push hash for browser back/forward (skip if triggered by popstate)
+    if (pushHistory !== false && window.location.hash !== '#' + id) {
+        history.pushState(null, '', '#' + id);
+    }
 }
+
+// Handle browser back/forward
+window.addEventListener('hashchange', function() {
+    var hash = window.location.hash.replace('#', '') || 'home';
+    if (document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
+
+// On page load, restore section from hash
+window.addEventListener('DOMContentLoaded', function() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function toggleBtn(el) {

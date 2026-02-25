@@ -342,13 +342,36 @@
 </div>
 
 <script>
-function showPage(id) {
+var PAGE_NAV_INDEX = { documents:0, photos:1, 'chat-history':2, 'saved-answers':3, billing:4, settings:5 };
+
+function showPage(id, pushHistory) {
     document.querySelectorAll('.dash-page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-' + id).classList.add('active');
-    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-    if(event && event.target) event.target.closest('.sidebar-link')?.classList.add('active');
+    document.querySelectorAll('.sidebar-nav .sidebar-link').forEach(l => l.classList.remove('active'));
+    var idx = PAGE_NAV_INDEX[id];
+    if (idx !== undefined) {
+        var links = document.querySelectorAll('.sidebar-nav .sidebar-link');
+        if (links[idx]) links[idx].classList.add('active');
+    }
     window.scrollTo(0,0);
+    if (pushHistory !== false && window.location.hash !== '#' + id) {
+        history.pushState(null, '', '#' + id);
+    }
 }
+
+window.addEventListener('hashchange', function() {
+    var hash = window.location.hash.replace('#', '') || 'documents';
+    if (document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
+
+window.addEventListener('DOMContentLoaded', function() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function activateTab(el) {
