@@ -343,11 +343,13 @@ var cardElement = null;
 var setupClientSecret = null;
 
 function loadBilling() {
-    var plan = currentSubscription ? currentSubscription.plan : 'pro';
+    var plan = currentSubscription ? currentSubscription.plan : 'free';
 
-    // Billing detail text (next billing date)
+    // Billing detail text
     var detailEl = document.getElementById('billing-plan-detail');
-    if (currentSubscription && currentSubscription.current_period_end) {
+    if (plan === 'free') {
+        detailEl.textContent = 'You are on the Free plan. Upgrade below to unlock all features.';
+    } else if (currentSubscription && currentSubscription.current_period_end) {
         var endDate = new Date(currentSubscription.current_period_end);
         detailEl.textContent = 'You are on the ' + capitalize(plan) + ' plan. Next billing date: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     } else {
@@ -355,7 +357,7 @@ function loadBilling() {
     }
 
     // Highlight current plan card
-    var cards = ['pro', 'business'];
+    var cards = ['pro', 'business', 'enterprise'];
     cards.forEach(function(p) {
         var card = document.getElementById('plan-card-' + p);
         if (card) card.classList.toggle('plan-active', p === plan);
@@ -365,7 +367,14 @@ function loadBilling() {
     var btnPro = document.getElementById('billing-btn-pro');
     var btnBiz = document.getElementById('billing-btn-biz');
 
-    if (plan === 'pro') {
+    if (plan === 'free') {
+        btnPro.textContent = 'Upgrade to Pro';
+        btnPro.disabled = false;
+        btnPro.className = 'btn btn-primary';
+        btnBiz.textContent = 'Upgrade to Business';
+        btnBiz.disabled = false;
+        btnBiz.className = 'btn btn-primary';
+    } else if (plan === 'pro') {
         btnPro.textContent = 'Current Plan';
         btnPro.disabled = true;
         btnPro.className = 'btn btn-outline';
@@ -381,15 +390,17 @@ function loadBilling() {
         btnBiz.className = 'btn btn-outline';
     }
 
-    // Show cancel + payment + invoice sections
+    // Show cancel + payment + invoice sections only for paid plans
     var cancelSection = document.getElementById('billing-cancel-section');
-    if (cancelSection) cancelSection.style.display = '';
+    if (cancelSection) cancelSection.style.display = (plan === 'free') ? 'none' : '';
 
-    document.getElementById('billing-payment-section').style.display = '';
-    document.getElementById('billing-invoice-section').style.display = '';
+    document.getElementById('billing-payment-section').style.display = (plan === 'free') ? 'none' : '';
+    document.getElementById('billing-invoice-section').style.display = (plan === 'free') ? 'none' : '';
 
-    // Load billing details from Stripe (invoices + payment method)
-    loadBillingDetails();
+    // Load billing details from Stripe (only for paid plans)
+    if (plan !== 'free') {
+        loadBillingDetails();
+    }
 }
 
 async function loadBillingDetails() {

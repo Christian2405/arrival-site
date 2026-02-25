@@ -397,8 +397,8 @@ async function navigateToDashboard() {
         }
     } catch (err) {
         console.error('Dashboard navigation error:', err);
-        // Fallback — use last known dashboard type, default to business
-        var lastDash = localStorage.getItem('arrival_dashboard') || 'business';
+        // Fallback — use last known dashboard type, default to individual
+        var lastDash = localStorage.getItem('arrival_dashboard') || 'individual';
         window.location.href = '/dashboard-' + lastDash;
     }
 }
