@@ -106,7 +106,6 @@ async function initAuth() {
     }
 
     loadDocuments();
-    loadMedia();
     loadBilling();
     loadSettings();
     checkCheckoutSuccess();
@@ -827,86 +826,6 @@ async function handleDeleteAccount() {
     }
 }
 
-// ============================================
-// PHOTOS & VIDEOS
-// ============================================
-
-var userMedia = [];
-
-async function loadMedia() {
-    var result = await sb.from('documents')
-        .select('*')
-        .eq('uploaded_by', currentUser.id)
-        .is('team_id', null)
-        .in('category', ['photo', 'video'])
-        .order('created_at', { ascending: false });
-
-    userMedia = result.data || [];
-    renderMediaGrid(userMedia);
-
-    var plan = currentProfile ? currentProfile.account_type : 'pro';
-    var indicator = document.getElementById('media-storage-indicator');
-    if (indicator) indicator.innerHTML = userMedia.length + ' files uploaded <span class="plan-badge">' + capitalize(plan) + '</span>';
-}
-
-async function renderMediaGrid(items) {
-    var grid = document.getElementById('media-grid');
-    if (!grid) return;
-
-    if (items.length === 0) {
-        grid.innerHTML = '<div style="padding:48px 20px;text-align:center;color:var(--text-muted,#7c736a);width:100%;">No photos or videos uploaded yet.</div>';
-        return;
-    }
-
-    var videoPlaySvg = '<svg width="28" height="28" viewBox="0 0 28 28" fill="white" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));"><polygon points="10,6 24,14 10,22"/></svg>';
-
-    // Get signed URLs for all items in parallel
-    var paths = items.map(function(m) { return m.storage_path; });
-    var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
-    var urlMap = {};
-    if (signedResults.data) {
-        signedResults.data.forEach(function(r) {
-            if (r.signedUrl) urlMap[r.path] = r.signedUrl;
-        });
-    }
-
-    grid.innerHTML = items.map(function(m) {
-        var isVideo = m.category === 'video' || (m.file_type && m.file_type.startsWith('video/'));
-        var mediaType = isVideo ? 'video' : 'photo';
-        var ext = m.file_name.split('.').pop().toUpperCase();
-        var sizeMB = (m.file_size / (1024 * 1024)).toFixed(1);
-        var date = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        var title = m.notes || m.file_name;
-        var url = urlMap[m.storage_path] || '';
-
-        var thumbHtml;
-        if (url && !isVideo) {
-            thumbHtml = '<div class="media-thumb" style="background:#e8e4df;overflow:hidden;"><img src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display=\'none\'"></div>';
-        } else if (url && isVideo) {
-            thumbHtml = '<div class="media-thumb media-thumb-video" style="background:#e8e4df;overflow:hidden;position:relative;"><video src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" muted preload="metadata" onerror="this.style.display=\'none\'"></video>' + videoPlaySvg + '</div>';
-        } else {
-            thumbHtml = '<div class="media-thumb" style="background:#e8e4df;"><svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/></svg></div>';
-        }
-
-        return '<div class="media-card" data-media="' + mediaType + '">' +
-            thumbHtml +
-            '<div class="media-info">' +
-                '<div class="media-name">' + escapeHtml(title) + '</div>' +
-                '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + '</div>' +
-            '</div>' +
-            '<div class="media-actions"><a href="#" class="table-action" onclick="viewMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">View</a> <a href="#" class="table-action table-action-danger" onclick="deleteMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">Delete</a></div>' +
-            '</div>';
-    }).join('');
-}
-
-function filterMediaIndiv(el, type) {
-    el.parentElement.querySelectorAll('.filter-tab').forEach(function(t) { t.classList.remove('active'); });
-    el.classList.add('active');
-    document.querySelectorAll('#media-grid .media-card').forEach(function(card) {
-        card.style.display = (type === 'all' || card.dataset.media === type) ? '' : 'none';
-    });
-}
-
 function showUploadOverlay(text) {
     var overlay = document.getElementById('upload-overlay');
     var textEl = document.getElementById('upload-overlay-text');
@@ -917,93 +836,6 @@ function showUploadOverlay(text) {
 function hideUploadOverlay() {
     var overlay = document.getElementById('upload-overlay');
     if (overlay) overlay.classList.remove('active');
-}
-
-async function handleMediaUpload(event) {
-    var files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    var total = files.length;
-    var uploaded = 0;
-    var failed = 0;
-
-    showUploadOverlay('Uploading ' + total + ' file' + (total > 1 ? 's' : '') + '...');
-
-    for (var i = 0; i < files.length; i++) {
-        var file = files[i];
-        if (file.size > 200 * 1024 * 1024) {
-            failed++;
-            showToast(file.name + ' exceeds 200MB limit.', 'error');
-            continue;
-        }
-
-        if (total > 1) {
-            showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
-        }
-
-        var isVideo = file.type.startsWith('video/');
-        var category = isVideo ? 'video' : 'photo';
-        var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        var storagePath = currentUser.id + '/media/' + Date.now() + '_' + safeName;
-
-        try {
-            var uploadResult = await sb.storage.from('documents').upload(storagePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-            if (uploadResult.error) throw uploadResult.error;
-
-            var ext = file.name.split('.').pop().toLowerCase();
-            var insertResult = await sb.from('documents').insert({
-                uploaded_by: currentUser.id,
-                team_id: null,
-                file_name: file.name,
-                file_type: file.type || (isVideo ? 'video/' + ext : 'image/' + ext),
-                file_size: file.size,
-                storage_path: storagePath,
-                category: category,
-                status: 'ready'
-            });
-            if (insertResult.error) throw insertResult.error;
-
-            uploaded++;
-        } catch (err) {
-            console.error('Media upload error:', err);
-            failed++;
-            showToast('Failed: ' + (err.message || JSON.stringify(err)), 'error');
-        }
-    }
-
-    hideUploadOverlay();
-
-    event.target.value = '';
-    await loadMedia();
-}
-
-async function viewMedia(id, storagePath) {
-    try {
-        var signedResult = await sb.storage.from('documents').createSignedUrl(storagePath, 3600);
-        if (signedResult.error) throw signedResult.error;
-        window.open(signedResult.data.signedUrl, '_blank');
-    } catch (err) {
-        console.error('View media error:', err);
-        showToast('Failed to open file.', 'error');
-    }
-}
-
-async function deleteMedia(id, storagePath) {
-    if (!confirm('Delete this file? This cannot be undone.')) return;
-
-    try {
-        await sb.storage.from('documents').remove([storagePath]);
-        var dbResult = await sb.from('documents').delete().eq('id', id);
-        if (dbResult.error) throw dbResult.error;
-        showToast('File deleted.');
-        await loadMedia();
-    } catch (err) {
-        console.error('Delete media error:', err);
-        showToast('Failed to delete file.', 'error');
-    }
 }
 
 // ============================================
@@ -1131,28 +963,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var cancelCardBtn = document.getElementById('cancel-card-btn');
     if (cancelCardBtn) {
         cancelCardBtn.addEventListener('click', function() { hideCardForm(); });
-    }
-
-    // Media upload handler
-    document.getElementById('media-input').addEventListener('change', handleMediaUpload);
-
-    // Media drag & drop
-    var mediaZone = document.getElementById('media-upload-zone');
-    if (mediaZone) {
-        mediaZone.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            mediaZone.classList.add('drag-over');
-        });
-        mediaZone.addEventListener('dragleave', function() {
-            mediaZone.classList.remove('drag-over');
-        });
-        mediaZone.addEventListener('drop', function(e) {
-            e.preventDefault();
-            mediaZone.classList.remove('drag-over');
-            var input = document.getElementById('media-input');
-            input.files = e.dataTransfer.files;
-            input.dispatchEvent(new Event('change'));
-        });
     }
 
     // Drag & drop
