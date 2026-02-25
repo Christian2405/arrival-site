@@ -372,7 +372,24 @@
 <script>
 var PAGE_NAV_INDEX = { documents:0, photos:1, 'chat-history':2, 'saved-answers':3, billing:4, settings:5 };
 
+function isTrialExpired() {
+    if (typeof currentSubscription === 'undefined' || !currentSubscription) return false;
+    if (currentSubscription.plan !== 'free') return false;
+    if (currentSubscription.status === 'trial_expired') return true;
+    if (currentSubscription.trial_ends_at) {
+        return new Date(currentSubscription.trial_ends_at) < new Date();
+    }
+    return false;
+}
+
 function showPage(id, pushHistory) {
+    // Expired trial users can only see billing — redirect everything else back
+    if (id !== 'billing' && isTrialExpired()) {
+        showPage('billing', pushHistory);
+        loadBilling();
+        document.getElementById('trial-expired-overlay').style.display = 'flex';
+        return;
+    }
     document.querySelectorAll('.dash-page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-' + id).classList.add('active');
     document.querySelectorAll('.sidebar-nav .sidebar-link').forEach(l => l.classList.remove('active'));
@@ -425,7 +442,7 @@ function filterDocs(el, cat) {
         <h2>Your free trial has ended</h2>
         <p>Your 7-day trial is over. Upgrade to Pro or Business to continue using Arrival.</p>
         <div class="trial-expired-buttons">
-            <button class="btn btn-primary" onclick="window.location.hash='billing'; document.getElementById('trial-expired-overlay').style.display='none'; loadBilling();">View Plans</button>
+            <button class="btn btn-primary" onclick="document.getElementById('trial-expired-overlay').style.display='none'; showPage('billing'); loadBilling();">View Plans</button>
             <button class="btn btn-outline" onclick="handleLogout()">Sign Out</button>
         </div>
     </div>
