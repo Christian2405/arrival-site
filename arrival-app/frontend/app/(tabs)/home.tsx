@@ -437,30 +437,23 @@ export default function HomeScreen() {
             <Ionicons name="menu" size={24} color="#FFF" />
           </TouchableOpacity>
 
-          {/* Center: Job Mode toggle */}
-          <TouchableOpacity
-            style={[styles.recordingPill, jobMode && styles.recordingPillActive]}
-            onPress={() => {
-              if (!tierLimits.jobMode && !jobMode) {
-                Alert.alert(
-                  'Business Feature',
-                  'Job Mode continuous recording is available on the Business plan. Upgrade on arrivalcompany.com to unlock this feature.',
-                  [{ text: 'OK' }]
-                );
-                return;
-              }
-              setJobMode(!jobMode);
-            }}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.recordDot, jobMode && styles.recordDotActive]} />
-            <Text style={styles.recordText}>
-              {jobMode ? 'Job Mode ON' : 'Job Mode'}
-            </Text>
-            {!tierLimits.jobMode && (
-              <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.5)" />
-            )}
-          </TouchableOpacity>
+          {/* Center: Job Mode toggle (business/enterprise only) */}
+          {tierLimits.jobMode ? (
+            <TouchableOpacity
+              style={[styles.recordingPill, jobMode && styles.recordingPillActive]}
+              onPress={() => setJobMode(!jobMode)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.recordDot, jobMode && styles.recordDotActive]} />
+              <Text style={styles.recordText}>
+                {jobMode ? 'Job Mode ON' : 'Job Mode'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.recordingPill}>
+              <ArrivalLogo width={80} color="#FFF" />
+            </View>
+          )}
 
           {/* Right: Flash */}
           <TouchableOpacity style={styles.topIconBtn} onPress={() => setFlashOn(!flashOn)}>

@@ -33,6 +33,13 @@ export const TIER_LIMITS: Record<string, TierLimits> = {
     teamDocs: true,
     voiceOutput: true,
   },
+  enterprise: {
+    maxDocs: 999,
+    jobMode: true,
+    proactiveAlerts: true,
+    teamDocs: true,
+    voiceOutput: true,
+  },
 };
 
 export function getTierLimits(plan: string): TierLimits {
