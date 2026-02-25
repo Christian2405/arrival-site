@@ -863,9 +863,20 @@ async function handleMediaUpload() {
     var category = isVideo ? 'video' : 'photo';
     var storagePath = 'teams/' + currentTeam.id + '/media/' + Date.now() + '_' + file.name;
 
+    // Capture field values before closing modal
+    var projectVal = projectInput.value.trim() || null;
+    var titleVal = titleInput.value.trim() || null;
+    var notesVal = notesInput.value.trim() || null;
+
+    // Close modal and show progress (same UX as doc upload)
+    closeModal('media-upload-modal');
+    showUploadOverlay('Uploading ' + file.name + '...');
+
     try {
         var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
         if (uploadResult.error) throw uploadResult.error;
+
+        showUploadOverlay('Saving...');
 
         var ext = file.name.split('.').pop().toLowerCase();
         var insertResult = await sb.from('documents').insert({
@@ -876,23 +887,26 @@ async function handleMediaUpload() {
             file_size: file.size,
             storage_path: storagePath,
             category: category,
-            project_tag: projectInput.value.trim() || null,
-            notes: titleInput.value.trim() || notesInput.value.trim() || null,
+            project_tag: projectVal,
+            notes: titleVal || notesVal,
             status: 'ready'
         });
         if (insertResult.error) throw insertResult.error;
 
+        hideUploadOverlay();
         showToast(file.name + ' uploaded successfully.');
-        closeModal('media-upload-modal');
 
+        // Reset modal fields
         fileInput.value = '';
         titleInput.value = '';
         projectInput.value = '';
         notesInput.value = '';
 
         await loadMedia();
+        loadHome();
     } catch (err) {
         console.error('Media upload error:', err);
+        hideUploadOverlay();
         showToast('Failed to upload: ' + err.message, 'error');
     }
 }
