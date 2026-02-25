@@ -78,11 +78,21 @@
                             account_type: 'free'
                         });
 
+                        var trialEnd = new Date();
+                        trialEnd.setDate(trialEnd.getDate() + 7);
                         await sb.from('subscriptions').insert({
                             user_id: user.id,
                             plan: 'free',
-                            status: 'active'
+                            status: 'active',
+                            trial_ends_at: trialEnd.toISOString()
                         });
+
+                        // Send welcome email (fire-and-forget)
+                        fetch('/.netlify/functions/send-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ to: user.email, template: 'welcome', args: [firstName] })
+                        }).catch(function(e) { console.error('Welcome email error:', e); });
                     }
 
                     // Check user plan — free users always go to individual

@@ -152,6 +152,48 @@ function paymentFailedEmail(firstName) {
   };
 }
 
+// ─── TRIAL ENDING TOMORROW ──────────────────
+function trialEndingTomorrowEmail(firstName) {
+  const name = firstName || 'there';
+  return {
+    subject: 'Your free trial ends tomorrow ⏱',
+    html: baseTemplate(`
+      <h1>Your trial ends tomorrow</h1>
+      <p>Hi ${name}, your 7-day free trial of Arrival ends tomorrow. After that, you'll lose access to the dashboard and AI assistant.</p>
+      <p>Upgrade now to keep using Arrival without interruption.</p>
+      <div class="highlight">
+        <div class="highlight-label">Recommended</div>
+        <div class="highlight-value">Pro &mdash; $25/month</div>
+      </div>
+      <ul class="feature-list">
+        <li>Unlimited AI queries</li>
+        <li>Unlimited camera snaps</li>
+        <li>Up to 50 document uploads</li>
+        <li>Chat history &amp; saved answers</li>
+      </ul>
+      <a href="https://arrivalcompany.com/dashboard-individual#billing" class="btn">Upgrade Now</a>
+      <hr class="divider">
+      <p style="font-size:13px; color:#7c736a;">If you have any questions, just reply to this email.</p>
+    `)
+  };
+}
+
+// ─── TRIAL EXPIRED ──────────────────────────
+function trialExpiredEmail(firstName) {
+  const name = firstName || 'there';
+  return {
+    subject: 'Your free trial has ended',
+    html: baseTemplate(`
+      <h1>Your trial has ended</h1>
+      <p>Hi ${name}, your 7-day free trial of Arrival has expired. Your account is now locked.</p>
+      <p>Upgrade to Pro or Business to get back in and keep using your AI assistant on job sites.</p>
+      <a href="https://arrivalcompany.com/dashboard-individual#billing" class="btn">Upgrade Now</a>
+      <hr class="divider">
+      <p style="font-size:13px; color:#7c736a;">Miss us already? Reply to this email — we'd love to hear from you.</p>
+    `)
+  };
+}
+
 // ============================================
 // TEMPLATE REGISTRY
 // ============================================
@@ -160,7 +202,9 @@ const TEMPLATES = {
   welcome: welcomeEmail,
   subscription_confirmed: subscriptionConfirmedEmail,
   subscription_cancelled: subscriptionCancelledEmail,
-  payment_failed: paymentFailedEmail
+  payment_failed: paymentFailedEmail,
+  trial_ending_tomorrow: trialEndingTomorrowEmail,
+  trial_expired: trialExpiredEmail
 };
 
 // ============================================

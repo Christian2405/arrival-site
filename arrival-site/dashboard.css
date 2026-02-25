@@ -1841,3 +1841,78 @@ p { line-height: 1.7; color: var(--text-dark); }
 .doc-thumb-pdf .doc-thumb-label {
     color: #c45a3c;
 }
+
+/* ── Trial Banner ── */
+.trial-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f0faf0;
+    border: 1px solid #b8e6b8;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+}
+.trial-banner.trial-orange {
+    background: #fff8f0;
+    border-color: #f0c878;
+}
+.trial-banner.trial-red {
+    background: #fef2f0;
+    border-color: #e8a8a0;
+}
+.trial-banner-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+.trial-banner-text {
+    font-size: 14px;
+    color: var(--text-dark);
+    line-height: 1.5;
+}
+
+/* ── Trial Expired Overlay ── */
+.trial-expired-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+.trial-expired-card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 48px 40px;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.trial-expired-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+.trial-expired-card h2 {
+    font-family: Georgia, serif;
+    font-size: 22px;
+    margin: 0 0 12px;
+    color: var(--text-dark);
+}
+.trial-expired-card p {
+    font-size: 15px;
+    color: var(--text-muted);
+    margin: 0 0 28px;
+    line-height: 1.6;
+}
+.trial-expired-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+.trial-expired-buttons .btn {
+    min-width: 120px;
+}

@@ -132,6 +132,12 @@
             <p class="dash-sub" id="billing-plan-detail"></p>
         </div>
 
+        <!-- Trial Countdown Banner -->
+        <div class="trial-banner" id="trial-banner" style="display:none;">
+            <div class="trial-banner-icon">⏱</div>
+            <div class="trial-banner-text"><strong><span id="trial-days-left">7</span> days left</strong> on your free trial. Upgrade to keep access.</div>
+        </div>
+
         <!-- Plan Cards Grid -->
         <div class="billing-plans-grid">
             <!-- Pro -->
@@ -412,6 +418,19 @@ function filterDocs(el, cat) {
     });
 }
 </script>
+<!-- Trial Expired Overlay -->
+<div id="trial-expired-overlay" style="display:none;" class="trial-expired-overlay">
+    <div class="trial-expired-card">
+        <div class="trial-expired-icon">🔒</div>
+        <h2>Your free trial has ended</h2>
+        <p>Your 7-day trial is over. Upgrade to Pro or Business to continue using Arrival.</p>
+        <div class="trial-expired-buttons">
+            <button class="btn btn-primary" onclick="window.location.hash='billing'; document.getElementById('trial-expired-overlay').style.display='none'; loadBilling();">View Plans</button>
+            <button class="btn btn-outline" onclick="handleLogout()">Sign Out</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://js.stripe.com/v3/"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="dashboard.js"></script>

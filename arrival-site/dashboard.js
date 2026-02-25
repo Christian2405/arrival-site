@@ -88,6 +88,23 @@ async function initAuth() {
         return;
     }
 
+    // Check if free trial has expired
+    var subPlan = currentSubscription ? currentSubscription.plan : 'free';
+    var subStatus = currentSubscription ? currentSubscription.status : 'active';
+    if (subPlan === 'free') {
+        if (subStatus === 'trial_expired') {
+            showTrialExpiredOverlay();
+            return;
+        }
+        if (currentSubscription && currentSubscription.trial_ends_at) {
+            var trialEnd = new Date(currentSubscription.trial_ends_at);
+            if (trialEnd < new Date()) {
+                showTrialExpiredOverlay();
+                return;
+            }
+        }
+    }
+
     loadDocuments();
     loadMedia();
     loadBilling();
@@ -95,11 +112,16 @@ async function initAuth() {
     checkCheckoutSuccess();
 }
 
+function showTrialExpiredOverlay() {
+    var overlay = document.getElementById('trial-expired-overlay');
+    if (overlay) overlay.style.display = 'flex';
+}
+
 async function loadProfile() {
     var result = await sb.from('users').select('*').eq('id', currentUser.id).single();
     if (result.data) currentProfile = result.data;
 
-    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
+    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).in('status', ['active', 'trial_expired']).limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
 }
 
@@ -347,8 +369,30 @@ function loadBilling() {
 
     // Billing detail text
     var detailEl = document.getElementById('billing-plan-detail');
+    var trialBanner = document.getElementById('trial-banner');
     if (plan === 'free') {
-        detailEl.textContent = 'You are on the Free plan. Upgrade below to unlock all features.';
+        var daysLeft = 0;
+        if (currentSubscription && currentSubscription.trial_ends_at) {
+            var trialEnd = new Date(currentSubscription.trial_ends_at);
+            daysLeft = Math.ceil((trialEnd - new Date()) / 86400000);
+            if (daysLeft < 0) daysLeft = 0;
+        }
+        if (daysLeft > 0) {
+            detailEl.textContent = 'You are on a 7-day free trial. Upgrade below to keep access after your trial ends.';
+            if (trialBanner) {
+                trialBanner.style.display = 'flex';
+                var daysEl = document.getElementById('trial-days-left');
+                if (daysEl) daysEl.textContent = daysLeft;
+                trialBanner.className = 'trial-banner' + (daysLeft <= 1 ? ' trial-red' : daysLeft <= 3 ? ' trial-orange' : '');
+            }
+        } else {
+            detailEl.textContent = 'Your free trial has ended. Upgrade below to continue using Arrival.';
+            if (trialBanner) {
+                trialBanner.style.display = 'flex';
+                trialBanner.className = 'trial-banner trial-red';
+                trialBanner.innerHTML = '<div class="trial-banner-text"><strong>Trial expired</strong> — upgrade now to keep using Arrival.</div>';
+            }
+        }
     } else if (currentSubscription && currentSubscription.current_period_end) {
         var endDate = new Date(currentSubscription.current_period_end);
         detailEl.textContent = 'You are on the ' + capitalize(plan) + ' plan. Next billing date: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });

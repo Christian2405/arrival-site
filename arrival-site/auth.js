@@ -140,11 +140,14 @@ async function handleSignup(event) {
         });
         if (userResult.error) throw userResult.error;
 
-        // 3. Insert free subscription
+        // 3. Insert free subscription with 7-day trial
+        var trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 7);
         var subResult = await sb.from('subscriptions').insert({
             user_id: userId,
             plan: 'free',
-            status: 'active'
+            status: 'active',
+            trial_ends_at: trialEnd.toISOString()
         });
         if (subResult.error) throw subResult.error;
 
