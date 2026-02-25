@@ -47,25 +47,102 @@
                         <p class="hero-note">7-day free trial. No credit card required.</p>
                     </div>
                     <div class="hero-visual">
-                        <div class="hero-visual-card">
-                            <div class="feature-card">
-                                <div class="feature-card-item">
-                                    <div class="check">Q</div>
-                                    <div>What's this fault code?</div>
-                                </div>
-                                <div class="feature-card-item">
-                                    <div class="check">A</div>
-                                    <div>Carrier 50XC Code 13: Check contactor and transformer. Common on startup cycles.</div>
-                                </div>
-                                <div class="feature-card-item">
-                                    <div class="check">Q</div>
-                                    <div>How do I reset it?</div>
-                                </div>
-                                <div class="feature-card-item">
-                                    <div class="check">A</div>
-                                    <div>Power off 30 seconds, restore power. If persists, check indoor/outdoor thermostat wiring.</div>
-                                </div>
-                            </div>
+                        <div class="hero-phone-wrap">
+                            <svg class="hero-phone" viewBox="0 0 300 600" width="300" height="600">
+                                <!-- iPhone frame -->
+                                <rect x="0" y="0" width="300" height="600" rx="40" fill="#1a1714"/>
+                                <rect x="4" y="4" width="292" height="592" rx="36" fill="#2a2622"/>
+                                <rect x="8" y="8" width="284" height="584" rx="32" fill="#141414"/>
+                                <!-- Dynamic Island -->
+                                <rect x="108" y="16" width="84" height="26" rx="13" fill="#1a1714"/>
+                                <!-- Status bar -->
+                                <text x="30" y="34" font-size="11" fill="rgba(255,255,255,0.5)" font-family="system-ui, sans-serif">9:41</text>
+                                <text x="250" y="34" font-size="11" fill="rgba(255,255,255,0.5)" font-family="system-ui, sans-serif" text-anchor="end">87%</text>
+
+                                <!-- Top nav bar -->
+                                <rect x="8" y="48" width="284" height="50" fill="rgba(255,255,255,0.04)"/>
+                                <!-- Arrival logo "A" circle -->
+                                <circle cx="34" cy="73" r="14" fill="#D4842A"/>
+                                <text x="34" y="78" text-anchor="middle" font-size="14" fill="white" font-family="system-ui, sans-serif" font-weight="800">A</text>
+                                <text x="56" y="70" font-size="13" fill="white" font-family="system-ui, sans-serif" font-weight="700">arrival</text>
+                                <text x="56" y="84" font-size="10" fill="rgba(255,255,255,0.4)" font-family="system-ui, sans-serif">AI Trade Assistant</text>
+
+                                <!-- Camera preview thumbnail (top right) -->
+                                <rect x="226" y="56" width="56" height="36" rx="6" fill="#2a2a2a" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+                                <circle cx="254" cy="74" r="8" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+                                <circle cx="254" cy="74" r="3" fill="rgba(255,255,255,0.15)"/>
+                                <!-- Live dot -->
+                                <circle cx="234" cy="62" r="3" fill="#D4842A"/>
+
+                                <!-- User message bubble -->
+                                <rect x="60" y="112" width="220" height="56" rx="16" fill="rgba(212,132,42,0.12)" stroke="rgba(212,132,42,0.25)" stroke-width="1"/>
+                                <text x="76" y="133" font-size="12" fill="white" font-family="system-ui, sans-serif" font-weight="500">"This unit's making a grinding</text>
+                                <text x="76" y="149" font-size="12" fill="white" font-family="system-ui, sans-serif" font-weight="500">noise. What should I check?"</text>
+                                <!-- Mic icon on bubble -->
+                                <circle cx="262" cy="135" r="8" fill="rgba(212,132,42,0.3)"/>
+                                <rect x="259.5" y="129" width="5" height="8" rx="2.5" fill="#D4842A"/>
+
+                                <!-- AI response card -->
+                                <rect x="20" y="184" width="260" height="220" rx="16" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+
+                                <!-- Arrival AI avatar on card -->
+                                <circle cx="42" cy="206" r="10" fill="#D4842A"/>
+                                <text x="42" y="210" text-anchor="middle" font-size="10" fill="white" font-family="system-ui, sans-serif" font-weight="800">A</text>
+                                <text x="60" y="210" font-size="11" fill="white" font-family="system-ui, sans-serif" font-weight="600">Arrival AI</text>
+                                <text x="260" y="210" text-anchor="end" font-size="9" fill="rgba(255,255,255,0.3)" font-family="system-ui, sans-serif">Just now</text>
+
+                                <!-- Diagnosis section -->
+                                <text x="36" y="236" font-size="10" fill="#D4842A" font-family="system-ui, sans-serif" font-weight="700" letter-spacing="0.5">DIAGNOSIS</text>
+                                <text x="36" y="254" font-size="11" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Carrier 25HNH5 — Grinding on</text>
+                                <text x="36" y="270" font-size="11" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">startup indicates compressor</text>
+                                <text x="36" y="286" font-size="11" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">hard-start or failing contactor.</text>
+
+                                <!-- Divider -->
+                                <line x1="36" y1="298" x2="264" y2="298" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+
+                                <!-- Next steps -->
+                                <text x="36" y="316" font-size="10" fill="#D4842A" font-family="system-ui, sans-serif" font-weight="600" letter-spacing="0.5">NEXT STEPS</text>
+                                <text x="36" y="334" font-size="11" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">1. Check contactor for pitting</text>
+                                <text x="36" y="350" font-size="11" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">2. Test compressor capacitor</text>
+                                <text x="36" y="366" font-size="11" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">3. Inspect motor bearings</text>
+
+                                <!-- Confidence + Source row -->
+                                <rect x="20" y="416" width="110" height="30" rx="15" fill="rgba(212,132,42,0.12)"/>
+                                <text x="40" y="436" font-size="11" fill="#D4842A" font-family="system-ui, sans-serif" font-weight="600">94% Confidence</text>
+                                <rect x="140" y="416" width="140" height="30" rx="15" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                                <text x="152" y="435" font-size="9" fill="rgba(255,255,255,0.4)" font-family="system-ui, sans-serif">SOURCE</text>
+                                <text x="190" y="435" font-size="9" fill="rgba(255,255,255,0.6)" font-family="system-ui, sans-serif">Manual p.47</text>
+
+                                <!-- Audio playback bar -->
+                                <rect x="20" y="458" width="180" height="32" rx="16" fill="rgba(212,132,42,0.1)"/>
+                                <polygon points="36,468 36,484 46,476" fill="#D4842A"/>
+                                <g transform="translate(54, 476)">
+                                    <rect x="0" y="-4" width="2" height="8" rx="1" fill="#D4842A" opacity="0.5"/>
+                                    <rect x="5" y="-7" width="2" height="14" rx="1" fill="#D4842A" opacity="0.7"/>
+                                    <rect x="10" y="-3" width="2" height="6" rx="1" fill="#D4842A" opacity="0.4"/>
+                                    <rect x="15" y="-9" width="2" height="18" rx="1" fill="#D4842A" opacity="0.8"/>
+                                    <rect x="20" y="-5" width="2" height="10" rx="1" fill="#D4842A" opacity="0.6"/>
+                                    <rect x="25" y="-7" width="2" height="14" rx="1" fill="#D4842A" opacity="0.7"/>
+                                    <rect x="30" y="-3" width="2" height="6" rx="1" fill="#D4842A" opacity="0.4"/>
+                                    <rect x="35" y="-6" width="2" height="12" rx="1" fill="#D4842A" opacity="0.6"/>
+                                    <rect x="40" y="-4" width="2" height="8" rx="1" fill="#D4842A" opacity="0.5"/>
+                                    <rect x="45" y="-8" width="2" height="16" rx="1" fill="#D4842A" opacity="0.7"/>
+                                    <rect x="50" y="-3" width="2" height="6" rx="1" fill="#D4842A" opacity="0.4"/>
+                                    <rect x="55" y="-6" width="2" height="12" rx="1" fill="#D4842A" opacity="0.6"/>
+                                </g>
+                                <text x="130" y="479" font-size="9" fill="#D4842A" font-family="system-ui, sans-serif">Playing answer...</text>
+
+                                <!-- Bottom voice input bar -->
+                                <rect x="20" y="510" width="260" height="48" rx="24" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+                                <text x="50" y="539" font-size="12" fill="rgba(255,255,255,0.3)" font-family="system-ui, sans-serif">Ask a follow-up...</text>
+                                <!-- Mic button -->
+                                <circle cx="258" cy="534" r="16" fill="#D4842A"/>
+                                <rect x="255" y="524" width="6" height="12" rx="3" fill="white"/>
+                                <path d="M252 534 L252 538 Q252 544 258 544 Q264 544 264 538 L264 534" fill="none" stroke="white" stroke-width="1.5"/>
+
+                                <!-- Home indicator -->
+                                <rect x="110" y="574" width="80" height="4" rx="2" fill="rgba(255,255,255,0.2)"/>
+                            </svg>
                         </div>
                     </div>
                 </div>

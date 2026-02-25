@@ -318,6 +318,22 @@ p {
 
 .hero-visual {
     padding-left: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hero-phone-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hero-phone {
+    max-width: 280px;
+    height: auto;
+    filter: drop-shadow(0 20px 60px rgba(0,0,0,0.3));
 }
 
 .hero-visual-card {
@@ -1563,6 +1579,10 @@ p {
 
     .hero-visual {
         padding-left: 0;
+    }
+
+    .hero-phone {
+        max-width: 220px;
     }
 
     .hero-visual-card {
