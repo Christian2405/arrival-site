@@ -211,9 +211,12 @@ export default function SettingsScreen() {
               <Ionicons name="moon-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Dark Mode</Text>
             </View>
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>Soon</Text>
-            </View>
+            <Switch
+              value={false}
+              disabled
+              trackColor={{ false: '#E8E4DF', true: '#FE6B3F' }}
+              thumbColor="#fff"
+            />
           </View>
         </View>
 

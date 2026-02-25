@@ -1,5 +1,5 @@
 """
-Documents router — upload, list, delete documents via Supabase.
+Documents router — upload, list, delete, and index documents via Supabase.
 All endpoints require authentication (JWT).
 Uses the documents table as source of truth (matches website).
 """
@@ -9,6 +9,8 @@ from pydantic import BaseModel
 
 from app.middleware.auth import get_current_user
 from app.services.supabase import upload_document, list_documents, delete_document
+from app.services.rag import index_document
+from app import config
 
 router = APIRouter()
 
@@ -29,6 +31,17 @@ class DocumentListResponse(BaseModel):
 
 class DeleteResponse(BaseModel):
     success: bool
+    message: str
+
+
+class IndexRequest(BaseModel):
+    document_id: str
+    storage_path: str
+
+
+class IndexResponse(BaseModel):
+    success: bool
+    chunks_indexed: int
     message: str
 
 
@@ -121,3 +134,73 @@ async def delete_doc(document_id: str, request: Request):
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+@router.post("/index-document", response_model=IndexResponse)
+async def index_doc(body: IndexRequest, request: Request):
+    """
+    Trigger RAG indexing for a document already uploaded to Supabase Storage.
+    Called by the website dashboards after direct-to-Supabase uploads.
+    Downloads the file from Storage, extracts text, chunks, and upserts to Pinecone.
+    """
+    try:
+        user = await get_current_user(request)
+        user_id = user["user_id"]
+
+        if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
+            return IndexResponse(success=False, chunks_indexed=0, message="Supabase not configured")
+
+        if not config.PINECONE_API_KEY:
+            return IndexResponse(success=False, chunks_indexed=0, message="Pinecone not configured")
+
+        # Download the file from Supabase Storage
+        import httpx
+        storage_url = (
+            f"{config.SUPABASE_URL}/storage/v1/object/"
+            f"{config.SUPABASE_STORAGE_BUCKET}/{body.storage_path}"
+        )
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                storage_url,
+                headers={
+                    "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                },
+            )
+            resp.raise_for_status()
+            file_bytes = resp.content
+
+        # Guess content type from filename
+        filename = body.storage_path.split("/")[-1]
+        # Strip the timestamp prefix (e.g., "1700000000000_manual.pdf" -> "manual.pdf")
+        if "_" in filename:
+            filename = filename.split("_", 1)[1]
+
+        content_type = "application/octet-stream"
+        lower = filename.lower()
+        if lower.endswith(".pdf"):
+            content_type = "application/pdf"
+        elif lower.endswith((".txt", ".md", ".csv")):
+            content_type = "text/plain"
+
+        # Index via RAG pipeline
+        chunks = await index_document(
+            document_id=body.document_id,
+            user_id=user_id,
+            filename=filename,
+            file_bytes=file_bytes,
+            content_type=content_type,
+        )
+
+        return IndexResponse(
+            success=True,
+            chunks_indexed=chunks,
+            message=f"Indexed {chunks} chunks from {filename}",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[index-document] Error: {e}")
+        # Return success=False but don't error — indexing is best-effort
+        return IndexResponse(success=False, chunks_indexed=0, message=str(e))

@@ -207,8 +207,12 @@ async function loadHome() {
     var docCount = docsResult.count || 0;
     document.getElementById('home-stat-docs').innerHTML = docCount + ' <span class="stat-cap">uploaded</span>';
 
-    // Queries — hardcoded to 0
-    document.getElementById('home-stat-queries').textContent = '0';
+    // Queries — count from queries table
+    var queriesResult = await sb.from('queries')
+        .select('id', { count: 'exact', head: true })
+        .eq('team_id', currentTeam.id);
+    var queryCount = queriesResult.count || 0;
+    document.getElementById('home-stat-queries').textContent = queryCount;
 
     // Recent activity feed — combine recent documents + recent team member joins
     await loadActivityFeed();
@@ -232,6 +236,13 @@ async function loadActivityFeed() {
         .order('joined_at', { ascending: false })
         .limit(5);
 
+    // Get recent queries (last 10)
+    var queriesResult = await sb.from('queries')
+        .select('*, users!queries_user_id_fkey(first_name, last_name)')
+        .eq('team_id', currentTeam.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
     var items = [];
 
     // Add document uploads
@@ -241,6 +252,18 @@ async function loadActivityFeed() {
             items.push({
                 time: new Date(doc.created_at),
                 html: '<span class="activity-name">' + escapeHtml(name.trim()) + '</span> uploaded <em>' + escapeHtml(doc.file_name) + '</em>'
+            });
+        });
+    }
+
+    // Add queries
+    if (queriesResult.data) {
+        queriesResult.data.forEach(function(q) {
+            var name = q.users ? (q.users.first_name || '') + ' ' + (q.users.last_name || '') : 'Team member';
+            var shortQ = q.question.length > 60 ? q.question.substring(0, 57) + '...' : q.question;
+            items.push({
+                time: new Date(q.created_at),
+                html: '<span class="activity-name">' + escapeHtml(name.trim()) + '</span> asked <em>"' + escapeHtml(shortQ) + '"</em>'
             });
         });
     }
@@ -686,10 +709,9 @@ async function loadPerTechActivity() {
     var tbody = document.getElementById('pertech-tbody');
     if (!tbody) return;
 
-    // Get active team members (not current user if they are admin and want to see techs)
+    // Get active team members
     var activeMembers = teamMembers.length > 0 ? teamMembers : [];
     if (activeMembers.length === 0) {
-        // Re-fetch if not loaded yet
         var result = await sb.from('team_members')
             .select('*, users(first_name, last_name)')
             .eq('team_id', currentTeam.id)
@@ -702,18 +724,51 @@ async function loadPerTechActivity() {
         return;
     }
 
+    // Get query counts per user for this team
+    var queryCounts = {};
+    var lastQueryDates = {};
+    try {
+        var qResult = await sb.from('queries')
+            .select('user_id, created_at')
+            .eq('team_id', currentTeam.id)
+            .order('created_at', { ascending: false });
+        if (qResult.data) {
+            qResult.data.forEach(function(q) {
+                queryCounts[q.user_id] = (queryCounts[q.user_id] || 0) + 1;
+                if (!lastQueryDates[q.user_id]) lastQueryDates[q.user_id] = q.created_at;
+            });
+        }
+    } catch (_) { /* queries table may not exist yet */ }
+
+    // Get document counts per user for this team
+    var docCounts = {};
+    try {
+        var dResult = await sb.from('documents')
+            .select('uploaded_by')
+            .eq('team_id', currentTeam.id);
+        if (dResult.data) {
+            dResult.data.forEach(function(d) {
+                docCounts[d.uploaded_by] = (docCounts[d.uploaded_by] || 0) + 1;
+            });
+        }
+    } catch (_) { /* ignore */ }
+
     tbody.innerHTML = activeMembers.filter(function(m) { return m.status === 'active'; }).map(function(m) {
         var name = m.users ? ((m.users.first_name || '') + ' ' + (m.users.last_name || '')).trim() : m.email;
+        var uid = m.user_id;
+        var qCount = queryCounts[uid] || 0;
+        var dCount = docCounts[uid] || 0;
+        var lastDate = lastQueryDates[uid] ? timeAgo(new Date(lastQueryDates[uid])) : '—';
         return '<tr>' +
-            '<td class="td-name"><a href="#" class="drill-link" onclick="openDrillPanelForTech(\'' + m.id + '\',\'' + escapeHtml(name) + '\'); return false;">' + escapeHtml(name) + '</a></td>' +
-            '<td>0</td>' +
-            '<td>—</td>' +
-            '<td>0</td>' +
+            '<td class="td-name"><a href="#" class="drill-link" onclick="openDrillPanelForTech(\'' + m.id + '\',\'' + escapeHtml(name) + '\',\'' + uid + '\'); return false;">' + escapeHtml(name) + '</a></td>' +
+            '<td>' + qCount + '</td>' +
+            '<td>' + lastDate + '</td>' +
+            '<td>' + dCount + '</td>' +
             '</tr>';
     }).join('');
 }
 
-function openDrillPanelForTech(memberId, name) {
+async function openDrillPanelForTech(memberId, name, userId) {
     var panel = document.getElementById('drill-panel');
     var overlay = document.getElementById('drill-overlay');
     var title = document.getElementById('drill-title');
@@ -723,14 +778,46 @@ function openDrillPanelForTech(memberId, name) {
 
     searchInput.value = '';
     title.textContent = name;
-    sub.textContent = '0 queries this period';
-    list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">No queries yet. Queries will appear here once ' + escapeHtml(name) + ' uses Arrival in the field.</div>';
-
-    // Clear the hardcoded drillData items
-    if (typeof currentDrillItems !== 'undefined') currentDrillItems = [];
+    sub.textContent = 'Loading...';
+    list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">Loading queries...</div>';
 
     panel.classList.add('open');
     overlay.classList.add('open');
+
+    // Fetch real queries for this user
+    try {
+        var qResult = await sb.from('queries')
+            .select('id, question, source, confidence, has_image, created_at')
+            .eq('team_id', currentTeam.id)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        var queries = qResult.data || [];
+        sub.textContent = queries.length + ' quer' + (queries.length === 1 ? 'y' : 'ies') + ' total';
+
+        if (queries.length === 0) {
+            list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">No queries yet. Queries will appear here once ' + escapeHtml(name) + ' uses Arrival in the field.</div>';
+            return;
+        }
+
+        // Store for search filtering
+        if (typeof currentDrillItems !== 'undefined') currentDrillItems = queries;
+
+        list.innerHTML = queries.map(function(q) {
+            var shortQ = q.question.length > 80 ? q.question.substring(0, 77) + '...' : q.question;
+            var badge = q.has_image ? ' 📷' : '';
+            return '<div class="drill-item" style="padding:12px 16px;border-bottom:1px solid var(--border,#e8e4df);">' +
+                '<div style="font-weight:500;color:var(--text-dark,#2a2622);">' + escapeHtml(shortQ) + badge + '</div>' +
+                '<div style="font-size:12px;color:var(--text-muted,#7c736a);margin-top:4px;">' + timeAgo(new Date(q.created_at)) +
+                (q.confidence ? ' · ' + q.confidence + ' confidence' : '') +
+                (q.source ? ' · ' + q.source : '') + '</div></div>';
+        }).join('');
+    } catch (err) {
+        console.error('Drill panel query error:', err);
+        sub.textContent = '0 queries';
+        list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">Could not load queries.</div>';
+    }
 }
 
 // ============================================

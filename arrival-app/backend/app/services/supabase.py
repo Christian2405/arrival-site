@@ -1,5 +1,5 @@
 """
-Supabase service — Storage + documents table operations.
+Supabase service — Storage, documents, and query logging operations.
 Matches the website's storage path pattern and uses the documents table
 as the source of truth (not raw Storage listing).
 """
@@ -199,3 +199,118 @@ async def delete_document(
         print(f"[supabase] RAG vector delete failed (non-blocking): {e}")
 
     return True
+
+
+# ============================================
+# QUERY LOGGING (Team Activity)
+# ============================================
+
+def _service_db_headers() -> dict:
+    """Service role headers for DB operations (bypasses RLS)."""
+    return {
+        "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+
+
+async def log_query(
+    user_id: str,
+    question: str,
+    response: str | None = None,
+    source: str | None = None,
+    confidence: str | None = None,
+    has_image: bool = False,
+    team_id: str | None = None,
+) -> None:
+    """
+    Log a chat query to the queries table for team activity tracking.
+    Uses service role to bypass RLS (backend is trusted).
+    Non-blocking — failures are silently logged.
+    """
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
+        return
+
+    row = {
+        "user_id": user_id,
+        "question": question[:500],  # Cap at 500 chars
+        "has_image": has_image,
+    }
+    if response:
+        row["response"] = response[:2000]  # Cap at 2000 chars
+    if source:
+        row["source"] = source
+    if confidence:
+        row["confidence"] = confidence
+    if team_id:
+        row["team_id"] = team_id
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{config.SUPABASE_URL}/rest/v1/queries",
+                headers=_service_db_headers(),
+                json=row,
+            )
+            resp.raise_for_status()
+    except Exception as e:
+        print(f"[supabase] Query log failed (non-blocking): {e}")
+
+
+async def get_user_team_id(user_id: str) -> str | None:
+    """Look up the user's active team_id from team_members table."""
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{config.SUPABASE_URL}/rest/v1/team_members",
+                headers=_service_db_headers(),
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "status": "eq.active",
+                    "select": "team_id",
+                    "limit": "1",
+                },
+            )
+            resp.raise_for_status()
+            rows = resp.json()
+            if rows:
+                return rows[0].get("team_id")
+    except Exception as e:
+        print(f"[supabase] Team lookup failed: {e}")
+
+    return None
+
+
+async def get_team_queries(
+    team_id: str,
+    user_token: str,
+    limit: int = 50,
+) -> list[dict]:
+    """
+    Get recent queries for a team (for activity feed / stats).
+    Uses user token so RLS applies.
+    """
+    if not config.SUPABASE_URL:
+        return []
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{config.SUPABASE_URL}/rest/v1/queries",
+                headers=_db_headers(user_token),
+                params={
+                    "team_id": f"eq.{team_id}",
+                    "select": "id,user_id,question,source,confidence,has_image,created_at",
+                    "order": "created_at.desc",
+                    "limit": str(limit),
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"[supabase] Get team queries failed: {e}")
+        return []

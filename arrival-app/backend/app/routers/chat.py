@@ -12,6 +12,7 @@ from app.services.demo import get_demo_chat_response
 from app.services.anthropic import chat_with_claude
 from app.services.memory import retrieve_memories, store_memory
 from app.services.rag import retrieve_context
+from app.services.supabase import log_query, get_user_team_id
 from app.middleware.auth import get_current_user
 
 router = APIRouter()
@@ -67,6 +68,20 @@ async def chat(
                 {"role": "user", "content": request.message},
                 {"role": "assistant", "content": result["response"]},
             ]))
+
+            # 6. Log query for team activity (fire-and-forget, non-blocking)
+            async def _log():
+                team_id = await get_user_team_id(user_id)
+                await log_query(
+                    user_id=user_id,
+                    question=request.message,
+                    response=result.get("response"),
+                    source=result.get("source"),
+                    confidence=result.get("confidence"),
+                    has_image=bool(request.image_base64),
+                    team_id=team_id,
+                )
+            asyncio.create_task(_log())
 
         return ChatResponse(
             response=result["response"],

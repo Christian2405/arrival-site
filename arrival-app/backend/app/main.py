@@ -6,7 +6,7 @@ FastAPI app with STT, Chat, TTS, and Documents endpoints.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stt, chat, tts, documents, analyze
+from app.routers import stt, chat, tts, documents, analyze, queries, saved_answers
 
 app = FastAPI(
     title="Arrival API",
@@ -29,6 +29,8 @@ app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(tts.router, prefix="/api", tags=["Text-to-Speech"])
 app.include_router(documents.router, prefix="/api", tags=["Documents"])
 app.include_router(analyze.router, prefix="/api", tags=["Frame Analysis"])
+app.include_router(queries.router, prefix="/api", tags=["Queries"])
+app.include_router(saved_answers.router, prefix="/api", tags=["Saved Answers"])
 
 
 # --- Health Check ---

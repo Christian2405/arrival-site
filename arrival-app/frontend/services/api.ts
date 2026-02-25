@@ -88,4 +88,29 @@ export const documentsAPI = {
   },
 };
 
+// --- Saved Answers API ---
+
+export const savedAnswersAPI = {
+  save: async (data: {
+    question: string;
+    answer: string;
+    source?: string;
+    confidence?: string;
+    trade?: string;
+  }) => {
+    const response = await api.post('/saved-answers', data);
+    return response.data;
+  },
+
+  list: async () => {
+    const response = await api.get('/saved-answers');
+    return response.data;
+  },
+
+  delete: async (answerId: string) => {
+    const response = await api.delete(`/saved-answers/${encodeURIComponent(answerId)}`);
+    return response.data;
+  },
+};
+
 export default api;
