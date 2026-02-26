@@ -321,9 +321,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .from('users')
         .select('id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (existing) return; // Already exists
+
+      // Also check if subscription exists (prevent duplicates)
+      const { data: existingSub } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (existingSub && existingSub.length > 0) return; // Has subscription, profile might just be RLS-blocked
 
       // Extract name from Google metadata
       const meta = user.user_metadata || {};
@@ -335,7 +344,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.log('[Auth] Creating profile for OAuth user:', email);
 
       // Insert user profile
-      await supabase.from('users').insert({
+      await supabase.from('users').upsert({
         id: user.id,
         email,
         first_name: firstName,
@@ -343,9 +352,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         primary_trade: 'other',
         experience_level: '1_3_years',
         account_type: 'free',
-      });
+      }, { onConflict: 'id', ignoreDuplicates: true });
 
-      // Insert free subscription
+      // Insert free subscription only if none exists
       await supabase.from('subscriptions').insert({
         user_id: user.id,
         plan: 'free',
@@ -373,18 +382,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       console.log('[Auth] Profile loaded:', profile?.email || 'NULL', '| account_type:', profile?.account_type || 'NULL');
 
-      // Load active subscription
-      const { data: subscription, error: subError } = await supabase
+      // Load active subscription — order so highest plan wins if duplicates exist
+      const planOrder = { business: 1, enterprise: 1, pro: 2, free: 3 };
+      const { data: subscriptions, error: subError } = await supabase
         .from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
-        .eq('status', 'active')
-        .single();
+        .eq('status', 'active');
 
       if (subError) {
         console.error('[Auth] Subscription load error:', subError.message, subError.code);
       }
-      console.log('[Auth] Subscription loaded:', subscription?.plan || 'NULL');
+
+      // Pick the highest-tier subscription if multiple exist
+      const subscription = subscriptions && subscriptions.length > 0
+        ? subscriptions.sort((a: any, b: any) =>
+            (planOrder[a.plan as keyof typeof planOrder] || 99) -
+            (planOrder[b.plan as keyof typeof planOrder] || 99)
+          )[0]
+        : null;
+
+      console.log('[Auth] Subscription loaded:', subscription?.plan || 'NULL', '| rows:', subscriptions?.length || 0);
+
+      // Clean up duplicate subscriptions — keep only the highest-tier one
+      if (subscriptions && subscriptions.length > 1 && subscription) {
+        const dupes = subscriptions.filter((s: any) => s.id !== subscription.id);
+        for (const dupe of dupes) {
+          console.log('[Auth] Removing duplicate subscription:', dupe.plan, dupe.id);
+          await supabase.from('subscriptions').delete().eq('id', dupe.id);
+        }
+      }
 
       // Load team membership (with team details)
       const { data: membership } = await supabase
