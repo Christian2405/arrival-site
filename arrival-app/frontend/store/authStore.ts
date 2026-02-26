@@ -121,7 +121,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      console.log('[Auth] Signing in with:', email, '| Supabase URL:', process.env.EXPO_PUBLIC_SUPABASE_URL ? '✓' : '✗');
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      console.log('[Auth] Signing in:', email, '| URL:', supabaseUrl.substring(0, 30), '| Key:', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'set' : 'MISSING');
+
+      if (!supabaseUrl) {
+        return { error: 'App not configured. Restart with: npx expo start --clear' };
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -129,7 +134,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       if (error) {
-        console.error('[Auth] Sign-in error:', error.message, error.status);
+        console.error('[Auth] Sign-in error:', error.message, '| status:', error.status, '| code:', (error as any).code);
         return { error: error.message };
       }
 
@@ -357,19 +362,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     try {
       // Load user profile
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .single();
 
+      if (profileError) {
+        console.error('[Auth] Profile load error:', profileError.message, profileError.code);
+      }
+      console.log('[Auth] Profile loaded:', profile?.email || 'NULL', '| account_type:', profile?.account_type || 'NULL');
+
       // Load active subscription
-      const { data: subscription } = await supabase
+      const { data: subscription, error: subError } = await supabase
         .from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'active')
         .single();
+
+      if (subError) {
+        console.error('[Auth] Subscription load error:', subError.message, subError.code);
+      }
+      console.log('[Auth] Subscription loaded:', subscription?.plan || 'NULL');
 
       // Load team membership (with team details)
       const { data: membership } = await supabase
