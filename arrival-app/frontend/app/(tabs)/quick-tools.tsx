@@ -14,21 +14,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// ─── Wire Gauge Table (NEC copper, 75°C, single-phase) ──────────────────────
+// ─── Wire Gauge Table (NEC Table 310.16, copper, 75°C, single-phase) ────────
 const WIRE_GAUGE_TABLE = [
-  { gauge: '14 AWG', amps: 15, maxFt60: 50 },
-  { gauge: '12 AWG', amps: 20, maxFt60: 60 },
-  { gauge: '10 AWG', amps: 30, maxFt60: 80 },
-  { gauge: '8 AWG', amps: 40, maxFt60: 100 },
-  { gauge: '6 AWG', amps: 55, maxFt60: 130 },
-  { gauge: '4 AWG', amps: 70, maxFt60: 170 },
-  { gauge: '3 AWG', amps: 85, maxFt60: 200 },
-  { gauge: '2 AWG', amps: 95, maxFt60: 230 },
-  { gauge: '1 AWG', amps: 110, maxFt60: 270 },
-  { gauge: '1/0 AWG', amps: 125, maxFt60: 310 },
-  { gauge: '2/0 AWG', amps: 145, maxFt60: 360 },
-  { gauge: '3/0 AWG', amps: 165, maxFt60: 420 },
-  { gauge: '4/0 AWG', amps: 195, maxFt60: 490 },
+  { gauge: '14 AWG', amps: 20, maxFt60: 50 },
+  { gauge: '12 AWG', amps: 25, maxFt60: 60 },
+  { gauge: '10 AWG', amps: 35, maxFt60: 80 },
+  { gauge: '8 AWG', amps: 50, maxFt60: 100 },
+  { gauge: '6 AWG', amps: 65, maxFt60: 130 },
+  { gauge: '4 AWG', amps: 85, maxFt60: 170 },
+  { gauge: '3 AWG', amps: 100, maxFt60: 200 },
+  { gauge: '2 AWG', amps: 115, maxFt60: 230 },
+  { gauge: '1 AWG', amps: 130, maxFt60: 270 },
+  { gauge: '1/0 AWG', amps: 150, maxFt60: 310 },
+  { gauge: '2/0 AWG', amps: 175, maxFt60: 360 },
+  { gauge: '3/0 AWG', amps: 200, maxFt60: 420 },
+  { gauge: '4/0 AWG', amps: 230, maxFt60: 490 },
 ];
 
 // ─── Circular mils for voltage drop calc ─────────────────────────────────────

@@ -56,10 +56,22 @@ async def upload(
     Upload a document (PDF, image, manual) to Supabase.
     Stores in Storage AND records in documents table.
     """
+    ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".docx", ".dwg", ".dxf"}
+
     try:
         user = await get_current_user(request)
         user_id = user["user_id"]
         user_token = user["token"]
+
+        # Validate file type by extension
+        import os
+        filename = file.filename or "untitled"
+        _, ext = os.path.splitext(filename.lower())
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            )
 
         file_bytes = await file.read()
         if len(file_bytes) == 0:
