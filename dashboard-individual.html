@@ -25,10 +25,6 @@
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2h8l4 4v10a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z"/><path d="M12 2v4h4"/></svg>
             My Documents
         </a>
-        <a href="#" class="sidebar-link" onclick="showPage('photos'); return false;">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="14" height="12" rx="2"/><circle cx="6.5" cy="7.5" r="1.5"/><path d="M16 12l-3.5-4L9 12.5 7 10l-5 5"/></svg>
-            Photos & Videos
-        </a>
         <a href="#" class="sidebar-link" onclick="showPage('chat-history'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h12v10H6l-3 3V3z"/></svg>
             Chat History
@@ -36,10 +32,6 @@
         <a href="#" class="sidebar-link" onclick="showPage('saved-answers'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 2h8a1 1 0 011 1v14l-5-3-5 3V3a1 1 0 011-1z"/></svg>
             Saved Answers
-        </a>
-        <a href="#" class="sidebar-link" onclick="showPage('quick-tools'); return false;">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>
-            Quick Tools
         </a>
         <a href="#" class="sidebar-link" onclick="showPage('billing'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2 8h14"/></svg>
@@ -51,10 +43,6 @@
         </a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="#" class="sidebar-link" onclick="return false;">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="7"/><path d="M6 9h6M9 6v6"/></svg>
-            Help Centre
-        </a>
         <a id="sidebar-logout" class='sidebar-link sidebar-logout' href='#' onclick="handleLogout(); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H4a2 2 0 00-2 2v12a2 2 0 002 2h2M10 14l4-4-4-4M7 10h7"/></svg>
             Log Out
@@ -71,45 +59,37 @@
             <p class="dash-sub">Upload manuals, specs, or reference material. Query them from the Arrival app on any job.</p>
         </div>
 
-        <div id="upload-zone" class="upload-zone" onclick="document.getElementById('file-input').click()">
-            <input type="file" id="file-input" style="display:none;" multiple accept=".pdf,.jpg,.jpeg,.png,.docx">
+        <div id="upload-zone" class="upload-zone" onclick="openModal('upload-modal')">
             <svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><path d="M24 32V16M16 22l8-8 8 8"/><rect x="4" y="4" width="40" height="40" rx="8"/></svg>
             <p class="upload-text">Drop files here or click to browse</p>
             <p class="upload-formats">PDF, JPG, PNG, DOCX — Max 50MB per file</p>
         </div>
 
+        <div class="doc-controls">
+            <div class="search-bar">
+                <svg width="18" height="18" fill="none" stroke="#9a9590" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M14 14l3 3"/></svg>
+                <input type="text" id="doc-search" placeholder="Search documents..." oninput="searchDocs(this.value)">
+            </div>
+            <div class="filter-tabs">
+                <button class="filter-tab active" onclick="filterDocs(this,'all')">All</button>
+                <button class="filter-tab" onclick="filterDocs(this,'manuals')">Manufacturer Manuals</button>
+                <button class="filter-tab" onclick="filterDocs(this,'specs')">Equipment Spec Sheets</button>
+                <button class="filter-tab" onclick="filterDocs(this,'sops')">Company SOPs</button>
+                <button class="filter-tab" onclick="filterDocs(this,'safety')">Safety Protocols</button>
+                <button class="filter-tab" onclick="filterDocs(this,'diagnostics')">Diagnostic Workflows</button>
+                <button class="filter-tab" onclick="filterDocs(this,'training')">Training Materials</button>
+                <button class="filter-tab" onclick="filterDocs(this,'plans')">Building Plans</button>
+                <button class="filter-tab" onclick="filterDocs(this,'parts')">Parts Lists</button>
+            </div>
+        </div>
+
         <div class="table-wrapper">
-            <table class="dash-table">
-                <thead><tr><th>File Name</th><th>Type</th><th>Status</th><th>Uploaded</th><th>Actions</th></tr></thead>
+            <table class="dash-table" id="doc-table">
+                <thead><tr><th>File Name</th><th>Category</th><th>Project / Site</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
                 <tbody id="documents-tbody"></tbody>
             </table>
         </div>
         <div id="storage-indicator" class="storage-indicator">0 / 50 documents used <span id="plan-badge" class="plan-badge">Pro</span></div>
-    </div>
-
-    <!-- PHOTOS & VIDEOS -->
-    <div class="dash-page" id="page-photos">
-        <div class="dash-header">
-            <h1>Photos & Videos</h1>
-            <p class="dash-sub">Upload photos and videos of your job sites, progress, or issues. Arrival AI uses these for visual context when answering your questions.</p>
-        </div>
-
-        <div class="upload-zone" id="media-upload-zone" onclick="document.getElementById('media-input').click()">
-            <input type="file" id="media-input" style="display:none;" multiple accept="image/*,video/*">
-            <svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="40" height="32" rx="6"/><circle cx="16" cy="19" r="5"/><path d="M44 30l-10-11-8 9.5-5-4.5L4 38"/></svg>
-            <p class="upload-text">Drop photos or videos here, or click to browse</p>
-            <p class="upload-formats">JPG, PNG, HEIC, MP4, MOV — Max 200MB per file</p>
-        </div>
-
-        <div class="filter-tabs" style="margin-bottom:24px;">
-            <button class="filter-tab active" onclick="filterMediaIndiv(this,'all')">All</button>
-            <button class="filter-tab" onclick="filterMediaIndiv(this,'photo')">Photos</button>
-            <button class="filter-tab" onclick="filterMediaIndiv(this,'video')">Videos</button>
-        </div>
-
-        <div class="media-grid" id="media-grid">
-        </div>
-        <div class="storage-indicator" id="media-storage-indicator" style="margin-top:24px;">0 files uploaded <span class="plan-badge">Pro</span></div>
     </div>
 
     <!-- SUBSCRIPTION & BILLING -->
@@ -117,6 +97,12 @@
         <div class="dash-header">
             <h1>Subscription & Billing</h1>
             <p class="dash-sub" id="billing-plan-detail"></p>
+        </div>
+
+        <!-- Trial Countdown Banner -->
+        <div class="trial-banner" id="trial-banner" style="display:none;">
+            <div class="trial-banner-icon">⏱</div>
+            <div class="trial-banner-text"><strong><span id="trial-days-left">7</span> days left</strong> on your free trial. Upgrade to keep access.</div>
         </div>
 
         <!-- Plan Cards Grid -->
@@ -162,6 +148,28 @@
                     <div class="pricing-feature">Training gap reports</div>
                     <div class="pricing-feature">Role-based access</div>
                     <div class="pricing-feature">Priority support</div>
+                </div>
+            </div>
+
+            <!-- Enterprise -->
+            <div class="pricing-card" id="plan-card-enterprise">
+                <div class="pricing-badge-spacer"></div>
+                <div class="pricing-header"><h3>Enterprise</h3></div>
+                <div class="pricing-subtitle">For large organisations operating at scale.</div>
+                <div class="pricing-price">Custom</div>
+                <div class="pricing-desc">Tailored to your organisation.</div>
+                <div class="pricing-cta">
+                    <a href="mailto:sales@arrival.ai" class="btn btn-primary" style="background:var(--text-light);">Contact Sales</a>
+                </div>
+                <hr class="pricing-divider">
+                <div class="pricing-inherits">Everything in Business, plus:</div>
+                <div class="pricing-features">
+                    <div class="pricing-feature">Custom seat count</div>
+                    <div class="pricing-feature">Multi-location support</div>
+                    <div class="pricing-feature">SSO / SAML authentication</div>
+                    <div class="pricing-feature">API access</div>
+                    <div class="pricing-feature">Dedicated CSM</div>
+                    <div class="pricing-feature">SLA + 24/7 support</div>
                 </div>
             </div>
         </div>
@@ -227,41 +235,6 @@
                     <tr><td colspan="3" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No saved answers yet. Bookmark answers in the Arrival app to access them here.</td></tr>
                 </tbody>
             </table>
-        </div>
-    </div>
-
-    <!-- QUICK TOOLS -->
-    <div class="dash-page" id="page-quick-tools">
-        <div class="dash-header">
-            <h1>Quick Tools</h1>
-            <p class="dash-sub">Common trade calculators and reference tools at your fingertips.</p>
-        </div>
-        <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px;">
-            <div class="card" style="padding: 28px; cursor: default;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Wire Gauge Calculator</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Calculate the correct wire gauge for amperage, distance, and voltage drop.</p>
-                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
-            </div>
-            <div class="card" style="padding: 28px; cursor: default;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Voltage Drop Calculator</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Determine voltage drop for a given wire size, load, and run length.</p>
-                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
-            </div>
-            <div class="card" style="padding: 28px; cursor: default;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Ohm's Law Calculator</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Quick voltage, current, resistance, and power calculations.</p>
-                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
-            </div>
-            <div class="card" style="padding: 28px; cursor: default;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Pipe Sizing Tool</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Size pipes based on flow rate, pressure, and material type.</p>
-                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
-            </div>
-            <div class="card" style="padding: 28px; cursor: default;">
-                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">Refrigerant PT Chart</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Pressure-temperature lookup for common refrigerants (R-410A, R-22, R-134a).</p>
-                <span style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent-green);font-weight:600;">Coming Soon</span>
-            </div>
         </div>
     </div>
 
@@ -339,14 +312,78 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="upload-modal" onclick="if(event.target===this)closeModal('upload-modal')">
+    <div class="modal modal-wide">
+        <h2>Upload Document</h2>
+        <div class="form-group"><label>File</label><input type="file" id="upload-file-input" accept=".pdf,.jpg,.jpeg,.png,.docx" multiple></div>
+        <div class="form-group">
+            <label>Category (required)</label>
+            <select id="upload-category">
+                <option value="">Select category...</option>
+                <option value="manufacturer_manuals">Manufacturer Manuals</option>
+                <option value="equipment_spec_sheets">Equipment Spec Sheets</option>
+                <option value="company_sops">Company SOPs</option>
+                <option value="safety_protocols">Safety Protocols</option>
+                <option value="diagnostic_workflows">Diagnostic Workflows</option>
+                <option value="training_materials">Training Materials</option>
+                <option value="building_plans">Building Plans</option>
+                <option value="parts_lists">Parts Lists</option>
+            </select>
+        </div>
+        <div class="form-group"><label>Project / Site (optional)</label><input type="text" id="upload-project" placeholder="e.g. 445 Oak St, Johnson Residence"></div>
+        <div class="form-group"><label>Notes (optional)</label><input type="text" id="upload-notes" placeholder="e.g. 2024 revision, supersedes previous version"></div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('upload-modal')">Cancel</button><button class="btn btn-primary" id="upload-submit-btn">Upload</button></div>
+    </div>
+</div>
+
 <script>
-function showPage(id) {
+var PAGE_NAV_INDEX = { documents:0, 'chat-history':1, 'saved-answers':2, billing:3, settings:4 };
+
+function isTrialExpired() {
+    if (typeof currentSubscription === 'undefined' || !currentSubscription) return false;
+    if (currentSubscription.stripe_subscription_id) return false; // Paid subscriber
+    if (currentSubscription.status === 'trial_expired') return true;
+    if (currentSubscription.trial_ends_at) {
+        return new Date(currentSubscription.trial_ends_at) < new Date();
+    }
+    return false;
+}
+
+function showPage(id, pushHistory) {
+    // Expired trial users can only see billing — redirect everything else back
+    if (id !== 'billing' && isTrialExpired()) {
+        showPage('billing', pushHistory);
+        loadBilling();
+        document.getElementById('trial-expired-overlay').style.display = 'flex';
+        return;
+    }
     document.querySelectorAll('.dash-page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-' + id).classList.add('active');
-    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-    if(event && event.target) event.target.closest('.sidebar-link')?.classList.add('active');
+    document.querySelectorAll('.sidebar-nav .sidebar-link').forEach(l => l.classList.remove('active'));
+    var idx = PAGE_NAV_INDEX[id];
+    if (idx !== undefined) {
+        var links = document.querySelectorAll('.sidebar-nav .sidebar-link');
+        if (links[idx]) links[idx].classList.add('active');
+    }
     window.scrollTo(0,0);
+    if (pushHistory !== false && window.location.hash !== '#' + id) {
+        history.pushState(null, '', '#' + id);
+    }
 }
+
+window.addEventListener('popstate', function() {
+    var hash = window.location.hash.replace('#', '') || 'documents';
+    if (document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
+
+window.addEventListener('DOMContentLoaded', function() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function activateTab(el) {
@@ -357,7 +394,27 @@ function toggleBtn(el) {
     el.parentElement.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
 }
+function filterDocs(el, cat) {
+    el.parentElement.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('#doc-table tbody tr').forEach(row => {
+        row.style.display = (cat === 'all' || row.dataset.cat === cat) ? '' : 'none';
+    });
+}
 </script>
+<!-- Trial Expired Overlay -->
+<div id="trial-expired-overlay" style="display:none;" class="trial-expired-overlay">
+    <div class="trial-expired-card">
+        <div class="trial-expired-icon">🔒</div>
+        <h2>Your free trial has ended</h2>
+        <p>Your 7-day trial is over. Upgrade to Pro or Business to continue using Arrival.</p>
+        <div class="trial-expired-buttons">
+            <button class="btn btn-primary" onclick="document.getElementById('trial-expired-overlay').style.display='none'; showPage('billing'); loadBilling();">View Plans</button>
+            <button class="btn btn-outline" onclick="handleLogout()">Sign Out</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://js.stripe.com/v3/"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="dashboard.js"></script>

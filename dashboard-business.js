@@ -5,8 +5,11 @@
 
 const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
+const BACKEND_URL = 'https://arrival-backend-81x7.onrender.com/api';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+});
 
 // State
 let currentUser = null;
@@ -61,11 +64,37 @@ function showToast(message, type) {
     type = type || 'success';
     var container = document.getElementById('toast-container');
     var toast = document.createElement('div');
-    toast.style.cssText = 'padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;font-family:var(--font-body,DM Sans,sans-serif);box-shadow:0 4px 12px rgba(0,0,0,.15);animation:toast-in .3s ease;max-width:360px;';
-    toast.style.background = type === 'error' ? '#c0392b' : '#27ae60';
-    toast.textContent = message;
+    var icon = type === 'error' ? '✕' : '✓';
+    toast.style.cssText = 'padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;font-family:var(--font-body,DM Sans,sans-serif);box-shadow:0 4px 16px rgba(0,0,0,.18);animation:toast-in .3s ease;max-width:360px;background:#2A2622;';
+    toast.textContent = icon + '  ' + message;
     container.appendChild(toast);
     setTimeout(function() { toast.remove(); }, 4000);
+}
+
+// ============================================
+// UPLOAD OVERLAY (dynamically created)
+// ============================================
+
+function ensureUploadOverlay() {
+    if (document.getElementById('upload-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'upload-overlay';
+    overlay.id = 'upload-overlay';
+    overlay.innerHTML = '<div class="upload-spinner"></div><div class="upload-overlay-text" id="upload-overlay-text">Uploading...</div>';
+    document.body.appendChild(overlay);
+}
+
+function showUploadOverlay(text) {
+    ensureUploadOverlay();
+    var overlay = document.getElementById('upload-overlay');
+    var textEl = document.getElementById('upload-overlay-text');
+    if (textEl) textEl.textContent = text || 'Uploading...';
+    if (overlay) overlay.classList.add('active');
+}
+
+function hideUploadOverlay() {
+    var overlay = document.getElementById('upload-overlay');
+    if (overlay) overlay.classList.remove('active');
 }
 
 // ============================================
@@ -87,6 +116,13 @@ async function initAuth() {
     // Load subscription
     var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
+
+    // Pro plan users without a team always go to individual dashboard
+    var subPlan = currentSubscription ? currentSubscription.plan : 'pro';
+    if (subPlan === 'pro') {
+        window.location.href = '/dashboard-individual';
+        return;
+    }
 
     // Find team membership (retry if coming from checkout — webhook may still be processing)
     var isCheckoutReturn = window.location.search.includes('checkout=success');
@@ -123,10 +159,8 @@ async function initAuth() {
     await Promise.all([
         loadHome(),
         loadDocuments(),
-        loadMedia(),
         loadTeam(),
         loadPerTechActivity(),
-        loadAnalytics(),
         loadBilling(),
         loadSettings()
     ]);
@@ -172,8 +206,12 @@ async function loadHome() {
     var docCount = docsResult.count || 0;
     document.getElementById('home-stat-docs').innerHTML = docCount + ' <span class="stat-cap">uploaded</span>';
 
-    // Queries — hardcoded to 0
-    document.getElementById('home-stat-queries').textContent = '0';
+    // Queries — count from queries table
+    var queriesResult = await sb.from('queries')
+        .select('id', { count: 'exact', head: true })
+        .eq('team_id', currentTeam.id);
+    var queryCount = queriesResult.count || 0;
+    document.getElementById('home-stat-queries').textContent = queryCount;
 
     // Recent activity feed — combine recent documents + recent team member joins
     await loadActivityFeed();
@@ -197,6 +235,13 @@ async function loadActivityFeed() {
         .order('joined_at', { ascending: false })
         .limit(5);
 
+    // Get recent queries (last 10)
+    var queriesResult = await sb.from('queries')
+        .select('*, users!queries_user_id_fkey(first_name, last_name)')
+        .eq('team_id', currentTeam.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
     var items = [];
 
     // Add document uploads
@@ -206,6 +251,18 @@ async function loadActivityFeed() {
             items.push({
                 time: new Date(doc.created_at),
                 html: '<span class="activity-name">' + escapeHtml(name.trim()) + '</span> uploaded <em>' + escapeHtml(doc.file_name) + '</em>'
+            });
+        });
+    }
+
+    // Add queries
+    if (queriesResult.data) {
+        queriesResult.data.forEach(function(q) {
+            var name = q.users ? (q.users.first_name || '') + ' ' + (q.users.last_name || '') : 'Team member';
+            var shortQ = q.question.length > 60 ? q.question.substring(0, 57) + '...' : q.question;
+            items.push({
+                time: new Date(q.created_at),
+                html: '<span class="activity-name">' + escapeHtml(name.trim()) + '</span> asked <em>"' + escapeHtml(shortQ) + '"</em>'
             });
         });
     }
@@ -236,34 +293,37 @@ async function loadActivityFeed() {
 }
 
 // ============================================
-// TEAM ANALYTICS
-// ============================================
-
-async function loadAnalytics() {
-    // Stub — analytics data will be populated when query tracking is implemented
-    // For now, display zero-state in all analytics tables
-    var totalEl = document.getElementById('analytics-total-queries');
-    var topicsEl = document.getElementById('analytics-unique-topics');
-    var unansweredEl = document.getElementById('analytics-unanswered');
-    var avgEl = document.getElementById('analytics-avg-per-tech');
-
-    if (totalEl) totalEl.textContent = '0';
-    if (topicsEl) topicsEl.textContent = '0';
-    if (unansweredEl) unansweredEl.textContent = '0';
-    if (avgEl) avgEl.textContent = '0';
-}
-
-// ============================================
 // DOCUMENT LIBRARY
 // ============================================
+
+var docThumbUrls = {};
 
 async function loadDocuments() {
     var result = await sb.from('documents')
         .select('*, users!documents_uploaded_by_fkey(first_name, last_name)')
         .eq('team_id', currentTeam.id)
+        .not('category', 'in', '("photo","video")')
         .order('created_at', { ascending: false });
 
     teamDocs = result.data || [];
+
+    // Get signed URLs for image-type documents (for thumbnails)
+    var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    var imageDocs = teamDocs.filter(function(d) {
+        var ext = d.file_name.split('.').pop().toLowerCase();
+        return imageExts.indexOf(ext) !== -1;
+    });
+    docThumbUrls = {};
+    if (imageDocs.length > 0) {
+        var paths = imageDocs.map(function(d) { return d.storage_path; });
+        var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
+        if (signedResults.data) {
+            signedResults.data.forEach(function(r) {
+                if (r.signedUrl) docThumbUrls[r.path] = r.signedUrl;
+            });
+        }
+    }
+
     renderDocTable(teamDocs);
 
     // Update count
@@ -281,6 +341,8 @@ function renderDocTable(docs) {
     }
 
     tbody.innerHTML = docs.map(function(d) {
+        var ext = d.file_name.split('.').pop().toLowerCase();
+        var extUpper = ext.toUpperCase();
         var catLabel = CATEGORY_LABELS[d.category] || d.category;
         var catFilter = CATEGORY_FILTERS[d.category] || 'all';
         var uploaderName = d.users ? (d.users.first_name || '').charAt(0).toUpperCase() + (d.users.first_name || '').slice(1) + ' ' + ((d.users.last_name || '').charAt(0) || '') + '.' : '—';
@@ -290,15 +352,25 @@ function renderDocTable(docs) {
         var project = d.project_tag || '—';
         var viewDisabled = d.status !== 'ready' ? ' disabled' : '';
 
+        // Build thumbnail
+        var thumb;
+        if (docThumbUrls[d.storage_path]) {
+            thumb = '<div class="doc-thumb"><img src="' + docThumbUrls[d.storage_path] + '" alt=""></div>';
+        } else if (ext === 'pdf') {
+            thumb = '<div class="doc-thumb doc-thumb-pdf"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c45a3c" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">PDF</span></div>';
+        } else {
+            thumb = '<div class="doc-thumb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9590" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">' + extUpper + '</span></div>';
+        }
+
         return '<tr data-cat="' + catFilter + '">' +
-            '<td class="td-name">' + escapeHtml(d.file_name) + '</td>' +
+            '<td class="td-name"><div class="doc-name-cell">' + thumb + '<span>' + escapeHtml(d.file_name) + '</span></div></td>' +
             '<td><span class="cat-pill">' + escapeHtml(catLabel) + '</span></td>' +
             '<td>' + escapeHtml(project) + '</td>' +
             '<td>' + escapeHtml(uploaderName) + '</td>' +
             '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
             '<td>' + date + '</td>' +
-            '<td><a href="#" class="table-action' + viewDisabled + '" onclick="viewDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">View</a> ' +
-            '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">Delete</a></td>' +
+            '<td><a href="#" class="table-action' + viewDisabled + '" onclick="viewDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
+            '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
             '</tr>';
     }).join('');
 }
@@ -351,14 +423,18 @@ async function handleDocUpload() {
         return;
     }
 
-    var storagePath = 'teams/' + currentTeam.id + '/' + Date.now() + '_' + file.name;
+    closeModal('upload-modal');
+    showUploadOverlay('Uploading ' + file.name + '...');
 
     try {
-        // Upload to storage
+        // Upload directly to Supabase storage (bypasses slow backend cold starts)
+        var storagePath = 'teams/' + currentTeam.id + '/docs/' + Date.now() + '_' + file.name;
         var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
         if (uploadResult.error) throw uploadResult.error;
 
-        // Insert DB row
+        showUploadOverlay('Saving...');
+
+        // Insert document record
         var ext = file.name.split('.').pop().toLowerCase();
         var insertResult = await sb.from('documents').insert({
             uploaded_by: currentUser.id,
@@ -374,8 +450,8 @@ async function handleDocUpload() {
         });
         if (insertResult.error) throw insertResult.error;
 
+        hideUploadOverlay();
         showToast(file.name + ' uploaded successfully.');
-        closeModal('upload-modal');
 
         // Reset modal fields
         fileInput.value = '';
@@ -386,9 +462,22 @@ async function handleDocUpload() {
         // Reload documents and home stats
         await loadDocuments();
         loadHome();
+
+        // Trigger RAG indexing in background (non-blocking, best-effort)
+        try {
+            var session = (await sb.auth.getSession()).data.session;
+            if (session) {
+                fetch(BACKEND_URL + '/index-document', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ document_id: insertResult.data ? insertResult.data[0].id : null, storage_path: storagePath })
+                }).catch(function() { /* RAG indexing is best-effort */ });
+            }
+        } catch (_) { /* ignore RAG errors */ }
     } catch (err) {
         console.error('Upload error:', err);
-        showToast('Failed to upload: ' + err.message, 'error');
+        hideUploadOverlay();
+        showToast('Failed to upload ' + file.name + ': ' + (err.message || 'Unknown error'), 'error');
     }
 }
 
@@ -407,15 +496,26 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        var storageResult = await sb.storage.from('documents').remove([storagePath]);
-        if (storageResult.error) throw storageResult.error;
-
+        // Delete from storage
+        await sb.storage.from('documents').remove([storagePath]);
+        // Delete DB record
         var dbResult = await sb.from('documents').delete().eq('id', docId);
         if (dbResult.error) throw dbResult.error;
 
         showToast('Document deleted.');
         await loadDocuments();
         loadHome();
+
+        // Best-effort RAG cleanup via backend
+        try {
+            var session = (await sb.auth.getSession()).data.session;
+            if (session) {
+                fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + session.access_token }
+                }).catch(function() {});
+            }
+        } catch (_) {}
     } catch (err) {
         console.error('Delete error:', err);
         showToast('Failed to delete document.', 'error');
@@ -608,10 +708,9 @@ async function loadPerTechActivity() {
     var tbody = document.getElementById('pertech-tbody');
     if (!tbody) return;
 
-    // Get active team members (not current user if they are admin and want to see techs)
+    // Get active team members
     var activeMembers = teamMembers.length > 0 ? teamMembers : [];
     if (activeMembers.length === 0) {
-        // Re-fetch if not loaded yet
         var result = await sb.from('team_members')
             .select('*, users(first_name, last_name)')
             .eq('team_id', currentTeam.id)
@@ -624,18 +723,51 @@ async function loadPerTechActivity() {
         return;
     }
 
+    // Get query counts per user for this team
+    var queryCounts = {};
+    var lastQueryDates = {};
+    try {
+        var qResult = await sb.from('queries')
+            .select('user_id, created_at')
+            .eq('team_id', currentTeam.id)
+            .order('created_at', { ascending: false });
+        if (qResult.data) {
+            qResult.data.forEach(function(q) {
+                queryCounts[q.user_id] = (queryCounts[q.user_id] || 0) + 1;
+                if (!lastQueryDates[q.user_id]) lastQueryDates[q.user_id] = q.created_at;
+            });
+        }
+    } catch (_) { /* queries table may not exist yet */ }
+
+    // Get document counts per user for this team
+    var docCounts = {};
+    try {
+        var dResult = await sb.from('documents')
+            .select('uploaded_by')
+            .eq('team_id', currentTeam.id);
+        if (dResult.data) {
+            dResult.data.forEach(function(d) {
+                docCounts[d.uploaded_by] = (docCounts[d.uploaded_by] || 0) + 1;
+            });
+        }
+    } catch (_) { /* ignore */ }
+
     tbody.innerHTML = activeMembers.filter(function(m) { return m.status === 'active'; }).map(function(m) {
         var name = m.users ? ((m.users.first_name || '') + ' ' + (m.users.last_name || '')).trim() : m.email;
+        var uid = m.user_id;
+        var qCount = queryCounts[uid] || 0;
+        var dCount = docCounts[uid] || 0;
+        var lastDate = lastQueryDates[uid] ? timeAgo(new Date(lastQueryDates[uid])) : '—';
         return '<tr>' +
-            '<td class="td-name"><a href="#" class="drill-link" onclick="openDrillPanelForTech(\'' + m.id + '\',\'' + escapeHtml(name) + '\'); return false;">' + escapeHtml(name) + '</a></td>' +
-            '<td>0</td>' +
-            '<td>—</td>' +
-            '<td>0</td>' +
+            '<td class="td-name"><a href="#" class="drill-link" onclick="openDrillPanelForTech(\'' + m.id + '\',\'' + escapeHtml(name) + '\',\'' + uid + '\'); return false;">' + escapeHtml(name) + '</a></td>' +
+            '<td>' + qCount + '</td>' +
+            '<td>' + lastDate + '</td>' +
+            '<td>' + dCount + '</td>' +
             '</tr>';
     }).join('');
 }
 
-function openDrillPanelForTech(memberId, name) {
+async function openDrillPanelForTech(memberId, name, userId) {
     var panel = document.getElementById('drill-panel');
     var overlay = document.getElementById('drill-overlay');
     var title = document.getElementById('drill-title');
@@ -645,165 +777,45 @@ function openDrillPanelForTech(memberId, name) {
 
     searchInput.value = '';
     title.textContent = name;
-    sub.textContent = '0 queries this period';
-    list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">No queries yet. Queries will appear here once ' + escapeHtml(name) + ' uses Arrival in the field.</div>';
-
-    // Clear the hardcoded drillData items
-    if (typeof currentDrillItems !== 'undefined') currentDrillItems = [];
+    sub.textContent = 'Loading...';
+    list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">Loading queries...</div>';
 
     panel.classList.add('open');
     overlay.classList.add('open');
-}
 
-// ============================================
-// PHOTOS & VIDEOS
-// ============================================
-
-var teamMedia = [];
-
-async function loadMedia() {
-    // Query documents table for media files (category = 'photo' or 'video')
-    var result = await sb.from('documents')
-        .select('*, users!documents_uploaded_by_fkey(first_name, last_name)')
-        .eq('team_id', currentTeam.id)
-        .in('category', ['photo', 'video'])
-        .order('created_at', { ascending: false });
-
-    teamMedia = result.data || [];
-    renderMediaGrid(teamMedia);
-
-    var indicator = document.getElementById('media-storage-indicator');
-    if (indicator) indicator.textContent = teamMedia.length + ' files uploaded · Unlimited on Business plan.';
-}
-
-function renderMediaGrid(items) {
-    var grid = document.getElementById('media-grid');
-    if (!grid) return;
-
-    if (items.length === 0) {
-        grid.innerHTML = '<div style="padding:48px 20px;text-align:center;color:var(--text-muted,#7c736a);width:100%;">No photos or videos uploaded yet.</div>';
-        return;
-    }
-
-    var photoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M28 22l-6-7-5 6-3-3-6 6"/></svg>';
-    var videoSvg = '<svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><polygon points="12,8 26,16 12,24"/></svg>';
-
-    grid.innerHTML = items.map(function(m) {
-        var isVideo = m.category === 'video' || (m.file_type && m.file_type.startsWith('video/'));
-        var mediaType = isVideo ? 'video' : 'photo';
-        var thumbClass = isVideo ? 'media-thumb media-thumb-video' : 'media-thumb';
-        var svg = isVideo ? videoSvg : photoSvg;
-        var ext = m.file_name.split('.').pop().toUpperCase();
-        var sizeMB = (m.file_size / (1024 * 1024)).toFixed(1);
-        var date = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        var uploaderName = m.users ? (m.users.first_name || '').charAt(0).toUpperCase() + (m.users.first_name || '').slice(1) + ' ' + ((m.users.last_name || '').charAt(0) || '') + '.' : '';
-        var title = m.notes || m.file_name;
-        var site = m.project_tag ? '<div class="media-meta">Site: ' + escapeHtml(m.project_tag) + '</div>' : '';
-
-        return '<div class="media-card" data-media="' + mediaType + '">' +
-            '<div class="' + thumbClass + '" style="background:#e8e4df;">' + svg + '</div>' +
-            '<div class="media-info">' +
-                '<div class="media-name">' + escapeHtml(title) + '</div>' +
-                '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + (uploaderName ? ' · Uploaded by ' + escapeHtml(uploaderName) : '') + '</div>' +
-                site +
-            '</div>' +
-            '<div class="media-actions"><a href="#" class="table-action" onclick="viewMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">View</a> <a href="#" class="table-action table-action-danger" onclick="deleteMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">Delete</a></div>' +
-            '</div>';
-    }).join('');
-}
-
-function searchMedia(query) {
-    var q = query.toLowerCase();
-    if (!q) {
-        renderMediaGrid(teamMedia);
-        return;
-    }
-    var filtered = teamMedia.filter(function(m) {
-        return m.file_name.toLowerCase().includes(q) ||
-            (m.notes && m.notes.toLowerCase().includes(q)) ||
-            (m.project_tag && m.project_tag.toLowerCase().includes(q));
-    });
-    renderMediaGrid(filtered);
-}
-
-async function handleMediaUpload() {
-    var fileInput = document.getElementById('media-file-input');
-    var titleInput = document.getElementById('media-title');
-    var projectInput = document.getElementById('media-project');
-    var notesInput = document.getElementById('media-notes');
-
-    if (!fileInput.files || fileInput.files.length === 0) {
-        showToast('Please select a file.', 'error');
-        return;
-    }
-
-    var file = fileInput.files[0];
-    if (file.size > 200 * 1024 * 1024) {
-        showToast('File exceeds 200MB limit.', 'error');
-        return;
-    }
-
-    var isVideo = file.type.startsWith('video/');
-    var category = isVideo ? 'video' : 'photo';
-    var storagePath = 'teams/' + currentTeam.id + '/media/' + Date.now() + '_' + file.name;
-
+    // Fetch real queries for this user
     try {
-        var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
-        if (uploadResult.error) throw uploadResult.error;
+        var qResult = await sb.from('queries')
+            .select('id, question, source, confidence, has_image, created_at')
+            .eq('team_id', currentTeam.id)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
 
-        var ext = file.name.split('.').pop().toLowerCase();
-        var insertResult = await sb.from('documents').insert({
-            uploaded_by: currentUser.id,
-            team_id: currentTeam.id,
-            file_name: file.name,
-            file_type: file.type || (isVideo ? 'video/' + ext : 'image/' + ext),
-            file_size: file.size,
-            storage_path: storagePath,
-            category: category,
-            project_tag: projectInput.value.trim() || null,
-            notes: titleInput.value.trim() || notesInput.value.trim() || null,
-            status: 'ready'
-        });
-        if (insertResult.error) throw insertResult.error;
+        var queries = qResult.data || [];
+        sub.textContent = queries.length + ' quer' + (queries.length === 1 ? 'y' : 'ies') + ' total';
 
-        showToast(file.name + ' uploaded successfully.');
-        closeModal('media-upload-modal');
+        if (queries.length === 0) {
+            list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">No queries yet. Queries will appear here once ' + escapeHtml(name) + ' uses Arrival in the field.</div>';
+            return;
+        }
 
-        fileInput.value = '';
-        titleInput.value = '';
-        projectInput.value = '';
-        notesInput.value = '';
+        // Store for search filtering
+        if (typeof currentDrillItems !== 'undefined') currentDrillItems = queries;
 
-        await loadMedia();
+        list.innerHTML = queries.map(function(q) {
+            var shortQ = q.question.length > 80 ? q.question.substring(0, 77) + '...' : q.question;
+            var badge = q.has_image ? ' 📷' : '';
+            return '<div class="drill-item" style="padding:12px 16px;border-bottom:1px solid var(--border,#e8e4df);">' +
+                '<div style="font-weight:500;color:var(--text-dark,#2a2622);">' + escapeHtml(shortQ) + badge + '</div>' +
+                '<div style="font-size:12px;color:var(--text-muted,#7c736a);margin-top:4px;">' + timeAgo(new Date(q.created_at)) +
+                (q.confidence ? ' · ' + q.confidence + ' confidence' : '') +
+                (q.source ? ' · ' + q.source : '') + '</div></div>';
+        }).join('');
     } catch (err) {
-        console.error('Media upload error:', err);
-        showToast('Failed to upload: ' + err.message, 'error');
-    }
-}
-
-async function viewMedia(id, storagePath) {
-    try {
-        var signedResult = await sb.storage.from('documents').createSignedUrl(storagePath, 3600);
-        if (signedResult.error) throw signedResult.error;
-        window.open(signedResult.data.signedUrl, '_blank');
-    } catch (err) {
-        console.error('View media error:', err);
-        showToast('Failed to open file.', 'error');
-    }
-}
-
-async function deleteMedia(id, storagePath) {
-    if (!confirm('Delete this file? This cannot be undone.')) return;
-
-    try {
-        await sb.storage.from('documents').remove([storagePath]);
-        var dbResult = await sb.from('documents').delete().eq('id', id);
-        if (dbResult.error) throw dbResult.error;
-        showToast('File deleted.');
-        await loadMedia();
-    } catch (err) {
-        console.error('Delete media error:', err);
-        showToast('Failed to delete file.', 'error');
+        console.error('Drill panel query error:', err);
+        sub.textContent = '0 queries';
+        list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-light);">Could not load queries.</div>';
     }
 }
 
@@ -1104,6 +1116,11 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function escapeAttr(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -1132,9 +1149,6 @@ function timeAgo(date) {
 document.addEventListener('DOMContentLoaded', function() {
     // Upload document button
     document.getElementById('upload-submit-btn').addEventListener('click', handleDocUpload);
-
-    // Upload media button
-    document.getElementById('media-upload-btn').addEventListener('click', handleMediaUpload);
 
     // Invite team member
     document.getElementById('invite-send-btn').addEventListener('click', handleInvite);

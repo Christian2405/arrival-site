@@ -5,8 +5,11 @@
 
 const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
+const BACKEND_URL = 'https://arrival-backend-81x7.onrender.com/api';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+});
 
 // Current user state
 let currentUser = null;
@@ -17,6 +20,38 @@ let currentSubscription = null;
 const DOC_LIMITS = { pro: 50, business: 999, enterprise: 999 };
 const PLAN_PRICES = { pro: '$25/month', business: '$250/month', enterprise: 'Custom' };
 
+// Category display labels
+var CATEGORY_LABELS = {
+    manufacturer_manuals: 'Manufacturer Manuals',
+    equipment_spec_sheets: 'Equipment Spec Sheets',
+    company_sops: 'Company SOPs',
+    safety_protocols: 'Safety Protocols',
+    diagnostic_workflows: 'Diagnostic Workflows',
+    training_materials: 'Training Materials',
+    building_plans: 'Building Plans',
+    parts_lists: 'Parts Lists',
+    equipment_manuals: 'Manufacturer Manuals',
+    spec_sheets: 'Equipment Spec Sheets',
+    sops: 'Company SOPs',
+    wiring_diagrams: 'Manufacturer Manuals',
+    technical_bulletins: 'Manufacturer Manuals',
+    warranty_docs: 'Manufacturer Manuals'
+};
+
+// Map category DB values to filter tab categories
+var CATEGORY_FILTERS = {
+    manufacturer_manuals: 'manuals', equipment_manuals: 'manuals', wiring_diagrams: 'manuals',
+    technical_bulletins: 'manuals', warranty_docs: 'manuals',
+    equipment_spec_sheets: 'specs', spec_sheets: 'specs',
+    company_sops: 'sops', sops: 'sops', installation_checklists: 'sops', maintenance_guides: 'sops',
+    safety_protocols: 'safety', safety_data_sheets: 'safety', osha_docs: 'safety',
+    diagnostic_workflows: 'diagnostics', inspection_checklists: 'diagnostics',
+    training_materials: 'training',
+    building_plans: 'plans', engineering_reports: 'plans', site_surveys: 'plans',
+    permits: 'plans', project_specs: 'plans', scope_of_work: 'plans', material_specs: 'plans',
+    parts_lists: 'parts'
+};
+
 // ============================================
 // TOAST
 // ============================================
@@ -25,9 +60,9 @@ function showToast(message, type) {
     type = type || 'success';
     var container = document.getElementById('toast-container');
     var toast = document.createElement('div');
-    toast.style.cssText = 'padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;font-family:var(--font-body,DM Sans,sans-serif);box-shadow:0 4px 12px rgba(0,0,0,.15);animation:toast-in .3s ease;max-width:360px;';
-    toast.style.background = type === 'error' ? '#c0392b' : '#27ae60';
-    toast.textContent = message;
+    var icon = type === 'error' ? '✕' : '✓';
+    toast.style.cssText = 'padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;font-family:var(--font-body,DM Sans,sans-serif);box-shadow:0 4px 16px rgba(0,0,0,.18);animation:toast-in .3s ease;max-width:360px;background:#2A2622;';
+    toast.textContent = icon + '  ' + message;
     container.appendChild(toast);
     setTimeout(function() { toast.remove(); }, 4000);
 }
@@ -53,18 +88,36 @@ async function initAuth() {
         return;
     }
 
+    // Check if trial has expired
+    var subStatus = currentSubscription ? currentSubscription.status : 'active';
+    if (subStatus === 'trial_expired') {
+        showTrialExpiredOverlay();
+        return;
+    }
+    if (currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id) {
+        var trialEnd = new Date(currentSubscription.trial_ends_at);
+        if (trialEnd < new Date()) {
+            showTrialExpiredOverlay();
+            return;
+        }
+    }
+
     loadDocuments();
-    loadMedia();
     loadBilling();
     loadSettings();
     checkCheckoutSuccess();
+}
+
+function showTrialExpiredOverlay() {
+    var overlay = document.getElementById('trial-expired-overlay');
+    if (overlay) overlay.style.display = 'flex';
 }
 
 async function loadProfile() {
     var result = await sb.from('users').select('*').eq('id', currentUser.id).single();
     if (result.data) currentProfile = result.data;
 
-    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
+    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).in('status', ['active', 'trial_expired']).limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
 }
 
@@ -96,16 +149,49 @@ async function loadDocuments() {
     var tbody = document.getElementById('documents-tbody');
 
     if (docs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No documents uploaded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No documents uploaded yet.</td></tr>';
     } else {
+        // Get signed URLs for image-type documents (for thumbnails)
+        var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        var imageDocs = docs.filter(function(d) {
+            var ext = d.file_name.split('.').pop().toLowerCase();
+            return imageExts.indexOf(ext) !== -1;
+        });
+        var thumbUrls = {};
+        if (imageDocs.length > 0) {
+            var paths = imageDocs.map(function(d) { return d.storage_path; });
+            var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
+            if (signedResults.data) {
+                signedResults.data.forEach(function(r) {
+                    if (r.signedUrl) thumbUrls[r.path] = r.signedUrl;
+                });
+            }
+        }
+
         tbody.innerHTML = docs.map(function(d) {
-            var ext = d.file_name.split('.').pop().toUpperCase();
+            var ext = d.file_name.split('.').pop().toLowerCase();
+            var extUpper = ext.toUpperCase();
             var date = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             var statusClass = d.status === 'ready' ? 'status-ready' : 'status-processing';
             var statusLabel = d.status.charAt(0).toUpperCase() + d.status.slice(1);
-            return '<tr>' +
-                '<td class="td-name">' + escapeHtml(d.file_name) + '</td>' +
-                '<td>' + ext + '</td>' +
+            var catLabel = CATEGORY_LABELS[d.category] || d.category || '—';
+            var catFilter = CATEGORY_FILTERS[d.category] || 'other';
+            var project = d.project || d.notes || '—';
+
+            // Build thumbnail
+            var thumb;
+            if (thumbUrls[d.storage_path]) {
+                thumb = '<div class="doc-thumb"><img src="' + thumbUrls[d.storage_path] + '" alt=""></div>';
+            } else if (ext === 'pdf') {
+                thumb = '<div class="doc-thumb doc-thumb-pdf"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c45a3c" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">PDF</span></div>';
+            } else {
+                thumb = '<div class="doc-thumb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9590" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="doc-thumb-label">' + extUpper + '</span></div>';
+            }
+
+            return '<tr data-cat="' + catFilter + '">' +
+                '<td class="td-name"><div class="doc-name-cell">' + thumb + '<span>' + escapeHtml(d.file_name) + '</span></div></td>' +
+                '<td><span class="cat-pill">' + escapeHtml(catLabel) + '</span></td>' +
+                '<td>' + escapeHtml(project) + '</td>' +
                 '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
                 '<td>' + date + '</td>' +
                 '<td><a href="#" class="table-action" onclick="viewDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">View</a> ' +
@@ -129,59 +215,100 @@ async function loadDocuments() {
     }
 }
 
-async function handleFileUpload(event) {
-    var files = event.target.files;
-    if (!files || files.length === 0) return;
+// Search documents
+function searchDocs(query) {
+    var q = query.toLowerCase();
+    document.querySelectorAll('#doc-table tbody tr').forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+}
+
+async function handleDocUpload() {
+    var fileInput = document.getElementById('upload-file-input');
+    var categorySelect = document.getElementById('upload-category');
+    var projectInput = document.getElementById('upload-project');
+    var notesInput = document.getElementById('upload-notes');
+
+    var files = fileInput.files;
+    if (!files || files.length === 0) {
+        showToast('Please select a file.', 'error');
+        return;
+    }
+
+    var category = categorySelect.value;
+    if (!category) {
+        showToast('Please select a category.', 'error');
+        return;
+    }
+
+    closeModal('upload-modal');
 
     var total = files.length;
     var uploaded = 0;
     var failed = 0;
 
-    showUploadOverlay('Uploading ' + total + ' document' + (total > 1 ? 's' : '') + '...');
-
     for (var i = 0; i < files.length; i++) {
         var file = files[i];
-        if (file.size > 50 * 1024 * 1024) {
+        if (file.size > 100 * 1024 * 1024) {
             failed++;
-            showToast(file.name + ' exceeds 50MB limit.', 'error');
+            showToast(file.name + ' exceeds 100MB limit.', 'error');
             continue;
         }
 
-        if (total > 1) {
-            showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
-        }
-
-        var storagePath = currentUser.id + '/' + Date.now() + '_' + file.name;
+        showUploadOverlay('Uploading' + (total > 1 ? ' ' + (i + 1) + ' of ' + total : ' ' + file.name) + '...');
 
         try {
+            // Upload directly to Supabase storage (bypasses slow backend cold starts)
+            var storagePath = currentUser.id + '/' + Date.now() + '_' + file.name;
             var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
             if (uploadResult.error) throw uploadResult.error;
 
             var ext = file.name.split('.').pop().toLowerCase();
-            var category = 'equipment_manuals';
             var insertResult = await sb.from('documents').insert({
                 uploaded_by: currentUser.id,
-                team_id: null,
                 file_name: file.name,
                 file_type: file.type || 'application/' + ext,
                 file_size: file.size,
                 storage_path: storagePath,
                 category: category,
+                project_tag: projectInput.value.trim() || null,
+                notes: notesInput.value.trim() || null,
                 status: 'ready'
             });
             if (insertResult.error) throw insertResult.error;
 
             uploaded++;
+
+            // Trigger RAG indexing in background (non-blocking, best-effort)
+            try {
+                var session = (await sb.auth.getSession()).data.session;
+                if (session && insertResult.data) {
+                    fetch(BACKEND_URL + '/index-document', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document_id: insertResult.data[0].id, storage_path: storagePath })
+                    }).catch(function() { /* RAG indexing is best-effort */ });
+                }
+            } catch (_) { /* ignore RAG errors */ }
         } catch (err) {
             console.error('Upload error:', err);
             failed++;
-            showToast('Failed to upload ' + file.name + ': ' + err.message, 'error');
+            showToast('Failed to upload ' + file.name + ': ' + (err.message || 'Unknown error'), 'error');
         }
     }
 
     hideUploadOverlay();
 
-    event.target.value = '';
+    if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded successfully.');
+    if (failed > 0 && uploaded > 0) showToast(failed + ' failed.', 'error');
+
+    // Reset modal fields
+    fileInput.value = '';
+    categorySelect.value = '';
+    projectInput.value = '';
+    notesInput.value = '';
+
     await loadDocuments();
 }
 
@@ -202,13 +329,19 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        // Delete from storage
-        var storageResult = await sb.storage.from('documents').remove([storagePath]);
-        if (storageResult.error) throw storageResult.error;
+        // Delete through backend API so RAG vectors get cleaned up too
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
 
-        // Delete DB row
-        var dbResult = await sb.from('documents').delete().eq('id', docId);
-        if (dbResult.error) throw dbResult.error;
+        var resp = await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+            method: 'DELETE',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        });
+
+        if (!resp.ok) {
+            var errBody = await resp.text();
+            throw new Error(errBody || 'Delete failed');
+        }
 
         showToast('Document deleted.');
         await loadDocuments();
@@ -229,10 +362,34 @@ var setupClientSecret = null;
 
 function loadBilling() {
     var plan = currentSubscription ? currentSubscription.plan : 'pro';
+    var isOnTrial = currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id;
 
-    // Billing detail text (next billing date)
+    // Billing detail text
     var detailEl = document.getElementById('billing-plan-detail');
-    if (currentSubscription && currentSubscription.current_period_end) {
+    var trialBanner = document.getElementById('trial-banner');
+    if (isOnTrial) {
+        var daysLeft = 0;
+        var trialEnd = new Date(currentSubscription.trial_ends_at);
+        daysLeft = Math.ceil((trialEnd - new Date()) / 86400000);
+        if (daysLeft < 0) daysLeft = 0;
+
+        if (daysLeft > 0) {
+            detailEl.textContent = 'You are on a 7-day trial of the ' + capitalize(plan) + ' plan. Add a payment method below to keep access.';
+            if (trialBanner) {
+                trialBanner.style.display = 'flex';
+                var daysEl = document.getElementById('trial-days-left');
+                if (daysEl) daysEl.textContent = daysLeft;
+                trialBanner.className = 'trial-banner' + (daysLeft <= 1 ? ' trial-red' : daysLeft <= 3 ? ' trial-orange' : '');
+            }
+        } else {
+            detailEl.textContent = 'Your trial has ended. Subscribe below to continue using Arrival.';
+            if (trialBanner) {
+                trialBanner.style.display = 'flex';
+                trialBanner.className = 'trial-banner trial-red';
+                trialBanner.innerHTML = '<div class="trial-banner-text"><strong>Trial expired</strong> — subscribe now to keep using Arrival.</div>';
+            }
+        }
+    } else if (currentSubscription && currentSubscription.current_period_end) {
         var endDate = new Date(currentSubscription.current_period_end);
         detailEl.textContent = 'You are on the ' + capitalize(plan) + ' plan. Next billing date: ' + endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     } else {
@@ -240,7 +397,7 @@ function loadBilling() {
     }
 
     // Highlight current plan card
-    var cards = ['pro', 'business'];
+    var cards = ['pro', 'business', 'enterprise'];
     cards.forEach(function(p) {
         var card = document.getElementById('plan-card-' + p);
         if (card) card.classList.toggle('plan-active', p === plan);
@@ -251,9 +408,9 @@ function loadBilling() {
     var btnBiz = document.getElementById('billing-btn-biz');
 
     if (plan === 'pro') {
-        btnPro.textContent = 'Current Plan';
-        btnPro.disabled = true;
-        btnPro.className = 'btn btn-outline';
+        btnPro.textContent = isOnTrial ? 'Subscribe to Pro' : 'Current Plan';
+        btnPro.disabled = !isOnTrial;
+        btnPro.className = isOnTrial ? 'btn btn-primary' : 'btn btn-outline';
         btnBiz.textContent = 'Upgrade to Business';
         btnBiz.disabled = false;
         btnBiz.className = 'btn btn-primary';
@@ -266,15 +423,18 @@ function loadBilling() {
         btnBiz.className = 'btn btn-outline';
     }
 
-    // Show cancel + payment + invoice sections
+    // Show cancel + payment + invoice sections for paying users
+    var hasPaidSub = currentSubscription && currentSubscription.stripe_subscription_id;
     var cancelSection = document.getElementById('billing-cancel-section');
-    if (cancelSection) cancelSection.style.display = '';
+    if (cancelSection) cancelSection.style.display = hasPaidSub ? '' : 'none';
 
-    document.getElementById('billing-payment-section').style.display = '';
-    document.getElementById('billing-invoice-section').style.display = '';
+    document.getElementById('billing-payment-section').style.display = hasPaidSub ? '' : 'none';
+    document.getElementById('billing-invoice-section').style.display = hasPaidSub ? '' : 'none';
 
-    // Load billing details from Stripe (invoices + payment method)
-    loadBillingDetails();
+    // Load billing details from Stripe
+    if (hasPaidSub) {
+        loadBillingDetails();
+    }
 }
 
 async function loadBillingDetails() {
@@ -657,86 +817,6 @@ async function handleDeleteAccount() {
     }
 }
 
-// ============================================
-// PHOTOS & VIDEOS
-// ============================================
-
-var userMedia = [];
-
-async function loadMedia() {
-    var result = await sb.from('documents')
-        .select('*')
-        .eq('uploaded_by', currentUser.id)
-        .is('team_id', null)
-        .in('category', ['photo', 'video'])
-        .order('created_at', { ascending: false });
-
-    userMedia = result.data || [];
-    renderMediaGrid(userMedia);
-
-    var plan = currentProfile ? currentProfile.account_type : 'pro';
-    var indicator = document.getElementById('media-storage-indicator');
-    if (indicator) indicator.innerHTML = userMedia.length + ' files uploaded <span class="plan-badge">' + capitalize(plan) + '</span>';
-}
-
-async function renderMediaGrid(items) {
-    var grid = document.getElementById('media-grid');
-    if (!grid) return;
-
-    if (items.length === 0) {
-        grid.innerHTML = '<div style="padding:48px 20px;text-align:center;color:var(--text-muted,#7c736a);width:100%;">No photos or videos uploaded yet.</div>';
-        return;
-    }
-
-    var videoPlaySvg = '<svg width="28" height="28" viewBox="0 0 28 28" fill="white" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));"><polygon points="10,6 24,14 10,22"/></svg>';
-
-    // Get signed URLs for all items in parallel
-    var paths = items.map(function(m) { return m.storage_path; });
-    var signedResults = await sb.storage.from('documents').createSignedUrls(paths, 3600);
-    var urlMap = {};
-    if (signedResults.data) {
-        signedResults.data.forEach(function(r) {
-            if (r.signedUrl) urlMap[r.path] = r.signedUrl;
-        });
-    }
-
-    grid.innerHTML = items.map(function(m) {
-        var isVideo = m.category === 'video' || (m.file_type && m.file_type.startsWith('video/'));
-        var mediaType = isVideo ? 'video' : 'photo';
-        var ext = m.file_name.split('.').pop().toUpperCase();
-        var sizeMB = (m.file_size / (1024 * 1024)).toFixed(1);
-        var date = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        var title = m.notes || m.file_name;
-        var url = urlMap[m.storage_path] || '';
-
-        var thumbHtml;
-        if (url && !isVideo) {
-            thumbHtml = '<div class="media-thumb" style="background:#e8e4df;overflow:hidden;"><img src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display=\'none\'"></div>';
-        } else if (url && isVideo) {
-            thumbHtml = '<div class="media-thumb media-thumb-video" style="background:#e8e4df;overflow:hidden;position:relative;"><video src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" muted preload="metadata" onerror="this.style.display=\'none\'"></video>' + videoPlaySvg + '</div>';
-        } else {
-            thumbHtml = '<div class="media-thumb" style="background:#e8e4df;"><svg width="32" height="32" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="3"/></svg></div>';
-        }
-
-        return '<div class="media-card" data-media="' + mediaType + '">' +
-            thumbHtml +
-            '<div class="media-info">' +
-                '<div class="media-name">' + escapeHtml(title) + '</div>' +
-                '<div class="media-meta">' + ext + ' · ' + sizeMB + ' MB · ' + date + '</div>' +
-            '</div>' +
-            '<div class="media-actions"><a href="#" class="table-action" onclick="viewMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">View</a> <a href="#" class="table-action table-action-danger" onclick="deleteMedia(\'' + m.id + '\',\'' + m.storage_path + '\'); return false;">Delete</a></div>' +
-            '</div>';
-    }).join('');
-}
-
-function filterMediaIndiv(el, type) {
-    el.parentElement.querySelectorAll('.filter-tab').forEach(function(t) { t.classList.remove('active'); });
-    el.classList.add('active');
-    document.querySelectorAll('#media-grid .media-card').forEach(function(card) {
-        card.style.display = (type === 'all' || card.dataset.media === type) ? '' : 'none';
-    });
-}
-
 function showUploadOverlay(text) {
     var overlay = document.getElementById('upload-overlay');
     var textEl = document.getElementById('upload-overlay-text');
@@ -747,93 +827,6 @@ function showUploadOverlay(text) {
 function hideUploadOverlay() {
     var overlay = document.getElementById('upload-overlay');
     if (overlay) overlay.classList.remove('active');
-}
-
-async function handleMediaUpload(event) {
-    var files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    var total = files.length;
-    var uploaded = 0;
-    var failed = 0;
-
-    showUploadOverlay('Uploading ' + total + ' file' + (total > 1 ? 's' : '') + '...');
-
-    for (var i = 0; i < files.length; i++) {
-        var file = files[i];
-        if (file.size > 200 * 1024 * 1024) {
-            failed++;
-            showToast(file.name + ' exceeds 200MB limit.', 'error');
-            continue;
-        }
-
-        if (total > 1) {
-            showUploadOverlay('Uploading ' + (i + 1) + ' of ' + total + '...');
-        }
-
-        var isVideo = file.type.startsWith('video/');
-        var category = isVideo ? 'video' : 'photo';
-        var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        var storagePath = currentUser.id + '/media/' + Date.now() + '_' + safeName;
-
-        try {
-            var uploadResult = await sb.storage.from('documents').upload(storagePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-            if (uploadResult.error) throw uploadResult.error;
-
-            var ext = file.name.split('.').pop().toLowerCase();
-            var insertResult = await sb.from('documents').insert({
-                uploaded_by: currentUser.id,
-                team_id: null,
-                file_name: file.name,
-                file_type: file.type || (isVideo ? 'video/' + ext : 'image/' + ext),
-                file_size: file.size,
-                storage_path: storagePath,
-                category: category,
-                status: 'ready'
-            });
-            if (insertResult.error) throw insertResult.error;
-
-            uploaded++;
-        } catch (err) {
-            console.error('Media upload error:', err);
-            failed++;
-            showToast('Failed: ' + (err.message || JSON.stringify(err)), 'error');
-        }
-    }
-
-    hideUploadOverlay();
-
-    event.target.value = '';
-    await loadMedia();
-}
-
-async function viewMedia(id, storagePath) {
-    try {
-        var signedResult = await sb.storage.from('documents').createSignedUrl(storagePath, 3600);
-        if (signedResult.error) throw signedResult.error;
-        window.open(signedResult.data.signedUrl, '_blank');
-    } catch (err) {
-        console.error('View media error:', err);
-        showToast('Failed to open file.', 'error');
-    }
-}
-
-async function deleteMedia(id, storagePath) {
-    if (!confirm('Delete this file? This cannot be undone.')) return;
-
-    try {
-        await sb.storage.from('documents').remove([storagePath]);
-        var dbResult = await sb.from('documents').delete().eq('id', id);
-        if (dbResult.error) throw dbResult.error;
-        showToast('File deleted.');
-        await loadMedia();
-    } catch (err) {
-        console.error('Delete media error:', err);
-        showToast('Failed to delete file.', 'error');
-    }
 }
 
 // ============================================
@@ -904,9 +897,10 @@ function initDragDrop() {
     zone.addEventListener('drop', function(e) {
         e.preventDefault();
         zone.classList.remove('drag-over');
-        var input = document.getElementById('file-input');
-        input.files = e.dataTransfer.files;
-        input.dispatchEvent(new Event('change'));
+        // Open modal and pre-fill file input
+        openModal('upload-modal');
+        var input = document.getElementById('upload-file-input');
+        if (input) input.files = e.dataTransfer.files;
     });
 }
 
@@ -915,8 +909,9 @@ function initDragDrop() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // File upload handler
-    document.getElementById('file-input').addEventListener('change', handleFileUpload);
+    // Upload modal submit button
+    var uploadBtn = document.getElementById('upload-submit-btn');
+    if (uploadBtn) uploadBtn.addEventListener('click', handleDocUpload);
 
     // Profile save
     document.getElementById('settings-save-btn').addEventListener('click', handleSaveProfile);
@@ -959,28 +954,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var cancelCardBtn = document.getElementById('cancel-card-btn');
     if (cancelCardBtn) {
         cancelCardBtn.addEventListener('click', function() { hideCardForm(); });
-    }
-
-    // Media upload handler
-    document.getElementById('media-input').addEventListener('change', handleMediaUpload);
-
-    // Media drag & drop
-    var mediaZone = document.getElementById('media-upload-zone');
-    if (mediaZone) {
-        mediaZone.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            mediaZone.classList.add('drag-over');
-        });
-        mediaZone.addEventListener('dragleave', function() {
-            mediaZone.classList.remove('drag-over');
-        });
-        mediaZone.addEventListener('drop', function(e) {
-            e.preventDefault();
-            mediaZone.classList.remove('drag-over');
-            var input = document.getElementById('media-input');
-            input.files = e.dataTransfer.files;
-            input.dispatchEvent(new Event('change'));
-        });
     }
 
     // Drag & drop

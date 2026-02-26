@@ -7,32 +7,15 @@
 const SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+});
 
 // --- DEV MODE ---
 const IS_DEV = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
 
-// --- PROTECTED PAGES ---
-const PROTECTED_PAGES = ['dashboard-individual', 'dashboard-business'];
-
-// Store reference to original showPage before overriding
+// Store reference to original showPage
 const _originalShowPage = window.showPage;
-
-// Override showPage with route protection
-window.showPage = function(pageId) {
-    if (PROTECTED_PAGES.includes(pageId)) {
-        sb.auth.getUser().then(({ data: { user } }) => {
-            if (!user && !IS_DEV) {
-                _originalShowPage('login');
-                showToast('Please sign in to access your dashboard.', 'error');
-            } else {
-                _originalShowPage(pageId);
-            }
-        });
-    } else {
-        _originalShowPage(pageId);
-    }
-};
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -145,31 +128,41 @@ async function handleSignup(event) {
 
         var userId = result.data.user.id;
 
-        // 2. Insert user profile
-        var userResult = await sb.from('users').insert({
+        // 2. Upsert user profile (handles retries if auth user exists but profile failed)
+        var userResult = await sb.from('users').upsert({
             id: userId,
             email: email,
             first_name: firstName,
             last_name: lastName,
             primary_trade: trade,
             experience_level: experience,
-            account_type: 'free'
-        });
+            account_type: 'pro'
+        }, { onConflict: 'id' });
         if (userResult.error) throw userResult.error;
 
-        // 3. Insert free subscription
-        var subResult = await sb.from('subscriptions').insert({
+        // 3. Upsert pro subscription with 7-day trial
+        var trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 7);
+        var subResult = await sb.from('subscriptions').upsert({
             user_id: userId,
-            plan: 'free',
-            status: 'active'
-        });
+            plan: 'pro',
+            status: 'active',
+            trial_ends_at: trialEnd.toISOString()
+        }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
 
-        // 4. Redirect to individual dashboard
-        updateNavForAuth(result.data.user);
-        showToast('Account created successfully!');
-        _originalShowPage('dashboard-individual');
-        loadIndividualDashboard(result.data.user);
+        // 4. Send welcome email (fire-and-forget; function requires JWT and to === user email)
+        var accessToken = result.data.session ? result.data.session.access_token : '';
+        if (accessToken) {
+            fetch('/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
+            }).catch(function(err) { console.error('Welcome email error:', err); });
+        }
+
+        // 5. Redirect to individual dashboard
+        window.location.href = '/dashboard-individual';
 
     } catch (error) {
         console.error('Signup error:', error);
@@ -209,25 +202,21 @@ async function handleLogin(event) {
 
         var userId = result.data.user.id;
 
-        // Check if user has an active team membership
+        // Check if user has an active team membership → business dashboard
         var tmResult = await sb
             .from('team_members')
-            .select('team_id, role, status')
+            .select('team_id')
             .eq('user_id', userId)
             .eq('status', 'active')
             .limit(1);
 
-        updateNavForAuth(result.data.user);
-
         if (tmResult.data && tmResult.data.length > 0) {
-            _originalShowPage('dashboard-business');
-            loadBusinessDashboard(result.data.user, tmResult.data[0].team_id);
+            localStorage.setItem('arrival_dashboard', 'business');
+            window.location.href = '/dashboard-business';
         } else {
-            _originalShowPage('dashboard-individual');
-            loadIndividualDashboard(result.data.user);
+            localStorage.setItem('arrival_dashboard', 'individual');
+            window.location.href = '/dashboard-individual';
         }
-
-        showToast('Welcome back!');
 
     } catch (error) {
         console.error('Login error:', error);
@@ -296,7 +285,8 @@ async function handlePasswordUpdate(event) {
         if (result.error) throw result.error;
 
         showToast('Password updated successfully!');
-        _originalShowPage('login');
+        if (typeof _originalShowPage === 'function') _originalShowPage('login');
+        else showPage('login');
 
     } catch (error) {
         showFormError('reset-update-error', error.message || 'Failed to update password.');
@@ -311,9 +301,69 @@ async function handlePasswordUpdate(event) {
 
 async function handleLogout() {
     await sb.auth.signOut();
-    updateNavForAuth(null);
-    _originalShowPage('home');
-    showToast('Signed out successfully.');
+    window.location.href = '/';
+}
+
+// ============================================
+// GOOGLE SIGN-IN
+// ============================================
+
+async function handleGoogleSignIn() {
+    try {
+        var result = await sb.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + '/auth-callback',
+                queryParams: {
+                    prompt: 'select_account'
+                }
+            }
+        });
+
+        if (result.error) throw result.error;
+        // Browser will redirect to Google — no further action needed here
+
+    } catch (error) {
+        console.error('Google sign-in error:', error);
+        showToast('Google sign-in failed. Please try again.', 'error');
+    }
+}
+
+/**
+ * Ensures a users row + subscriptions row exist for OAuth sign-ins.
+ * Called after Google sign-in callback when user may not have a profile yet.
+ */
+async function ensureProfileExists(user) {
+    try {
+        var existing = await sb.from('users').select('id').eq('id', user.id).single();
+        if (existing.data) return; // Already exists
+
+        var meta = user.user_metadata || {};
+        var fullName = meta.full_name || meta.name || '';
+        var firstName = meta.first_name || fullName.split(' ')[0] || '';
+        var lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
+        var email = user.email || '';
+
+        console.log('[Auth] Creating profile for OAuth user:', email);
+
+        await sb.from('users').insert({
+            id: user.id,
+            email: email,
+            first_name: firstName,
+            last_name: lastName,
+            primary_trade: 'other',
+            experience_level: '1_3_years',
+            account_type: 'pro'
+        });
+
+        await sb.from('subscriptions').insert({
+            user_id: user.id,
+            plan: 'pro',
+            status: 'active'
+        });
+    } catch (err) {
+        console.error('ensureProfileExists error:', err);
+    }
 }
 
 // ============================================
@@ -321,102 +371,45 @@ async function handleLogout() {
 // ============================================
 
 async function navigateToDashboard() {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    try {
+        // Use getSession (local, fast) instead of getUser (API call, can fail)
+        var sessionResult = await sb.auth.getSession();
+        var session = sessionResult.data.session;
 
-    if (!user) {
-        _originalShowPage('login');
-        return;
-    }
+        if (!session || !session.user) {
+            if (typeof _originalShowPage === 'function') {
+                _originalShowPage('login');
+            } else {
+                showPage('login');
+            }
+            return;
+        }
 
-    var tmResult = await sb
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .limit(1);
+        var user = session.user;
 
-    if (tmResult.data && tmResult.data.length > 0) {
-        _originalShowPage('dashboard-business');
-        loadBusinessDashboard(user, tmResult.data[0].team_id);
-    } else {
-        _originalShowPage('dashboard-individual');
-        loadIndividualDashboard(user);
-    }
-}
+        // Check if user has an active team membership → business dashboard
+        var tmResult = await sb
+            .from('team_members')
+            .select('team_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .limit(1);
 
-// ============================================
-// DASHBOARD POPULATION
-// ============================================
-
-async function loadIndividualDashboard(user) {
-    var result = await sb
-        .from('users')
-        .select('first_name, last_name, primary_trade, account_type')
-        .eq('id', user.id)
-        .single();
-
-    if (result.data) {
-        document.getElementById('dashboard-user-name').textContent = result.data.first_name || 'User';
-        document.getElementById('dashboard-user-trade').textContent =
-            (result.data.primary_trade || '').replace(/_/g, ' ');
-        document.getElementById('dashboard-user-plan').textContent = result.data.account_type || 'free';
+        if (tmResult.data && tmResult.data.length > 0) {
+            localStorage.setItem('arrival_dashboard', 'business');
+            window.location.href = '/dashboard-business';
+        } else {
+            localStorage.setItem('arrival_dashboard', 'individual');
+            window.location.href = '/dashboard-individual';
+        }
+    } catch (err) {
+        console.error('Dashboard navigation error:', err);
+        // Fallback — use last known dashboard type, default to individual
+        var lastDash = localStorage.getItem('arrival_dashboard') || 'individual';
+        window.location.href = '/dashboard-' + lastDash;
     }
 }
 
-async function loadBusinessDashboard(user, teamId) {
-    // Fetch team info
-    var teamResult = await sb
-        .from('teams')
-        .select('name, max_seats')
-        .eq('id', teamId)
-        .single();
-
-    if (teamResult.data) {
-        document.getElementById('business-team-name').textContent = teamResult.data.name;
-    }
-
-    // Fetch team members
-    var membersResult = await sb
-        .from('team_members')
-        .select('email, role, status, user_id')
-        .eq('team_id', teamId);
-
-    if (membersResult.data) {
-        document.getElementById('business-member-count').textContent = membersResult.data.length;
-        document.getElementById('business-seats-used').textContent = membersResult.data.length;
-
-        var tbody = document.getElementById('team-members-tbody');
-        tbody.innerHTML = membersResult.data.map(function(m) {
-            return '<tr>' +
-                '<td>' + m.email.split('@')[0] + '</td>' +
-                '<td>' + m.email + '</td>' +
-                '<td style="text-transform: capitalize;">' + m.role + '</td>' +
-                '<td><span class="status-badge status-' + m.status + '">' + m.status + '</span></td>' +
-                '</tr>';
-        }).join('');
-    }
-
-    // Fetch team documents
-    var docsResult = await sb
-        .from('documents')
-        .select('file_name, category, uploaded_by, created_at')
-        .eq('team_id', teamId)
-        .order('created_at', { ascending: false });
-
-    if (docsResult.data && docsResult.data.length > 0) {
-        document.getElementById('business-doc-count').textContent = docsResult.data.length;
-        var docTbody = document.getElementById('team-documents-tbody');
-        docTbody.innerHTML = docsResult.data.map(function(d) {
-            return '<tr>' +
-                '<td>' + d.file_name + '</td>' +
-                '<td style="text-transform: capitalize;">' + d.category.replace(/_/g, ' ') + '</td>' +
-                '<td>' + (d.uploaded_by || '').substring(0, 8) + '...</td>' +
-                '<td>' + new Date(d.created_at).toLocaleDateString() + '</td>' +
-                '</tr>';
-        }).join('');
-    }
-}
 
 // ============================================
 // DEV BYPASS
@@ -472,10 +465,7 @@ async function devSkipAsPro() {
         // Ensure account_type is pro
         await sb.from('users').update({ account_type: 'pro' }).eq('id', result.data.user.id);
 
-        updateNavForAuth(result.data.user);
-        _originalShowPage('dashboard-individual');
-        loadIndividualDashboard(result.data.user);
-        showToast('Signed in as Pro test user');
+        window.location.href = '/dashboard-individual';
 
     } catch (err) {
         console.error('Dev skip pro error:', err);
@@ -569,10 +559,7 @@ async function devSkipAsBusinessAdmin() {
 
         var teamId = tmResult.data && tmResult.data[0] ? tmResult.data[0].team_id : null;
 
-        updateNavForAuth(result.data.user);
-        _originalShowPage('dashboard-business');
-        if (teamId) loadBusinessDashboard(result.data.user, teamId);
-        showToast('Signed in as Business Admin test user');
+        window.location.href = '/dashboard-business';
 
     } catch (err) {
         console.error('Dev skip business error:', err);
@@ -599,6 +586,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('reset-request-form').addEventListener('submit', handlePasswordResetRequest);
     document.getElementById('reset-update-form').addEventListener('submit', handlePasswordUpdate);
 
+    // Google sign-in buttons
+    var googleBtns = document.querySelectorAll('.google-signin-btn');
+    googleBtns.forEach(function(btn) {
+        btn.addEventListener('click', handleGoogleSignIn);
+    });
+
     // Dev bypass buttons
     if (IS_DEV) {
         var devBtns = document.getElementById('dev-bypass-buttons');
@@ -610,19 +603,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Check for password reset callback in URL hash
     var hash = window.location.hash;
     if (hash.includes('type=recovery') || hash.includes('access_token')) {
-        _originalShowPage('reset-password');
+        var _showReset = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
+        _showReset('reset-password');
         document.getElementById('reset-request-form').style.display = 'none';
         document.getElementById('reset-update-form').style.display = 'flex';
     }
 
     // Auth state listener
-    sb.auth.onAuthStateChange(function(event, session) {
+    sb.auth.onAuthStateChange(async function(event, session) {
         if (event === 'SIGNED_IN' && session) {
             updateNavForAuth(session.user);
+            // Ensure profile exists for OAuth users
+            await ensureProfileExists(session.user);
         } else if (event === 'SIGNED_OUT') {
             updateNavForAuth(null);
         } else if (event === 'PASSWORD_RECOVERY') {
-            _originalShowPage('reset-password');
+            var _showReset2 = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
+            _showReset2('reset-password');
             document.getElementById('reset-request-form').style.display = 'none';
             document.getElementById('reset-update-form').style.display = 'flex';
         }

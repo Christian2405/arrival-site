@@ -25,17 +25,9 @@
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2h8l4 4v10a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z"/><path d="M12 2v4h4"/></svg>
             Document Library
         </a>
-        <a href="#" class="sidebar-link" onclick="showPage('photos'); return false;">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="14" height="12" rx="2"/><circle cx="6.5" cy="7.5" r="1.5"/><path d="M16 12l-3.5-4L9 12.5 7 10l-5 5"/></svg>
-            Photos & Videos
-        </a>
         <a href="#" class="sidebar-link" onclick="showPage('activity'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="6" r="3"/><path d="M1 16c0-3 3-5 6-5s6 2 6 5"/><circle cx="14" cy="5" r="2"/><path d="M14 9c2 0 4 1.5 4 3.5"/></svg>
             Team Activity
-        </a>
-        <a href="#" class="sidebar-link" onclick="showPage('analytics'); return false;">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16V10M9 16V4M14 16V8"/></svg>
-            Team Analytics
         </a>
         <a href="#" class="sidebar-link" onclick="showPage('billing'); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2 8h14"/></svg>
@@ -47,10 +39,6 @@
         </a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="#" class="sidebar-link" onclick="return false;">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="7"/><path d="M6 9h6M9 6v6"/></svg>
-            Help Centre
-        </a>
         <a class='sidebar-link sidebar-logout' href='#' id="sidebar-logout" onclick="handleLogout(); return false;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H4a2 2 0 00-2 2v12a2 2 0 002 2h2M10 14l4-4-4-4M7 10h7"/></svg>
             Log Out
@@ -153,36 +141,6 @@
         <div class="storage-indicator" id="doc-storage-indicator">Unlimited documents on Business plan.</div>
     </div>
 
-    <!-- ========== PHOTOS & VIDEOS ========== -->
-    <div class="dash-page" id="page-photos">
-        <div class="dash-header">
-            <h1>Photos & Videos</h1>
-            <p class="dash-sub">Upload photos and videos of job sites, work in progress, or issues. Arrival AI uses these for visual context when your team asks questions in the field.</p>
-        </div>
-
-        <div class="upload-zone" onclick="openModal('media-upload-modal')">
-            <svg width="48" height="48" fill="none" stroke="#9a9590" stroke-width="1.5"><rect x="4" y="6" width="40" height="32" rx="6"/><circle cx="16" cy="19" r="5"/><path d="M44 30l-10-11-8 9.5-5-4.5L4 38"/></svg>
-            <p class="upload-text">Drop photos or videos here, or click to browse</p>
-            <p class="upload-formats">JPG, PNG, HEIC, MP4, MOV — Max 200MB per file</p>
-        </div>
-
-        <div class="doc-controls">
-            <div class="search-bar">
-                <svg width="18" height="18" fill="none" stroke="#9a9590" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M14 14l3 3"/></svg>
-                <input type="text" id="media-search" placeholder="Search photos & videos..." oninput="searchMedia(this.value)">
-            </div>
-            <div class="filter-tabs">
-                <button class="filter-tab active" onclick="filterMedia(this,'all')">All</button>
-                <button class="filter-tab" onclick="filterMedia(this,'photo')">Photos</button>
-                <button class="filter-tab" onclick="filterMedia(this,'video')">Videos</button>
-            </div>
-        </div>
-
-        <div class="media-grid" id="media-grid">
-        </div>
-        <div class="storage-indicator" id="media-storage-indicator" style="margin-top:24px;">0 files uploaded · Unlimited on Business plan.</div>
-    </div>
-
     <!-- ========== TEAM ACTIVITY ========== -->
     <div class="dash-page" id="page-activity">
         <div class="dash-header">
@@ -210,95 +168,6 @@
                 <table class="dash-table" id="pertech-table">
                     <thead><tr><th>Name</th><th>Queries This Period</th><th>Most Common Topic</th><th>Documents Queried</th></tr></thead>
                     <tbody id="pertech-tbody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- ========== TEAM ANALYTICS ========== -->
-    <div class="dash-page" id="page-analytics">
-        <div class="dash-header">
-            <h1>Team Analytics</h1>
-            <p class="dash-sub">Track query patterns, identify training gaps, and measure your team's usage.</p>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Total queries (this period)</div>
-                <div class="stat-value" id="analytics-total-queries">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Unique topics</div>
-                <div class="stat-value" id="analytics-unique-topics">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Unanswered queries</div>
-                <div class="stat-value" id="analytics-unanswered">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Avg queries per tech</div>
-                <div class="stat-value" id="analytics-avg-per-tech">0</div>
-            </div>
-        </div>
-
-        <div class="dash-section">
-            <h2>Most Asked Questions</h2>
-            <div class="table-wrapper">
-                <table class="dash-table">
-                    <thead><tr><th>Question</th><th>Times Asked</th><th>Topic</th></tr></thead>
-                    <tbody id="analytics-top-questions-tbody">
-                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No data yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="dash-section">
-            <h2>Most Queried Documents</h2>
-            <div class="table-wrapper">
-                <table class="dash-table">
-                    <thead><tr><th>Document</th><th>Category</th><th>Times Referenced</th></tr></thead>
-                    <tbody id="analytics-top-docs-tbody">
-                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No data yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="dash-section">
-            <h2>Training Gaps</h2>
-            <p class="dash-sub" style="margin-bottom:16px;">Topics where your team is asking questions with low confidence or repeated errors.</p>
-            <div class="table-wrapper">
-                <table class="dash-table">
-                    <thead><tr><th>Topic</th><th>Low-Confidence Queries</th><th>Techs Affected</th></tr></thead>
-                    <tbody id="analytics-training-gaps-tbody">
-                        <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:24px;">No training gaps identified yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="dash-section">
-            <h2>Query Volume Per Tech</h2>
-            <div class="table-wrapper">
-                <table class="dash-table">
-                    <thead><tr><th>Name</th><th>Total Queries</th><th>This Week</th><th>Most Common Topic</th></tr></thead>
-                    <tbody id="analytics-per-tech-tbody">
-                        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">No data yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="dash-section">
-            <h2>Unanswered Queries Log</h2>
-            <p class="dash-sub" style="margin-bottom:16px;">Questions Arrival couldn't confidently answer. Consider uploading relevant documentation.</p>
-            <div class="table-wrapper">
-                <table class="dash-table">
-                    <thead><tr><th>Date</th><th>Tech</th><th>Question</th><th>Suggested Action</th></tr></thead>
-                    <tbody id="analytics-unanswered-tbody">
-                        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">No unanswered queries.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -451,17 +320,6 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="media-upload-modal" onclick="if(event.target===this)closeModal('media-upload-modal')">
-    <div class="modal modal-wide">
-        <h2>Upload Photo or Video</h2>
-        <div class="form-group"><label>File</label><input type="file" id="media-file-input" accept="image/*,video/*"></div>
-        <div class="form-group"><label>Title (optional)</label><input type="text" id="media-title" placeholder="e.g. Condenser unit — before install"></div>
-        <div class="form-group"><label>Project / Site (optional)</label><input type="text" id="media-project" placeholder="e.g. 445 Oak St, Johnson Residence"></div>
-        <div class="form-group"><label>Notes (optional)</label><input type="text" id="media-notes" placeholder="e.g. Showing corroded pipe joint in basement"></div>
-        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('media-upload-modal')">Cancel</button><button class="btn btn-primary" id="media-upload-btn">Upload</button></div>
-    </div>
-</div>
-
 <div class="modal-overlay" id="remove-modal" onclick="if(event.target===this)closeModal('remove-modal')">
     <div class="modal">
         <h2>Remove Team Member</h2>
@@ -488,13 +346,41 @@
 </div>
 
 <script>
-function showPage(id) {
+// Page ID to sidebar link index mapping
+var PAGE_NAV_INDEX = { home:0, docs:1, activity:2, billing:3, settings:4 };
+
+function showPage(id, pushHistory) {
     document.querySelectorAll('.dash-page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-' + id).classList.add('active');
-    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-    if(event && event.target) event.target.closest('.sidebar-link')?.classList.add('active');
+    // Highlight correct sidebar link
+    document.querySelectorAll('.sidebar-nav .sidebar-link').forEach(l => l.classList.remove('active'));
+    var idx = PAGE_NAV_INDEX[id];
+    if (idx !== undefined) {
+        var links = document.querySelectorAll('.sidebar-nav .sidebar-link');
+        if (links[idx]) links[idx].classList.add('active');
+    }
     window.scrollTo(0,0);
+    // Push hash for browser back/forward (skip if triggered by popstate)
+    if (pushHistory !== false && window.location.hash !== '#' + id) {
+        history.pushState(null, '', '#' + id);
+    }
 }
+
+// Handle browser back/forward (popstate covers both hash changes and returning to no-hash URL)
+window.addEventListener('popstate', function() {
+    var hash = window.location.hash.replace('#', '') || 'home';
+    if (document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
+
+// On page load, restore section from hash
+window.addEventListener('DOMContentLoaded', function() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('page-' + hash)) {
+        showPage(hash, false);
+    }
+});
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function toggleBtn(el) {
@@ -504,13 +390,6 @@ function toggleBtn(el) {
 function activateTab(el) {
     el.parentElement.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
-}
-function filterMedia(el, type) {
-    el.parentElement.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    document.querySelectorAll('.media-card').forEach(card => {
-        card.style.display = (type === 'all' || card.dataset.media === type) ? '' : 'none';
-    });
 }
 function filterDocs(el, cat) {
     el.parentElement.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));

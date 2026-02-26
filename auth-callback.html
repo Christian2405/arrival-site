@@ -43,7 +43,9 @@
             var SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
             var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
 
-            var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+            });
 
             // Supabase automatically picks up the tokens from the URL hash
             // Wait a moment for the auth state to update
@@ -73,17 +75,29 @@
                             last_name: lastName,
                             primary_trade: 'other',
                             experience_level: '1_3_years',
-                            account_type: 'free'
+                            account_type: 'pro'
                         });
 
+                        var trialEnd = new Date();
+                        trialEnd.setDate(trialEnd.getDate() + 7);
                         await sb.from('subscriptions').insert({
                             user_id: user.id,
-                            plan: 'free',
-                            status: 'active'
+                            plan: 'pro',
+                            status: 'active',
+                            trial_ends_at: trialEnd.toISOString()
                         });
+
+                        // Send welcome email (fire-and-forget; function requires JWT and to === user email)
+                        if (session.access_token && user.email) {
+                            fetch('/.netlify/functions/send-email', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+                                body: JSON.stringify({ to: user.email, template: 'welcome', args: [firstName] })
+                            }).catch(function(e) { console.error('Welcome email error:', e); });
+                        }
                     }
 
-                    // Check if user has a team for routing
+                    // Check if user has a team → business dashboard
                     var tmResult = await sb
                         .from('team_members')
                         .select('team_id')
