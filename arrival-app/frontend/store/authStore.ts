@@ -27,7 +27,7 @@ export interface UserProfile {
 export interface Subscription {
   id: string;
   user_id: string;
-  plan: 'free' | 'pro' | 'business';
+  plan: 'pro' | 'business' | 'enterprise';
   status: string;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
@@ -91,7 +91,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (session) {
         set({ session, user: session.user });
-        await get().ensureProfileExists(session.user);
+        // Only ensure profile for OAuth users (Google sign-in) — email/password
+        // users already have profiles created during signup on website or app
+        const provider = session.user.app_metadata?.provider;
+        if (provider && provider !== 'email') {
+          await get().ensureProfileExists(session.user);
+        }
         await get().loadProfile();
       }
 
@@ -100,7 +105,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ session, user: session?.user || null });
 
         if (event === 'SIGNED_IN' && session) {
-          await get().ensureProfileExists(session.user);
+          const provider = session.user.app_metadata?.provider;
+          if (provider && provider !== 'email') {
+            await get().ensureProfileExists(session.user);
+          }
           await get().loadProfile();
         } else if (event === 'SIGNED_OUT') {
           set({
@@ -262,17 +270,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         last_name: lastName,
         primary_trade: trade,
         experience_level: experience,
-        account_type: 'free',
+        account_type: 'pro',
       });
 
       if (profileError) {
         console.error('Profile insert error:', profileError);
       }
 
-      // 3. Insert free subscription (same as website)
+      // 3. Insert pro subscription (lowest tier — no free tier)
       const { error: subError } = await supabase.from('subscriptions').insert({
         user_id: userId,
-        plan: 'free',
+        plan: 'pro',
         status: 'active',
       });
 
@@ -351,13 +359,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         last_name: lastName,
         primary_trade: 'other',
         experience_level: '1_3_years',
-        account_type: 'free',
+        account_type: 'pro',
       }, { onConflict: 'id', ignoreDuplicates: true });
 
-      // Insert free subscription only if none exists
+      // Insert pro subscription only if none exists
       await supabase.from('subscriptions').insert({
         user_id: user.id,
-        plan: 'free',
+        plan: 'pro',
         status: 'active',
       });
     } catch (error) {

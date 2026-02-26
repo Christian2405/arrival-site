@@ -92,12 +92,14 @@ export default function HomeScreen() {
 
   // Auth + tier data for drawer footer and Job Mode gating
   const { profile, subscription, teamMembership } = useAuthStore();
-  const plan = subscription?.plan || 'free';
-  const tierLimits = getTierLimits(plan);
+  const plan = subscription?.plan;
+  const tierLimits = getTierLimits(plan || '');
   const displayName = profile
     ? `${profile.first_name} ${profile.last_name}`
     : 'Arrival User';
-  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
+  const planLabel = plan
+    ? plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan'
+    : '';
   const planColor =
     plan === 'business' ? '#4A90D9' : plan === 'pro' ? Colors.accent : Colors.textSecondary;
 
@@ -285,6 +287,28 @@ export default function HomeScreen() {
     }
   };
 
+  // --- Voice Command Detection ---
+  const SAVE_COMMANDS = /^\s*(save\s+(that|this|the)\s*(answer|response|reply)?|bookmark\s+(that|this|the)\s*(answer|response|reply)?)\s*[.!?]?\s*$/i;
+
+  const handleVoiceSaveCommand = () => {
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (!lastAssistant) {
+      Alert.alert('Nothing to save', 'Ask a question first, then say "save that answer".');
+      return;
+    }
+    const userMsg = [...messages].reverse().find((m) => m.role === 'user');
+    saveAnswer({
+      id: lastAssistant.id,
+      question: userMsg?.content || 'Voice question',
+      answer: lastAssistant.content,
+      source: lastAssistant.source,
+      confidence: lastAssistant.confidence,
+      savedAt: new Date(),
+      trade: profile?.primary_trade || 'General',
+    });
+    Alert.alert('Saved!', 'Answer bookmarked to your Saved Answers.');
+  };
+
   const stopRecording = async () => {
     if (!recording) return;
     setIsRecording(false);
@@ -297,7 +321,13 @@ export default function HomeScreen() {
       const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
       const { text } = await aiAPI.transcribe(audioBase64, demoMode);
       if (text) {
-        await sendMessage(text);
+        // Check for voice save command before sending as chat
+        if (SAVE_COMMANDS.test(text)) {
+          handleVoiceSaveCommand();
+          setIsProcessing(false);
+        } else {
+          await sendMessage(text);
+        }
       } else {
         setIsProcessing(false);
         Alert.alert('Could not hear you', 'Tap the mic, speak clearly, then tap again to send.');
@@ -644,7 +674,11 @@ export default function HomeScreen() {
             {/* Drawer Footer */}
             <View style={styles.drawerFooter}>
               <View style={styles.drawerDivider} />
-              <View style={styles.drawerFooterContent}>
+              <TouchableOpacity
+                style={styles.drawerFooterContent}
+                onPress={() => navigateFromDrawer('/(tabs)/settings')}
+                activeOpacity={0.6}
+              >
                 <View style={[styles.drawerAvatar, { backgroundColor: planColor + '20' }]}>
                   <Ionicons name="person" size={18} color={planColor} />
                 </View>
@@ -652,7 +686,8 @@ export default function HomeScreen() {
                   <Text style={styles.drawerFooterName}>{displayName}</Text>
                   <Text style={[styles.drawerFooterPlan, { color: planColor }]}>{planLabel}</Text>
                 </View>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
+              </TouchableOpacity>
             </View>
           </SafeAreaView>
         </Animated.View>

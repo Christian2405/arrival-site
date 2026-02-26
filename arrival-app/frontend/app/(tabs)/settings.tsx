@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,19 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Linking,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Camera } from 'expo-camera';
+import { Audio } from 'expo-av';
 import { Colors } from '../../constants/Colors';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
+
+const WEBSITE_URL = 'https://arrivalcompany.com';
 
 type IoniconsName = keyof typeof Ionicons.glyphMap;
 
@@ -39,8 +45,81 @@ export default function SettingsScreen() {
     ? `${profile.first_name} ${profile.last_name}`
     : 'Arrival User';
   const displayEmail = profile?.email || 'Sign in to sync your data';
-  const plan = subscription?.plan || 'free';
-  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const plan = subscription?.plan;
+  const planLabel = plan
+    ? plan.charAt(0).toUpperCase() + plan.slice(1)
+    : '';
+
+  // Permission states
+  const [micPermission, setMicPermission] = useState<boolean | null>(null);
+  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
+
+  const checkPermissions = useCallback(async () => {
+    try {
+      const { status: camStatus } = await Camera.getCameraPermissionsAsync();
+      setCameraPermission(camStatus === 'granted');
+      const { status: micStatus } = await Audio.getPermissionsAsync();
+      setMicPermission(micStatus === 'granted');
+    } catch (e) {
+      console.error('Permission check error:', e);
+    }
+  }, []);
+
+  // Check permissions on mount and when app returns from settings
+  useEffect(() => {
+    checkPermissions();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkPermissions();
+    });
+    return () => sub.remove();
+  }, [checkPermissions]);
+
+  const handlePermissionToggle = async (type: 'mic' | 'camera') => {
+    const currentlyGranted = type === 'mic' ? micPermission : cameraPermission;
+
+    if (currentlyGranted) {
+      // Can't revoke from app — send to device settings
+      Alert.alert(
+        `Disable ${type === 'mic' ? 'Microphone' : 'Camera'}`,
+        'To revoke access, open your device settings for Arrival.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+    } else {
+      // Request permission
+      if (type === 'mic') {
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status === 'granted') {
+          setMicPermission(true);
+        } else {
+          Alert.alert(
+            'Microphone Access',
+            'Microphone access was denied. You can enable it in your device settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+        }
+      } else {
+        const { status } = await Camera.requestCameraPermissionsAsync();
+        if (status === 'granted') {
+          setCameraPermission(true);
+        } else {
+          Alert.alert(
+            'Camera Access',
+            'Camera access was denied. You can enable it in your device settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+        }
+      }
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -196,7 +275,11 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.row} activeOpacity={0.6}>
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            onPress={() => Linking.openSettings()}
+          >
             <View style={styles.rowLeft}>
               <Ionicons name="notifications-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Notifications</Text>
@@ -220,10 +303,48 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Permissions */}
+        <Text style={styles.sectionLabel}>Permissions</Text>
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="mic-outline" size={18} color="#2A2622" />
+              <Text style={styles.rowLabel}>Microphone</Text>
+            </View>
+            <Switch
+              value={micPermission === true}
+              onValueChange={() => handlePermissionToggle('mic')}
+              trackColor={{ false: '#DDD9D5', true: '#2A2622' }}
+              thumbColor="#FFF"
+              ios_backgroundColor="#DDD9D5"
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="camera-outline" size={18} color="#2A2622" />
+              <Text style={styles.rowLabel}>Camera</Text>
+            </View>
+            <Switch
+              value={cameraPermission === true}
+              onValueChange={() => handlePermissionToggle('camera')}
+              trackColor={{ false: '#DDD9D5', true: '#2A2622' }}
+              thumbColor="#FFF"
+              ios_backgroundColor="#DDD9D5"
+            />
+          </View>
+        </View>
+
         {/* Account */}
         <Text style={styles.sectionLabel}>Account</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={styles.row} activeOpacity={0.6}>
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`)}
+          >
             <View style={styles.rowLeft}>
               <Ionicons name="card-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Subscription</Text>
@@ -238,7 +359,11 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.row} activeOpacity={0.6}>
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            onPress={() => Linking.openURL(`mailto:support@arrivalcompany.com?subject=Help%20Request`)}
+          >
             <View style={styles.rowLeft}>
               <Ionicons name="help-circle-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Help & Support</Text>
@@ -248,7 +373,11 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.row} activeOpacity={0.6}>
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/terms`)}
+          >
             <View style={styles.rowLeft}>
               <Ionicons name="document-text-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Terms & Privacy</Text>

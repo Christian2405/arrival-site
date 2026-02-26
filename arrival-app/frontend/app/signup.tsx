@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -84,6 +85,19 @@ export default function SignupScreen() {
         'Check your email',
         'We sent a confirmation link to your email. Please confirm your account, then sign in.',
         [{ text: 'OK', onPress: () => router.push('/login') }]
+      );
+    } else {
+      // Account created — send to website to choose a plan
+      Alert.alert(
+        'Account created!',
+        'To activate your subscription, choose a plan on our website. You have a 7-day trial to get started.',
+        [
+          {
+            text: 'Choose a Plan',
+            onPress: () => Linking.openURL('https://arrivalcompany.com/#pricing'),
+          },
+          { text: 'Later', style: 'cancel' },
+        ]
       );
     }
   };

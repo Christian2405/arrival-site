@@ -29,8 +29,8 @@ export default function CodesScreen() {
   const { profile, subscription, teamMembership } = useAuthStore();
   const { personalDocs, teamDocs, loading, fetchDocuments, getSignedUrl } = useDocumentsStore();
 
-  const plan = subscription?.plan || 'free';
-  const tierLimits = getTierLimits(plan);
+  const plan = subscription?.plan;
+  const tierLimits = getTierLimits(plan || '');
   const userId = profile?.id;
   const teamId = teamMembership?.team_id;
 
