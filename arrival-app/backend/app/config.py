@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 # Load .env from the backend root (one level up from /app)
 _env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(_env_path, override=True)
+load_dotenv(_env_path, override=False)
 
 
 # --- Server ---
