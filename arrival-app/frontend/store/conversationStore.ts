@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../services/supabase';
 
 export interface Message {
   id: string;
@@ -35,6 +36,120 @@ interface ConversationState {
   loadConversations: () => Promise<void>;
   saveConversations: () => Promise<void>;
 }
+
+// ─── Supabase helpers (fire-and-forget, never block UI) ───
+
+async function getUserId(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Upsert a conversation row to Supabase. */
+async function syncConversationToSupabase(conv: Conversation) {
+  const userId = await getUserId();
+  if (!userId) return;
+
+  try {
+    await supabase.from('conversations').upsert(
+      {
+        id: conv.id,
+        user_id: userId,
+        title: conv.title,
+        trade: conv.trade,
+        created_at: conv.createdAt.toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch (e) {
+    console.warn('[conversations] Supabase sync error:', e);
+  }
+}
+
+/** Upsert a single message row to Supabase. */
+async function syncMessageToSupabase(msg: Message, conversationId: string) {
+  try {
+    await supabase.from('messages').upsert(
+      {
+        id: msg.id,
+        conversation_id: conversationId,
+        role: msg.role,
+        content: msg.content,
+        image: msg.image ?? null,
+        audio: msg.audio ?? null,
+        source: msg.source ?? null,
+        confidence: msg.confidence ?? null,
+        alert_type: msg.alertType ?? null,
+        timestamp: msg.timestamp.toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch (e) {
+    console.warn('[messages] Supabase sync error:', e);
+  }
+}
+
+/** Fetch all conversations + messages from Supabase. */
+async function fetchConversationsFromSupabase(): Promise<Conversation[] | null> {
+  const userId = await getUserId();
+  if (!userId) return null;
+
+  try {
+    // Fetch conversations ordered by most recent
+    const { data: convRows, error: convErr } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(50); // keep it reasonable
+
+    if (convErr || !convRows?.length) return convErr ? null : [];
+
+    // Fetch all messages for these conversations in one query
+    const convIds = convRows.map((c: any) => c.id);
+    const { data: msgRows, error: msgErr } = await supabase
+      .from('messages')
+      .select('*')
+      .in('conversation_id', convIds)
+      .order('timestamp', { ascending: true });
+
+    if (msgErr) return null;
+
+    // Group messages by conversation
+    const msgsByConv: Record<string, Message[]> = {};
+    for (const m of msgRows || []) {
+      if (!msgsByConv[m.conversation_id]) msgsByConv[m.conversation_id] = [];
+      msgsByConv[m.conversation_id].push({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        image: m.image ?? undefined,
+        audio: m.audio ?? undefined,
+        source: m.source ?? undefined,
+        confidence: m.confidence ?? undefined,
+        alertType: m.alert_type ?? undefined,
+        timestamp: new Date(m.timestamp),
+      });
+    }
+
+    return convRows.map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      trade: c.trade,
+      messages: msgsByConv[c.id] || [],
+      createdAt: new Date(c.created_at),
+    }));
+  } catch (e) {
+    console.warn('[conversations] Supabase fetch error:', e);
+    return null;
+  }
+}
+
+// ─── Store ───
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
@@ -74,6 +189,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         conversations: [newConv, ...conversations],
       });
       get().saveConversations();
+
+      // Sync to Supabase (non-blocking)
+      syncConversationToSupabase(newConv).then(() =>
+        syncMessageToSupabase(message, newConv.id)
+      );
       return;
     }
 
@@ -97,15 +217,20 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
 
     get().saveConversations();
+
+    // Sync to Supabase (non-blocking)
+    syncConversationToSupabase(updatedConversation).then(() =>
+      syncMessageToSupabase(message, updatedConversation.id)
+    );
   },
 
   loadConversations: async () => {
     try {
+      // 1. Load from AsyncStorage immediately (fast, offline-capable)
       const stored = await AsyncStorage.getItem('conversations');
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Restore Date objects
-        const conversations = parsed.map((c: any) => ({
+        const localConversations = parsed.map((c: any) => ({
           ...c,
           createdAt: new Date(c.createdAt),
           messages: c.messages.map((m: any) => ({
@@ -113,7 +238,34 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
             timestamp: new Date(m.timestamp),
           })),
         }));
-        set({ conversations });
+        set({ conversations: localConversations });
+      }
+
+      // 2. Then fetch from Supabase (cloud source of truth)
+      const cloudConversations = await fetchConversationsFromSupabase();
+      if (cloudConversations !== null) {
+        // Merge: cloud wins for conversations that exist in both,
+        // keep local-only conversations (not yet synced)
+        const { conversations: localConvs } = get();
+        const cloudIds = new Set(cloudConversations.map((c) => c.id));
+        const localOnly = localConvs.filter((c) => !cloudIds.has(c.id));
+
+        // Push local-only conversations to Supabase
+        for (const conv of localOnly) {
+          syncConversationToSupabase(conv).then(() => {
+            for (const msg of conv.messages) {
+              syncMessageToSupabase(msg, conv.id);
+            }
+          });
+        }
+
+        const merged = [...cloudConversations, ...localOnly].sort(
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+        );
+
+        set({ conversations: merged });
+        // Update AsyncStorage cache with merged data
+        await AsyncStorage.setItem('conversations', JSON.stringify(merged));
       }
     } catch (error) {
       console.error('Error loading conversations:', error);
