@@ -273,6 +273,12 @@ exports.handler = async (event) => {
           })
           .eq('stripe_subscription_id', subId);
 
+        // Reset user account type to base tier
+        await supabase
+          .from('users')
+          .update({ account_type: 'pro' })
+          .eq('id', sub.user_id);
+
         // 📧 Send cancellation email
         const cancelUser = await getUserInfo(sub.user_id);
         if (cancelUser.email) {

@@ -128,8 +128,8 @@ async function handleSignup(event) {
 
         var userId = result.data.user.id;
 
-        // 2. Insert user profile
-        var userResult = await sb.from('users').insert({
+        // 2. Upsert user profile (handles retries if auth user exists but profile failed)
+        var userResult = await sb.from('users').upsert({
             id: userId,
             email: email,
             first_name: firstName,
@@ -137,18 +137,18 @@ async function handleSignup(event) {
             primary_trade: trade,
             experience_level: experience,
             account_type: 'pro'
-        });
+        }, { onConflict: 'id' });
         if (userResult.error) throw userResult.error;
 
-        // 3. Insert pro subscription with 7-day trial
+        // 3. Upsert pro subscription with 7-day trial
         var trialEnd = new Date();
         trialEnd.setDate(trialEnd.getDate() + 7);
-        var subResult = await sb.from('subscriptions').insert({
+        var subResult = await sb.from('subscriptions').upsert({
             user_id: userId,
             plan: 'pro',
             status: 'active',
             trial_ends_at: trialEnd.toISOString()
-        });
+        }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
 
         // 4. Send welcome email (fire-and-forget)

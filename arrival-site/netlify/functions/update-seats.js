@@ -89,7 +89,7 @@ exports.handler = async (event) => {
         .from('team_members')
         .select('team_id')
         .eq('user_id', user.id)
-        .eq('role', 'owner')
+        .eq('role', 'admin')
         .limit(1)
         .single();
 
