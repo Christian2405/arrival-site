@@ -65,7 +65,7 @@ export default function SignupScreen() {
     }
 
     const result = await signUp({
-      email: email.trim().toLowerCase(),
+      email: email.trim(),
       password: password.trim(),
       firstName: firstName.trim(),
       lastName: lastName.trim(),

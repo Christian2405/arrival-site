@@ -35,7 +35,7 @@ export default function LoginScreen() {
       return;
     }
 
-    const result = await signIn(email.trim().toLowerCase(), password.trim());
+    const result = await signIn(email.trim(), password.trim());
     if (result.error) {
       // Make Supabase's generic error more helpful
       if (result.error.includes('Invalid login credentials')) {
@@ -47,7 +47,7 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = async () => {
-    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setError('Enter your email above, then tap "Forgot password?"');
       return;
