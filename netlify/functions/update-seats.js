@@ -37,7 +37,13 @@ exports.handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
     }
 
-    const { action, count } = JSON.parse(event.body);
+    let body;
+    try {
+      body = JSON.parse(event.body);
+    } catch (e) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+    }
+    const { action, count } = body;
     if (!action || !['add', 'remove'].includes(action)) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'action must be add or remove' }) };
     }
@@ -62,6 +68,19 @@ exports.handler = async (event) => {
 
     if (!sub.stripe_subscription_id) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'No Stripe subscription found' }) };
+    }
+
+    // Verify user is a team admin or owner
+    const { data: teamRole } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .in('role', ['admin', 'owner'])
+      .limit(1)
+      .single();
+
+    if (!teamRole) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Only team admins can modify seats' }) };
     }
 
     // Get the current subscription from Stripe

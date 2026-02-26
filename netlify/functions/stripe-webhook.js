@@ -342,7 +342,7 @@ exports.handler = async (event) => {
     }
   } catch (err) {
     console.error('Webhook processing error:', err);
-    // Still return 200 to prevent Stripe from retrying
+    return { statusCode: 500, body: JSON.stringify({ error: 'Webhook processing failed' }) };
   }
 
   return { statusCode: 200, body: JSON.stringify({ received: true }) };

@@ -196,7 +196,34 @@ exports.handler = async (event) => {
   }
 
   try {
-    const body = JSON.parse(event.body);
+    // Verify auth — require a valid Supabase JWT or internal secret
+    const authHeader = event.headers.authorization || '';
+    const internalSecret = process.env.INTERNAL_EMAIL_SECRET;
+    const token = authHeader.replace('Bearer ', '');
+
+    if (internalSecret && token === internalSecret) {
+      // Internal server-to-server call (from webhook, etc.) — allowed
+    } else if (token) {
+      // Client call — verify Supabase JWT
+      const { createClient } = require('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token' }) };
+      }
+    } else {
+      return { statusCode: 401, body: JSON.stringify({ error: 'Authorization required' }) };
+    }
+
+    let body;
+    try {
+      body = JSON.parse(event.body);
+    } catch (e) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+    }
     const { to, template, args } = body;
 
     if (!to || !template) {
