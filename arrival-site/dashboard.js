@@ -88,20 +88,17 @@ async function initAuth() {
         return;
     }
 
-    // Check if free trial has expired
-    var subPlan = currentSubscription ? currentSubscription.plan : 'free';
+    // Check if trial has expired
     var subStatus = currentSubscription ? currentSubscription.status : 'active';
-    if (subPlan === 'free') {
-        if (subStatus === 'trial_expired') {
+    if (subStatus === 'trial_expired') {
+        showTrialExpiredOverlay();
+        return;
+    }
+    if (currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id) {
+        var trialEnd = new Date(currentSubscription.trial_ends_at);
+        if (trialEnd < new Date()) {
             showTrialExpiredOverlay();
             return;
-        }
-        if (currentSubscription && currentSubscription.trial_ends_at) {
-            var trialEnd = new Date(currentSubscription.trial_ends_at);
-            if (trialEnd < new Date()) {
-                showTrialExpiredOverlay();
-                return;
-            }
         }
     }
 
@@ -364,20 +361,20 @@ var cardElement = null;
 var setupClientSecret = null;
 
 function loadBilling() {
-    var plan = currentSubscription ? currentSubscription.plan : 'free';
+    var plan = currentSubscription ? currentSubscription.plan : 'pro';
+    var isOnTrial = currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id;
 
     // Billing detail text
     var detailEl = document.getElementById('billing-plan-detail');
     var trialBanner = document.getElementById('trial-banner');
-    if (plan === 'free') {
+    if (isOnTrial) {
         var daysLeft = 0;
-        if (currentSubscription && currentSubscription.trial_ends_at) {
-            var trialEnd = new Date(currentSubscription.trial_ends_at);
-            daysLeft = Math.ceil((trialEnd - new Date()) / 86400000);
-            if (daysLeft < 0) daysLeft = 0;
-        }
+        var trialEnd = new Date(currentSubscription.trial_ends_at);
+        daysLeft = Math.ceil((trialEnd - new Date()) / 86400000);
+        if (daysLeft < 0) daysLeft = 0;
+
         if (daysLeft > 0) {
-            detailEl.textContent = 'You are on a 7-day free trial. Upgrade below to keep access after your trial ends.';
+            detailEl.textContent = 'You are on a 7-day trial of the ' + capitalize(plan) + ' plan. Add a payment method below to keep access.';
             if (trialBanner) {
                 trialBanner.style.display = 'flex';
                 var daysEl = document.getElementById('trial-days-left');
@@ -385,11 +382,11 @@ function loadBilling() {
                 trialBanner.className = 'trial-banner' + (daysLeft <= 1 ? ' trial-red' : daysLeft <= 3 ? ' trial-orange' : '');
             }
         } else {
-            detailEl.textContent = 'Your free trial has ended. Upgrade below to continue using Arrival.';
+            detailEl.textContent = 'Your trial has ended. Subscribe below to continue using Arrival.';
             if (trialBanner) {
                 trialBanner.style.display = 'flex';
                 trialBanner.className = 'trial-banner trial-red';
-                trialBanner.innerHTML = '<div class="trial-banner-text"><strong>Trial expired</strong> — upgrade now to keep using Arrival.</div>';
+                trialBanner.innerHTML = '<div class="trial-banner-text"><strong>Trial expired</strong> — subscribe now to keep using Arrival.</div>';
             }
         }
     } else if (currentSubscription && currentSubscription.current_period_end) {
@@ -410,17 +407,10 @@ function loadBilling() {
     var btnPro = document.getElementById('billing-btn-pro');
     var btnBiz = document.getElementById('billing-btn-biz');
 
-    if (plan === 'free') {
-        btnPro.textContent = 'Upgrade to Pro';
-        btnPro.disabled = false;
-        btnPro.className = 'btn btn-primary';
-        btnBiz.textContent = 'Upgrade to Business';
-        btnBiz.disabled = false;
-        btnBiz.className = 'btn btn-primary';
-    } else if (plan === 'pro') {
-        btnPro.textContent = 'Current Plan';
-        btnPro.disabled = true;
-        btnPro.className = 'btn btn-outline';
+    if (plan === 'pro') {
+        btnPro.textContent = isOnTrial ? 'Subscribe to Pro' : 'Current Plan';
+        btnPro.disabled = !isOnTrial;
+        btnPro.className = isOnTrial ? 'btn btn-primary' : 'btn btn-outline';
         btnBiz.textContent = 'Upgrade to Business';
         btnBiz.disabled = false;
         btnBiz.className = 'btn btn-primary';
@@ -433,15 +423,16 @@ function loadBilling() {
         btnBiz.className = 'btn btn-outline';
     }
 
-    // Show cancel + payment + invoice sections only for paid plans
+    // Show cancel + payment + invoice sections for paying users
+    var hasPaidSub = currentSubscription && currentSubscription.stripe_subscription_id;
     var cancelSection = document.getElementById('billing-cancel-section');
-    if (cancelSection) cancelSection.style.display = (plan === 'free') ? 'none' : '';
+    if (cancelSection) cancelSection.style.display = hasPaidSub ? '' : 'none';
 
-    document.getElementById('billing-payment-section').style.display = (plan === 'free') ? 'none' : '';
-    document.getElementById('billing-invoice-section').style.display = (plan === 'free') ? 'none' : '';
+    document.getElementById('billing-payment-section').style.display = hasPaidSub ? '' : 'none';
+    document.getElementById('billing-invoice-section').style.display = hasPaidSub ? '' : 'none';
 
-    // Load billing details from Stripe (only for paid plans)
-    if (plan !== 'free') {
+    // Load billing details from Stripe
+    if (hasPaidSub) {
         loadBillingDetails();
     }
 }

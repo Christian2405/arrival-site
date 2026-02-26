@@ -26,12 +26,12 @@ module.exports.handler = schedule("@daily", async (event) => {
   console.log("[trial-reminders] Running daily trial check...");
 
   try {
-    // Get all active free subscriptions with trial dates
+    // Get all active trial subscriptions (have trial_ends_at but no Stripe sub yet)
     const { data: subs, error } = await supabase
       .from('subscriptions')
       .select('id, user_id, trial_ends_at')
-      .eq('plan', 'free')
       .eq('status', 'active')
+      .is('stripe_subscription_id', null)
       .not('trial_ends_at', 'is', null);
 
     if (error) {
@@ -40,7 +40,7 @@ module.exports.handler = schedule("@daily", async (event) => {
     }
 
     if (!subs || subs.length === 0) {
-      console.log("[trial-reminders] No active free trials found.");
+      console.log("[trial-reminders] No active trials found.");
       return { statusCode: 200 };
     }
 

@@ -47,7 +47,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          plan: sub?.plan || 'free',
+          plan: sub?.plan || 'pro',
           status: sub?.status || 'active',
           invoices: [],
           paymentMethod: null,

@@ -136,16 +136,16 @@ async function handleSignup(event) {
             last_name: lastName,
             primary_trade: trade,
             experience_level: experience,
-            account_type: 'free'
+            account_type: 'pro'
         });
         if (userResult.error) throw userResult.error;
 
-        // 3. Insert free subscription with 7-day trial
+        // 3. Insert pro subscription with 7-day trial
         var trialEnd = new Date();
         trialEnd.setDate(trialEnd.getDate() + 7);
         var subResult = await sb.from('subscriptions').insert({
             user_id: userId,
-            plan: 'free',
+            plan: 'pro',
             status: 'active',
             trial_ends_at: trialEnd.toISOString()
         });
@@ -199,29 +199,20 @@ async function handleLogin(event) {
 
         var userId = result.data.user.id;
 
-        // Check user plan — free users always go to individual
-        var profileResult = await sb.from('users').select('account_type').eq('id', userId).single();
-        var accountType = profileResult.data ? profileResult.data.account_type : 'free';
+        // Check if user has an active team membership → business dashboard
+        var tmResult = await sb
+            .from('team_members')
+            .select('team_id')
+            .eq('user_id', userId)
+            .eq('status', 'active')
+            .limit(1);
 
-        if (accountType === 'free') {
+        if (tmResult.data && tmResult.data.length > 0) {
+            localStorage.setItem('arrival_dashboard', 'business');
+            window.location.href = '/dashboard-business';
+        } else {
             localStorage.setItem('arrival_dashboard', 'individual');
             window.location.href = '/dashboard-individual';
-        } else {
-            // Check if user has an active team membership
-            var tmResult = await sb
-                .from('team_members')
-                .select('team_id')
-                .eq('user_id', userId)
-                .eq('status', 'active')
-                .limit(1);
-
-            if (tmResult.data && tmResult.data.length > 0) {
-                localStorage.setItem('arrival_dashboard', 'business');
-                window.location.href = '/dashboard-business';
-            } else {
-                localStorage.setItem('arrival_dashboard', 'individual');
-                window.location.href = '/dashboard-individual';
-            }
         }
 
     } catch (error) {
@@ -359,12 +350,12 @@ async function ensureProfileExists(user) {
             last_name: lastName,
             primary_trade: 'other',
             experience_level: '1_3_years',
-            account_type: 'free'
+            account_type: 'pro'
         });
 
         await sb.from('subscriptions').insert({
             user_id: user.id,
-            plan: 'free',
+            plan: 'pro',
             status: 'active'
         });
     } catch (err) {
@@ -393,28 +384,20 @@ async function navigateToDashboard() {
 
         var user = session.user;
 
-        // Check user plan — free users always go to individual
-        var profileResult = await sb.from('users').select('account_type').eq('id', user.id).single();
-        var accountType = profileResult.data ? profileResult.data.account_type : 'free';
+        // Check if user has an active team membership → business dashboard
+        var tmResult = await sb
+            .from('team_members')
+            .select('team_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .limit(1);
 
-        if (accountType === 'free') {
+        if (tmResult.data && tmResult.data.length > 0) {
+            localStorage.setItem('arrival_dashboard', 'business');
+            window.location.href = '/dashboard-business';
+        } else {
             localStorage.setItem('arrival_dashboard', 'individual');
             window.location.href = '/dashboard-individual';
-        } else {
-            var tmResult = await sb
-                .from('team_members')
-                .select('team_id')
-                .eq('user_id', user.id)
-                .eq('status', 'active')
-                .limit(1);
-
-            if (tmResult.data && tmResult.data.length > 0) {
-                localStorage.setItem('arrival_dashboard', 'business');
-                window.location.href = '/dashboard-business';
-            } else {
-                localStorage.setItem('arrival_dashboard', 'individual');
-                window.location.href = '/dashboard-individual';
-            }
         }
     } catch (err) {
         console.error('Dashboard navigation error:', err);

@@ -341,7 +341,7 @@ var PAGE_NAV_INDEX = { documents:0, 'chat-history':1, 'saved-answers':2, billing
 
 function isTrialExpired() {
     if (typeof currentSubscription === 'undefined' || !currentSubscription) return false;
-    if (currentSubscription.plan !== 'free') return false;
+    if (currentSubscription.stripe_subscription_id) return false; // Paid subscriber
     if (currentSubscription.status === 'trial_expired') return true;
     if (currentSubscription.trial_ends_at) {
         return new Date(currentSubscription.trial_ends_at) < new Date();

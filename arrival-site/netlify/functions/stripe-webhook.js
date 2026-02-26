@@ -264,32 +264,22 @@ exports.handler = async (event) => {
           break;
         }
 
-        // Downgrade to free
+        // Cancel subscription (keep plan info for records, mark as canceled)
         await supabase
           .from('subscriptions')
           .update({
-            plan: 'free',
             status: 'canceled',
             stripe_subscription_id: null
           })
           .eq('stripe_subscription_id', subId);
-
-        await supabase
-          .from('users')
-          .update({ account_type: 'free' })
-          .eq('id', sub.user_id);
 
         // 📧 Send cancellation email
         const cancelUser = await getUserInfo(sub.user_id);
         if (cancelUser.email) {
           await sendEmail(cancelUser.email, 'Your subscription has been cancelled', `
             <h1>Subscription cancelled</h1>
-            <p>Hi ${cancelUser.first_name || 'there'}, your paid subscription has ended and your account has been moved to the Free plan.</p>
-            <p>You'll still have access to the free features — 10 queries per day, voice + text, and all trades.</p>
-            <div class="highlight">
-              <div class="highlight-label">Current plan</div>
-              <div class="highlight-value">Free &mdash; $0/month</div>
-            </div>
+            <p>Hi ${cancelUser.first_name || 'there'}, your subscription has been cancelled.</p>
+            <p>You'll lose access when your current billing period ends. Re-subscribe anytime to pick up where you left off.</p>
             <p>Changed your mind? You can upgrade again anytime.</p>
             <a href="https://arrivalcompany.com/dashboard-individual" class="btn">Re-subscribe</a>
             <hr class="divider">

@@ -75,14 +75,14 @@
                             last_name: lastName,
                             primary_trade: 'other',
                             experience_level: '1_3_years',
-                            account_type: 'free'
+                            account_type: 'pro'
                         });
 
                         var trialEnd = new Date();
                         trialEnd.setDate(trialEnd.getDate() + 7);
                         await sb.from('subscriptions').insert({
                             user_id: user.id,
-                            plan: 'free',
+                            plan: 'pro',
                             status: 'active',
                             trial_ends_at: trialEnd.toISOString()
                         });
@@ -95,26 +95,18 @@
                         }).catch(function(e) { console.error('Welcome email error:', e); });
                     }
 
-                    // Check user plan — free users always go to individual
-                    var userResult = await sb.from('users').select('account_type').eq('id', user.id).single();
-                    var accountType = userResult.data ? userResult.data.account_type : 'free';
+                    // Check if user has a team → business dashboard
+                    var tmResult = await sb
+                        .from('team_members')
+                        .select('team_id')
+                        .eq('user_id', user.id)
+                        .eq('status', 'active')
+                        .limit(1);
 
-                    if (accountType === 'free') {
-                        window.location.href = '/dashboard-individual';
+                    if (tmResult.data && tmResult.data.length > 0) {
+                        window.location.href = '/dashboard-business';
                     } else {
-                        // Check if user has a team for routing
-                        var tmResult = await sb
-                            .from('team_members')
-                            .select('team_id')
-                            .eq('user_id', user.id)
-                            .eq('status', 'active')
-                            .limit(1);
-
-                        if (tmResult.data && tmResult.data.length > 0) {
-                            window.location.href = '/dashboard-business';
-                        } else {
-                            window.location.href = '/dashboard-individual';
-                        }
+                        window.location.href = '/dashboard-individual';
                     }
                 } else if (attempts < maxAttempts) {
                     setTimeout(checkSession, 250);

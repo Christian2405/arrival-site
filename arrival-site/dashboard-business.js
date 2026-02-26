@@ -117,10 +117,9 @@ async function initAuth() {
     var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
 
-    // Free plan users always go to individual dashboard
-    var accountType = currentProfile ? currentProfile.account_type : 'free';
-    var subPlan = currentSubscription ? currentSubscription.plan : 'free';
-    if (accountType === 'free' || subPlan === 'free') {
+    // Pro plan users without a team always go to individual dashboard
+    var subPlan = currentSubscription ? currentSubscription.plan : 'pro';
+    if (subPlan === 'pro') {
         window.location.href = '/dashboard-individual';
         return;
     }
