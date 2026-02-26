@@ -275,6 +275,12 @@ p {
     align-items: center;
 }
 
+.hero-centered {
+    max-width: 700px;
+    margin: 0 auto;
+    text-align: center;
+}
+
 .hero-text {
     padding-right: 40px;
     text-align: center;
@@ -541,6 +547,38 @@ p {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Hero stats row */
+.hero-stats {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 32px;
+    margin-top: 48px;
+    padding-top: 40px;
+    border-top: 1px solid var(--bg-border);
+}
+.hero-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.hero-stat-num {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-dark);
+    font-family: var(--font-heading);
+}
+.hero-stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.hero-stat-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--bg-border);
 }
 
 /* ============================================
@@ -1774,15 +1812,15 @@ p {
         font-size: 40px;
     }
 
-    .hero-visual {
-        padding-left: 0;
+    .hero-stats {
+        gap: 20px;
+    }
+    .hero-stat-num {
+        font-size: 22px;
     }
 
-    .hero-phone-frame {
-        width: 240px;
-    }
-    .phone-screen {
-        min-height: 400px;
+    .hero-visual {
+        padding-left: 0;
     }
 
     .hero-visual-card {
