@@ -3,6 +3,8 @@ Arrival Backend API Server
 FastAPI app with STT, Chat, TTS, and Documents endpoints.
 """
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,10 +16,19 @@ app = FastAPI(
     description="AI voice & camera assistant for trade workers",
 )
 
-# CORS — allow all origins in development
+# CORS — restrict origins in production, allow all in development
+_debug = os.getenv("DEBUG", "false").lower() == "true"
+_allowed_origins = (
+    ["*"] if _debug else [
+        "https://arrivalcompany.com",
+        "https://www.arrivalcompany.com",
+        "https://arrival-site.netlify.app",
+    ]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

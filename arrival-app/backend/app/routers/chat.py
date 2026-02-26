@@ -18,6 +18,11 @@ from app.middleware.auth import get_current_user
 router = APIRouter()
 
 
+MAX_MESSAGE_LENGTH = 10_000  # 10K chars
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB base64
+MAX_HISTORY_ITEMS = 50
+
+
 class ChatRequest(BaseModel):
     message: str
     image_base64: str | None = None
@@ -40,6 +45,14 @@ async def chat(
     AI Chat — send a question with an optional camera frame.
     Pass ?demo=true for canned trade responses without API keys.
     """
+    # Validate input sizes
+    if len(request.message) > MAX_MESSAGE_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Message too long (max {MAX_MESSAGE_LENGTH} chars)")
+    if request.image_base64 and len(request.image_base64) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="Image too large (max 10 MB)")
+    if len(request.conversation_history) > MAX_HISTORY_ITEMS:
+        raise HTTPException(status_code=400, detail=f"Conversation history too long (max {MAX_HISTORY_ITEMS} messages)")
+
     try:
         if demo:
             result = get_demo_chat_response(request.message)

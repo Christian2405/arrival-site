@@ -65,13 +65,19 @@ async def get_current_user(request: Request) -> dict:
 
     Skip auth if no JWT secret is configured (development mode).
     """
-    # If no JWT secret configured, return a dev user
+    # If no JWT secret configured, return a dev user (ONLY in debug mode)
     if not config.SUPABASE_JWT_SECRET:
-        return {
-            "user_id": "dev-user",
-            "email": "dev@arrival.ai",
-            "token": config.SUPABASE_SERVICE_ROLE_KEY,
-        }
+        if config.DEBUG:
+            return {
+                "user_id": "dev-user",
+                "email": "dev@arrival.ai",
+                "token": config.SUPABASE_SERVICE_ROLE_KEY,
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Server misconfiguration: JWT secret not set"
+            )
 
     # Extract Bearer token
     auth_header = request.headers.get("Authorization", "")
