@@ -207,8 +207,8 @@ exports.handler = async (event) => {
 
         let status = 'active';
         if (subscription.status === 'past_due') status = 'past_due';
-        if (subscription.status === 'canceled') status = 'canceled';
-        if (subscription.status === 'unpaid') status = 'unpaid';
+        if (subscription.status === 'canceled') status = 'cancelled';
+        if (subscription.status === 'unpaid') status = 'cancelled';
 
         const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
         await supabase
@@ -269,7 +269,7 @@ exports.handler = async (event) => {
           .from('subscriptions')
           .update({
             plan: 'free',
-            status: 'canceled',
+            status: 'cancelled',
             stripe_subscription_id: null
           })
           .eq('stripe_subscription_id', subId);
