@@ -323,17 +323,214 @@ p {
     justify-content: center;
 }
 
-.hero-phone-wrap {
+/* -- Hero phone mockup -- */
+.hero-phone-frame {
+    width: 280px;
+    background: #1a1714;
+    border-radius: 40px;
+    padding: 12px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
     position: relative;
+}
+.phone-notch {
+    width: 80px;
+    height: 24px;
+    background: #1a1714;
+    border-radius: 12px;
+    margin: 0 auto 8px;
+    position: relative;
+    z-index: 2;
+}
+.phone-screen {
+    background: #141414;
+    border-radius: 28px;
+    overflow: hidden;
+    padding: 10px 0 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 480px;
+}
+.phone-home-bar {
+    width: 80px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.2);
+    margin: 10px auto;
+}
+/* App header */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 14px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.app-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.app-logo-circle {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #D4842A;
+    color: white;
+    font-weight: 800;
+    font-size: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-family: var(--font-body);
 }
-
-.hero-phone {
-    max-width: 280px;
-    height: auto;
-    filter: drop-shadow(0 20px 60px rgba(0,0,0,0.3));
+.app-logo-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    font-family: var(--font-body);
+    line-height: 1.1;
+}
+.app-logo-sub {
+    font-size: 9px;
+    color: rgba(255,255,255,0.4);
+    font-family: var(--font-body);
+}
+.app-job-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.06);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-family: var(--font-body);
+}
+.app-job-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+}
+/* Chat messages */
+.app-chat {
+    flex: 1;
+    padding: 12px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.app-msg {
+    font-family: var(--font-body);
+    font-size: 11px;
+    line-height: 1.5;
+    border-radius: 14px;
+    padding: 10px 12px;
+}
+.app-msg-user {
+    background: #D4842A;
+    color: white;
+    align-self: flex-end;
+    max-width: 85%;
+    border-bottom-right-radius: 4px;
+    font-weight: 500;
+}
+.app-msg-ai {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.85);
+    align-self: flex-start;
+    max-width: 95%;
+    border-bottom-left-radius: 4px;
+}
+.app-ai-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.app-ai-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #D4842A;
+    color: white;
+    font-size: 9px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-body);
+}
+.app-ai-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+}
+.app-ai-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #D4842A;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+.app-ai-body {
+    font-size: 11px;
+    color: rgba(255,255,255,0.85);
+    line-height: 1.5;
+}
+.app-ai-steps {
+    font-size: 10px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.7;
+}
+.app-ai-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+.app-confidence {
+    font-size: 9px;
+    font-weight: 600;
+    color: #D4842A;
+    background: rgba(212,132,42,0.12);
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+.app-source {
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+/* Bottom input */
+.app-input-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 12px 8px;
+    padding: 8px 12px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.app-input-placeholder {
+    font-size: 11px;
+    color: rgba(255,255,255,0.25);
+    font-family: var(--font-body);
+}
+.app-mic-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #D4842A;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .hero-visual-card {
@@ -1581,8 +1778,11 @@ p {
         padding-left: 0;
     }
 
-    .hero-phone {
-        max-width: 220px;
+    .hero-phone-frame {
+        width: 240px;
+    }
+    .phone-screen {
+        min-height: 400px;
     }
 
     .hero-visual-card {
