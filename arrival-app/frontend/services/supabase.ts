@@ -10,10 +10,12 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn(
-    '⚠️ Supabase env vars not loaded! Restart Expo with: npx expo start --clear',
-    { SUPABASE_URL: SUPABASE_URL ? '✓' : '✗', SUPABASE_ANON_KEY: SUPABASE_ANON_KEY ? '✓' : '✗' }
-  );
+  const msg = 'Supabase env vars not loaded. Restart Expo with: npx expo start --clear';
+  console.error(msg, {
+    SUPABASE_URL: SUPABASE_URL ? 'set' : 'MISSING',
+    SUPABASE_ANON_KEY: SUPABASE_ANON_KEY ? 'set' : 'MISSING',
+  });
+  throw new Error(msg);
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

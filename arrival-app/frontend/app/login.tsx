@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,7 +20,7 @@ import ArrivalLogo from '../components/ArrivalLogo';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, isLoading } = useAuthStore();
+  const { signIn, signInWithGoogle, resetPassword, isLoading } = useAuthStore();
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -34,9 +35,33 @@ export default function LoginScreen() {
       return;
     }
 
-    const result = await signIn(email.trim(), password);
+    const result = await signIn(email.trim().toLowerCase(), password.trim());
+    if (result.error) {
+      // Make Supabase's generic error more helpful
+      if (result.error.includes('Invalid login credentials')) {
+        setError('Incorrect email or password. Try resetting your password below.');
+      } else {
+        setError(result.error);
+      }
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setError('Enter your email above, then tap "Forgot password?"');
+      return;
+    }
+    setError('');
+    const result = await resetPassword(trimmedEmail);
     if (result.error) {
       setError(result.error);
+    } else {
+      Alert.alert(
+        'Check your email',
+        `We sent a password reset link to ${trimmedEmail}. Follow the link to reset your password.`,
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -120,6 +145,14 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={handleForgotPassword}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.button, (isLoading || googleLoading) && styles.buttonDisabled]}
@@ -267,6 +300,16 @@ const styles = StyleSheet.create({
   eyeBtn: {
     paddingHorizontal: 14,
     paddingVertical: 14,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  forgotText: {
+    fontSize: 14,
+    color: Colors.accent,
+    fontWeight: '500',
   },
   button: {
     backgroundColor: Colors.buttonDark,
