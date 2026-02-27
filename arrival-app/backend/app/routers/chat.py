@@ -122,13 +122,13 @@ async def chat(
             user = await get_current_user(req)
             user_id = user["user_id"]
 
-            # 2. Retrieve memories for this user
-            memories = await retrieve_memories(user_id, request.message)
+            # 2. Parallel fetch: memories + team_id
+            memories, team_id = await asyncio.gather(
+                retrieve_memories(user_id, request.message),
+                get_user_team_id(user_id),
+            )
 
-            # Bug #1: Look up the user's team_id so we can search team documents too
-            team_id = await get_user_team_id(user_id)
-
-            # 3. Retrieve relevant document context (RAG) — include team namespace
+            # 3. Retrieve relevant document context (RAG) — needs team_id, so runs after
             rag_context = await retrieve_context(user_id, request.message, team_id=team_id)
 
             # 4. Call Claude with memories + RAG context
@@ -138,6 +138,8 @@ async def chat(
                 conversation_history=request.conversation_history,
                 user_memories=memories,
                 rag_context=rag_context,
+                max_tokens=300,
+                system_prompt_prefix="Keep responses concise — 2-4 sentences for simple questions, more detail only when the user asks a technical or safety question.",
             )
 
             # 5. Store new memories (fire-and-forget, non-blocking)

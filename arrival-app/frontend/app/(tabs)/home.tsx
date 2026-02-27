@@ -9,6 +9,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
 import { useConversationStore, Message } from '../../store/conversationStore';
@@ -699,18 +700,37 @@ export default function HomeScreen() {
                 </View>
               )}
 
+              {/* Image preview strip */}
+              {pendingImage && (
+                <View style={styles.imagePreviewStrip}>
+                  <View style={styles.imagePreviewThumb}>
+                    <Ionicons name="image" size={16} color={Colors.accent} />
+                  </View>
+                  <Text style={styles.imagePreviewText}>Photo attached</Text>
+                  <TouchableOpacity onPress={() => setPendingImage(undefined)} style={styles.imagePreviewRemove}>
+                    <Ionicons name="close-circle" size={18} color="rgba(0,0,0,0.4)" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Text input bar */}
               <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-                {/* Camera snap button */}
+                {/* Photo picker button */}
                 <TouchableOpacity
                   onPress={async () => {
-                    const frame = await captureFrame();
-                    if (frame) setPendingImage(frame);
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ['images'],
+                      base64: true,
+                      quality: 0.5,
+                    });
+                    if (!result.canceled && result.assets[0]?.base64) {
+                      setPendingImage(result.assets[0].base64);
+                    }
                   }}
                   style={styles.inputIconBtn}
                 >
                   <Ionicons
-                    name="camera"
+                    name="image-outline"
                     size={22}
                     color={pendingImage ? Colors.accent : Colors.textSecondary}
                   />
@@ -721,18 +741,21 @@ export default function HomeScreen() {
                   style={styles.textInput}
                   value={inputText}
                   onChangeText={setInputText}
-                  placeholder="Type a message..."
+                  placeholder="Ask anything..."
                   placeholderTextColor={Colors.textMuted}
                   editable={!isProcessing}
-                  returnKeyType="send"
-                  onSubmitEditing={handleTextSubmit}
+                  multiline={true}
+                  returnKeyType="default"
+                  blurOnSubmit={false}
                 />
 
-                {inputText.trim() ? (
-                  <TouchableOpacity onPress={handleTextSubmit} style={styles.sendBtn}>
-                    <Ionicons name="send" size={20} color="#FFF" />
-                  </TouchableOpacity>
-                ) : null}
+                <TouchableOpacity
+                  onPress={handleTextSubmit}
+                  disabled={!inputText.trim() || isProcessing}
+                  style={[styles.sendBtn, (!inputText.trim() || isProcessing) && { opacity: 0.3 }]}
+                >
+                  <Ionicons name="arrow-up" size={20} color="#FFF" />
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -965,22 +988,23 @@ const styles = StyleSheet.create({
   // --- Text Mode: Input bar ---
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingLeft: 8,
-    paddingRight: 6,
-    paddingVertical: 8,
-    minHeight: 56,
+    borderRadius: 24,
+    marginHorizontal: 12,
+    marginBottom: 4,
+    paddingLeft: 4,
+    paddingRight: 4,
+    paddingVertical: 4,
+    minHeight: 48,
+    maxHeight: 120,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   inputIconBtn: {
     width: 40,
@@ -1002,22 +1026,47 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.text,
-    paddingVertical: 0,
+    paddingVertical: 8,
     paddingHorizontal: 8,
-    letterSpacing: -0.2,
+    maxHeight: 100,
+    lineHeight: 20,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+
+  // --- Image preview strip ---
+  imagePreviewStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  imagePreviewThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: Colors.accentMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePreviewText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  imagePreviewRemove: {
+    padding: 4,
   },
 
   // --- Drawer ---
