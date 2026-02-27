@@ -12,7 +12,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // --- DEV MODE ---
-const IS_DEV = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
+const IS_DEV = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 // Store reference to original showPage
 const _originalShowPage = window.showPage;
@@ -356,10 +356,13 @@ async function ensureProfileExists(user) {
             account_type: 'pro'
         });
 
+        var trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 7);
         await sb.from('subscriptions').insert({
             user_id: user.id,
             plan: 'pro',
-            status: 'active'
+            status: 'active',
+            trial_ends_at: trialEnd.toISOString()
         });
     } catch (err) {
         console.error('ensureProfileExists error:', err);

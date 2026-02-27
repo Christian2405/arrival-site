@@ -12,6 +12,8 @@ from app.services.anthropic import analyze_frame
 
 router = APIRouter()
 
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB raw; base64 is ~1.37x larger
+
 
 class FrameRequest(BaseModel):
     image_base64: str
@@ -30,6 +32,10 @@ async def analyze(request: FrameRequest, req: Request):
     Returns alert=False if nothing notable, or alert=True with message + severity.
     """
     try:
+        # Validate image size before processing
+        if len(request.image_base64) > MAX_IMAGE_SIZE * 1.37:
+            raise HTTPException(status_code=400, detail="Image too large (max 5 MB)")
+
         # Auth required — this is a paid feature
         user = await get_current_user(req)
         result = await analyze_frame(request.image_base64)

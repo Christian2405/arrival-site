@@ -87,6 +87,12 @@ exports.handler = async (event) => {
         };
       }
 
+      // Verify the payment method belongs to this customer
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+      if (pm.customer !== sub.stripe_customer_id) {
+        return { statusCode: 403, headers, body: JSON.stringify({ error: 'Payment method does not belong to this account' }) };
+      }
+
       // Set as customer default
       await stripe.customers.update(sub.stripe_customer_id, {
         invoice_settings: { default_payment_method: paymentMethodId }
@@ -99,8 +105,7 @@ exports.handler = async (event) => {
         });
       }
 
-      // Get updated card info to return
-      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+      // Get updated card info to return (pm already retrieved above for validation)
       const card = pm.card ? {
         brand: pm.card.brand,
         last4: pm.card.last4,

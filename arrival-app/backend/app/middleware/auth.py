@@ -6,10 +6,10 @@ Supports both HS256 (legacy) and ES256 (current) Supabase JWTs
 by fetching the JWKS public keys from Supabase.
 """
 
+import time
 import jwt
 import json
 import httpx
-from functools import lru_cache
 from fastapi import Request, HTTPException
 from fastapi.security import HTTPBearer
 
@@ -17,20 +17,37 @@ from app import config
 
 security = HTTPBearer(auto_error=False)
 
+# TTL-based JWKS cache (refresh every hour)
+_jwks_cache: dict = {"data": None, "fetched_at": 0.0}
+_JWKS_TTL_SECONDS = 3600  # 1 hour
 
-@lru_cache(maxsize=1)
+
 def _get_jwks():
-    """Fetch and cache the Supabase JWKS public keys."""
+    """Fetch and cache the Supabase JWKS public keys with a 1-hour TTL."""
     if not config.SUPABASE_URL:
         return None
+
+    now = time.time()
+    if _jwks_cache["data"] is not None and (now - _jwks_cache["fetched_at"]) < _JWKS_TTL_SECONDS:
+        return _jwks_cache["data"]
+
     url = f"{config.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
     try:
         resp = httpx.get(url, headers={"apikey": config.SUPABASE_ANON_KEY}, timeout=10)
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        _jwks_cache["data"] = data
+        _jwks_cache["fetched_at"] = now
+        return data
     except Exception as e:
         print(f"[Auth] Failed to fetch JWKS: {e}")
-        return None
+        return _jwks_cache["data"]  # return stale data if available
+
+
+def _clear_jwks_cache():
+    """Clear the JWKS cache so the next call to _get_jwks() fetches fresh keys."""
+    _jwks_cache["data"] = None
+    _jwks_cache["fetched_at"] = 0.0
 
 
 def _get_signing_key(token: str):
@@ -110,4 +127,26 @@ async def get_current_user(request: Request) -> dict:
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+        # Keys may have rotated — clear cache and retry once
+        _clear_jwks_cache()
+        try:
+            signing_key, algorithms = _get_signing_key(token)
+            payload = jwt.decode(
+                token,
+                signing_key,
+                algorithms=algorithms,
+                audience="authenticated",
+            )
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token: no user ID")
+            return {
+                "user_id": user_id,
+                "email": payload.get("email", ""),
+                "role": payload.get("role", ""),
+                "token": token,
+            }
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")

@@ -4,6 +4,8 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM_EMAIL = 'Arrival <noreply@arrivalcompany.com>';
 
+function escapeHtml(str) { if (!str) return ''; return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 // ============================================
 // EMAIL TEMPLATES
 // ============================================
@@ -52,7 +54,7 @@ function baseTemplate(content) {
 
 // ─── WELCOME ─────────────────────────────────
 function welcomeEmail(firstName) {
-  const name = firstName || 'there';
+  const name = escapeHtml(firstName) || 'there';
   return {
     subject: 'Welcome to Arrival! 👷',
     html: baseTemplate(`
@@ -75,7 +77,7 @@ function welcomeEmail(firstName) {
 
 // ─── SUBSCRIPTION CONFIRMED ──────────────────
 function subscriptionConfirmedEmail(firstName, plan) {
-  const name = firstName || 'there';
+  const name = escapeHtml(firstName) || 'there';
   const planName = plan === 'business' ? 'Business' : 'Pro';
   const price = plan === 'business' ? '$250/month' : '$25/month';
   const dashboardUrl = plan === 'business'
@@ -117,7 +119,7 @@ function subscriptionConfirmedEmail(firstName, plan) {
 
 // ─── SUBSCRIPTION CANCELLED ──────────────────
 function subscriptionCancelledEmail(firstName) {
-  const name = firstName || 'there';
+  const name = escapeHtml(firstName) || 'there';
   return {
     subject: 'Your subscription has been cancelled',
     html: baseTemplate(`
@@ -138,7 +140,7 @@ function subscriptionCancelledEmail(firstName) {
 
 // ─── PAYMENT FAILED ──────────────────────────
 function paymentFailedEmail(firstName) {
-  const name = firstName || 'there';
+  const name = escapeHtml(firstName) || 'there';
   return {
     subject: 'Payment failed — action required',
     html: baseTemplate(`

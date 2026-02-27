@@ -48,7 +48,9 @@ exports.handler = async (event) => {
     }
 
     // Determine return URL
-    const origin = event.headers.origin || event.headers.referer?.replace(/\/[^/]*$/, '') || 'https://arrival-site.netlify.app';
+    const ALLOWED_ORIGINS = ['https://arrivalcompany.com', 'https://www.arrivalcompany.com'];
+    const rawOrigin = event.headers.origin || event.headers.referer?.match(/^https?:\/\/[^/]+/)?.[0] || '';
+    const origin = ALLOWED_ORIGINS.includes(rawOrigin) ? rawOrigin : 'https://arrivalcompany.com';
 
     // Check if user is on business plan to determine return path
     const { data: userRow } = await supabase

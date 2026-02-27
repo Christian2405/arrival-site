@@ -194,8 +194,8 @@ async function loadDocuments() {
                 '<td>' + escapeHtml(project) + '</td>' +
                 '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
                 '<td>' + date + '</td>' +
-                '<td><a href="#" class="table-action" onclick="viewDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">View</a> ' +
-                '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + d.storage_path + '\'); return false;">Delete</a></td>' +
+                '<td><a href="#" class="table-action" onclick="viewDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
+                '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
                 '</tr>';
         }).join('');
     }
@@ -314,7 +314,6 @@ async function handleDocUpload() {
 
 async function viewDocument(docId, storagePath) {
     try {
-        var result = sb.storage.from('documents').getPublicUrl(storagePath);
         // Since bucket is private, we need a signed URL
         var signedResult = await sb.storage.from('documents').createSignedUrl(storagePath, 3600);
         if (signedResult.error) throw signedResult.error;
@@ -677,7 +676,6 @@ async function handleCancelSubscription() {
 
     cancelBtn.classList.remove('btn-loading');
     cancelBtn.disabled = false;
-    closeModal('cancel-modal');
 }
 
 // ============================================
@@ -833,7 +831,10 @@ function hideUploadOverlay() {
 // HELPERS
 // ============================================
 
+function escapeAttr(str) { if (!str) return ''; return str.replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 function escapeHtml(str) {
+    if (!str) return '';
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;

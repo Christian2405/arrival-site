@@ -53,6 +53,19 @@ async def chat(
     if len(request.conversation_history) > MAX_HISTORY_ITEMS:
         raise HTTPException(status_code=400, detail=f"Conversation history too long (max {MAX_HISTORY_ITEMS} messages)")
 
+    # Sanitize conversation_history — only allow valid roles, truncate content
+    MAX_CONTENT_LENGTH = 10_000
+    request.conversation_history = [
+        {
+            "role": msg["role"],
+            "content": str(msg.get("content", ""))[:MAX_CONTENT_LENGTH],
+        }
+        for msg in request.conversation_history
+        if isinstance(msg, dict)
+        and msg.get("role") in ("user", "assistant")
+        and msg.get("content")
+    ]
+
     try:
         if demo:
             result = get_demo_chat_response(request.message)

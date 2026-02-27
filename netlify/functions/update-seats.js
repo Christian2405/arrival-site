@@ -91,8 +91,19 @@ exports.handler = async (event) => {
       item => item.price.id === PRICE_BIZ_SEAT
     );
 
+    if (!seatItem && action === 'add') {
+      await stripe.subscriptions.update(sub.stripe_subscription_id, {
+        items: [{ price: PRICE_BIZ_SEAT, quantity: seatCount }],
+        proration_behavior: 'create_prorations'
+      });
+      // Update team max_seats
+      if (teamRole?.team_id) {
+        await supabase.from('teams').update({ max_seats: 10 + seatCount }).eq('id', teamRole.team_id);
+      }
+      return { statusCode: 200, headers, body: JSON.stringify({ success: true, extraSeats: seatCount, newSeatCount: 10 + seatCount }) };
+    }
     if (!seatItem) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Seat line item not found on subscription' }) };
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'No extra seats to remove' }) };
     }
 
     const currentQuantity = seatItem.quantity || 0;
@@ -135,6 +146,11 @@ exports.handler = async (event) => {
       }],
       proration_behavior: 'create_prorations'
     });
+
+    // Update team max_seats in the database
+    if (teamRole?.team_id) {
+      await supabase.from('teams').update({ max_seats: 10 + newQuantity }).eq('id', teamRole.team_id);
+    }
 
     const newTotalSeats = 10 + newQuantity;
 

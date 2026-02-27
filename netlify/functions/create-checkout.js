@@ -91,7 +91,9 @@ exports.handler = async (event) => {
     }
 
     // Determine the correct dashboard URL for redirect
-    const origin = event.headers.origin || event.headers.referer?.replace(/\/[^/]*$/, '') || 'https://arrival-site.netlify.app';
+    const ALLOWED_ORIGINS = ['https://arrivalcompany.com', 'https://www.arrivalcompany.com'];
+    const rawOrigin = event.headers.origin || event.headers.referer?.match(/^https?:\/\/[^/]+/)?.[0] || '';
+    const origin = ALLOWED_ORIGINS.includes(rawOrigin) ? rawOrigin : 'https://arrivalcompany.com';
     const dashboardPath = plan === 'business' ? '/dashboard-business' : '/dashboard-individual';
 
     // Create Checkout Session

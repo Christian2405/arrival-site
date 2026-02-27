@@ -114,7 +114,7 @@ async def index_document(
     for i, chunk in enumerate(chunks):
         records.append({
             "_id": f"{document_id}_{i}",
-            "text": chunk[:1000],  # Pinecone metadata size limit
+            "text": chunk,  # Already sized to CHUNK_SIZE (2000 chars)
             "document_id": document_id,
             "user_id": user_id,
             "filename": filename,

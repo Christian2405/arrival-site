@@ -114,8 +114,22 @@ async function initAuth() {
     if (profileResult.data) currentProfile = profileResult.data;
 
     // Load subscription
-    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
+    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).in('status', ['active', 'trial_expired']).limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
+
+    // Check if trial has expired
+    var subStatus = currentSubscription ? currentSubscription.status : 'active';
+    if (subStatus === 'trial_expired') {
+        showTrialExpiredOverlay();
+        return;
+    }
+    if (currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id) {
+        var trialEnd = new Date(currentSubscription.trial_ends_at);
+        if (trialEnd < new Date()) {
+            showTrialExpiredOverlay();
+            return;
+        }
+    }
 
     // Pro plan users without a team always go to individual dashboard
     var subPlan = currentSubscription ? currentSubscription.plan : 'pro';
@@ -170,6 +184,11 @@ async function initAuth() {
         showToast('Subscription activated! Welcome to Business.');
         window.history.replaceState({}, '', window.location.pathname);
     }
+}
+
+function showTrialExpiredOverlay() {
+    var overlay = document.getElementById('trial-expired-overlay');
+    if (overlay) overlay.style.display = 'flex';
 }
 
 // ============================================
@@ -496,29 +515,37 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        // Delete from storage
-        await sb.storage.from('documents').remove([storagePath]);
-        // Delete DB record
-        var dbResult = await sb.from('documents').delete().eq('id', docId);
-        if (dbResult.error) throw dbResult.error;
+        // Delete through backend API so RAG vectors get cleaned up too
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
+
+        var resp = await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+            method: 'DELETE',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        });
+
+        if (!resp.ok) {
+            var errBody = await resp.text();
+            throw new Error(errBody || 'Delete failed');
+        }
 
         showToast('Document deleted.');
         await loadDocuments();
         loadHome();
-
-        // Best-effort RAG cleanup via backend
-        try {
-            var session = (await sb.auth.getSession()).data.session;
-            if (session) {
-                fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
-                    method: 'DELETE',
-                    headers: { 'Authorization': 'Bearer ' + session.access_token }
-                }).catch(function() {});
-            }
-        } catch (_) {}
     } catch (err) {
-        console.error('Delete error:', err);
-        showToast('Failed to delete document.', 'error');
+        console.error('Delete error (backend):', err);
+        // Fallback: direct delete if backend is unreachable
+        try {
+            await sb.storage.from('documents').remove([storagePath]);
+            var dbResult = await sb.from('documents').delete().eq('id', docId);
+            if (dbResult.error) throw dbResult.error;
+            showToast('Document deleted.');
+            await loadDocuments();
+            loadHome();
+        } catch (fallbackErr) {
+            console.error('Delete fallback error:', fallbackErr);
+            showToast('Failed to delete document.', 'error');
+        }
     }
 }
 
@@ -636,6 +663,15 @@ async function handleInvite() {
             return;
         }
 
+        // Send invite email (fire-and-forget)
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+        fetch('/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ to: email, template: 'invite', args: [email] })
+        }).catch(function(err) { console.error('Invite email error:', err); });
+
         showToast('Invite sent to ' + email + '.');
         closeModal('invite-modal');
         emailInput.value = '';
@@ -697,7 +733,19 @@ async function handleRemoveMember() {
 }
 
 async function resendInvite(memberId, email) {
-    showToast('Invite resent to ' + email + '.');
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+        await fetch('/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ to: email, template: 'invite', args: [email] })
+        });
+        showToast('Invite resent to ' + email + '.');
+    } catch (err) {
+        console.error('Resend invite error:', err);
+        showToast('Failed to resend invite.', 'error');
+    }
 }
 
 // ============================================

@@ -16,6 +16,8 @@ const PRICE_BIZ_SEAT = 'price_1T2wmDAO3BMpwX67JSkM2fkF';
 
 const FROM_EMAIL = 'Arrival <noreply@arrivalcompany.com>';
 
+function escapeHtml(str) { if (!str) return ''; return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 // ============================================
 // EMAIL HELPER
 // ============================================
@@ -87,16 +89,16 @@ exports.handler = async (event) => {
           break;
         }
 
-        // Update subscriptions table
+        // Upsert subscriptions table (handles case where no row exists yet)
         await supabase
           .from('subscriptions')
-          .update({
+          .upsert({
+            user_id: userId,
             plan: plan,
             status: 'active',
             stripe_customer_id: session.customer,
             stripe_subscription_id: session.subscription
-          })
-          .eq('user_id', userId);
+          }, { onConflict: 'user_id' });
 
         // Update user account type
         await supabase
@@ -172,7 +174,7 @@ exports.handler = async (event) => {
 
           await sendEmail(user.email, `You're now on ${planName}! 🎉`, `
             <h1>You're on the ${planName} plan!</h1>
-            <p>Thanks for upgrading, ${user.first_name || 'there'}. Your subscription is now active and you have full access to all ${planName} features.</p>
+            <p>Thanks for upgrading, ${escapeHtml(user.first_name) || 'there'}. Your subscription is now active and you have full access to all ${planName} features.</p>
             <div class="highlight">
               <div class="highlight-label">Your plan</div>
               <div class="highlight-value">${planName} &mdash; ${price}</div>
@@ -206,6 +208,7 @@ exports.handler = async (event) => {
         }
 
         let status = 'active';
+        if (subscription.cancel_at_period_end) status = 'cancel_at_period_end';
         if (subscription.status === 'past_due') status = 'past_due';
         if (subscription.status === 'canceled') status = 'cancelled';
         if (subscription.status === 'unpaid') status = 'cancelled';
@@ -215,6 +218,7 @@ exports.handler = async (event) => {
           .from('subscriptions')
           .update({
             status: status,
+            cancel_at_period_end: !!subscription.cancel_at_period_end,
             current_period_end: periodEnd
           })
           .eq('stripe_subscription_id', subId);
@@ -284,7 +288,7 @@ exports.handler = async (event) => {
         if (cancelUser.email) {
           await sendEmail(cancelUser.email, 'Your subscription has been cancelled', `
             <h1>Subscription cancelled</h1>
-            <p>Hi ${cancelUser.first_name || 'there'}, your paid subscription has ended and your account has been moved to the Free plan.</p>
+            <p>Hi ${escapeHtml(cancelUser.first_name) || 'there'}, your paid subscription has ended and your account has been moved to the Free plan.</p>
             <p>You'll still have access to the free features — 10 queries per day, voice + text, and all trades.</p>
             <div class="highlight">
               <div class="highlight-label">Current plan</div>
@@ -324,7 +328,7 @@ exports.handler = async (event) => {
           if (failUser.email) {
             await sendEmail(failUser.email, 'Payment failed — action required', `
               <h1>Payment failed</h1>
-              <p>Hi ${failUser.first_name || 'there'}, we weren't able to process your latest payment. Your subscription is now past due.</p>
+              <p>Hi ${escapeHtml(failUser.first_name) || 'there'}, we weren't able to process your latest payment. Your subscription is now past due.</p>
               <p>Please update your payment method to keep your access. If we can't collect payment, your account will be downgraded to the Free plan.</p>
               <a href="https://arrivalcompany.com/dashboard-individual" class="btn">Update Payment Method</a>
               <hr class="divider">

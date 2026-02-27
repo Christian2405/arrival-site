@@ -8,6 +8,17 @@ import anthropic
 
 from app import config
 
+# Lazy singleton — avoid re-creating the client on every request
+_client: anthropic.Anthropic | None = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    """Return a shared Anthropic client, creating it on first use."""
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    return _client
+
 
 async def chat_with_claude(
     message: str,
@@ -24,7 +35,7 @@ async def chat_with_claude(
     if not config.ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY not set. Add it to your .env file.")
 
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = _get_client()
 
     # Build messages array from history
     messages = []
@@ -89,6 +100,9 @@ When you use information from these documents, cite the filename as your source.
         messages=messages,
     )
 
+    if not response.content:
+        raise ValueError("Empty AI response")
+
     # Determine source attribution
     source = "Claude AI Analysis"
     if rag_context:
@@ -113,7 +127,7 @@ async def analyze_frame(image_base64: str) -> dict:
     if not config.ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY not set.")
 
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = _get_client()
 
     analysis_prompt = """You are a job site safety and quality monitor for trade workers.
 
@@ -153,6 +167,9 @@ Be concise — the worker is on a job site and will hear this via text-to-speech
         system=analysis_prompt,
         messages=messages,
     )
+
+    if not response.content:
+        raise ValueError("Empty AI response")
 
     text = response.content[0].text.strip()
 

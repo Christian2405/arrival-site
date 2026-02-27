@@ -40,6 +40,7 @@ exports.handler = async (event) => {
       .from('subscriptions')
       .select('stripe_subscription_id')
       .eq('user_id', user.id)
+      .eq('status', 'active')
       .single();
 
     if (!sub || !sub.stripe_subscription_id) {
@@ -54,6 +55,12 @@ exports.handler = async (event) => {
     const cancelled = await stripe.subscriptions.update(sub.stripe_subscription_id, {
       cancel_at_period_end: true
     });
+
+    // Update local DB to reflect cancellation pending
+    await supabase
+      .from('subscriptions')
+      .update({ cancel_at_period_end: true })
+      .eq('user_id', user.id);
 
     return {
       statusCode: 200,
