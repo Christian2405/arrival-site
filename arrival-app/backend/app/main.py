@@ -3,33 +3,68 @@ Arrival Backend API Server
 FastAPI app with STT, Chat, TTS, and Documents endpoints.
 """
 
+import asyncio
+import logging
 import os
 
+import httpx
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers
 
+logger = logging.getLogger(__name__)
+
+# --- Keep-alive to prevent Render free tier from sleeping ---
+KEEP_ALIVE_INTERVAL = 13 * 60  # 13 minutes (Render sleeps after 15)
+
+async def _keep_alive():
+    """Ping own health endpoint to prevent Render free tier from sleeping."""
+    external_url = os.getenv("RENDER_EXTERNAL_URL")
+    if not external_url:
+        logger.info("[keep-alive] RENDER_EXTERNAL_URL not set — skipping keep-alive (not on Render)")
+        return
+
+    health_url = f"{external_url}/api/health"
+    logger.info(f"[keep-alive] Started — pinging {health_url} every {KEEP_ALIVE_INTERVAL}s")
+
+    async with httpx.AsyncClient() as client:
+        while True:
+            await asyncio.sleep(KEEP_ALIVE_INTERVAL)
+            try:
+                resp = await client.get(health_url, timeout=10)
+                logger.debug(f"[keep-alive] Pinged → {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"[keep-alive] Ping failed: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle — launches keep-alive task."""
+    task = asyncio.create_task(_keep_alive())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 app = FastAPI(
     title="Arrival API",
     version="2.0.0",
     description="AI voice & camera assistant for trade workers",
+    lifespan=lifespan,
 )
 
-# CORS — restrict origins in production, allow all in development
-_debug = os.getenv("DEBUG", "false").lower() == "true"
-_allowed_origins = (
-    ["*"] if _debug else [
-        "https://arrivalcompany.com",
-        "https://www.arrivalcompany.com",
-        "https://arrival-site.netlify.app",
-    ]
-)
-
+# CORS — allow all origins.
+# This API is consumed by a React Native mobile app which doesn't
+# run in a browser origin, so restrictive CORS just breaks things.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,   # Must be False when origins is "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )

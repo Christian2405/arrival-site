@@ -27,5 +27,7 @@ services:
         sync: false
       - key: PINECONE_INDEX_NAME
         sync: false
+      - key: ELEVENLABS_JOB_VOICE_ID
+        sync: false
       - key: PORT
         value: "8000"

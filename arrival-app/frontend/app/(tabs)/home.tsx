@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
   Animated, Keyboard, Platform, Alert, KeyboardAvoidingView, Dimensions,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -330,9 +331,12 @@ export default function HomeScreen() {
         setVoiceState('idle');
       } catch (error: any) {
         console.error('Voice chat error:', error);
+        const isNet = !error?.response && (error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK' || error?.message?.includes('Network'));
         addMessage({
           id: generateId(), role: 'assistant',
-          content: 'Voice processing failed. Please check your connection and try again.',
+          content: isNet
+            ? 'Server is starting up — please try again in a moment.'
+            : 'Voice processing failed. Please try again.',
           displayMode: 'voice', timestamp: new Date(),
         });
         setVoiceState('idle');
@@ -393,9 +397,22 @@ export default function HomeScreen() {
 
       // NO TTS in Text Mode -- text in = text out
     } catch (error: any) {
+      const isNetwork = !error?.response && (
+        error?.code === 'ECONNABORTED' ||
+        error?.code === 'ERR_NETWORK' ||
+        error?.message?.includes('Network') ||
+        error?.message?.includes('timeout')
+      );
+      const isServerDown = error?.response?.status === 502 || error?.response?.status === 503;
+      let errorMsg = 'Something went wrong. Please try again.';
+      if (isNetwork || isServerDown) {
+        errorMsg = 'Server is starting up — this can take a moment on the first request. Please try again.';
+      } else if (error?.response?.status === 429) {
+        errorMsg = 'Too many requests. Please wait a moment and try again.';
+      }
       addMessage({
         id: generateId(), role: 'assistant',
-        content: error?.message?.includes('Network') ? 'Cannot reach the server. Please check your connection.' : 'Something went wrong. Please try again.',
+        content: errorMsg,
         displayMode: 'text', timestamp: new Date(),
       });
     } finally {
@@ -647,117 +664,119 @@ export default function HomeScreen() {
           )}
 
           {interactionMode === 'text' && (
-            <View style={styles.modeContainer}>
-              {/* Chat messages */}
-              {showChat && textMessages.length > 0 ? (
-                <Animated.View style={[styles.chatArea, { opacity: chatSlide, transform: [{ translateY: chatSlide.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-                  <FlatList
-                    ref={flatListRef}
-                    data={textMessages}
-                    keyboardDismissMode="on-drag"
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                      <ChatBubble
-                        message={item}
-                        onSave={item.role === 'assistant' ? () => {
-                          saveAnswer({
-                            id: item.id, question: '', answer: item.content,
-                            source: item.source, trade: currentConversation?.trade || 'General',
-                            savedAt: new Date(),
-                          });
-                        } : undefined}
-                      />
-                    )}
-                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
-                    showsVerticalScrollIndicator={false}
-                    inverted={false}
-                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                    keyboardShouldPersistTaps="handled"
-                  />
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View style={styles.modeContainer}>
+                {/* Chat messages */}
+                {showChat && textMessages.length > 0 ? (
+                  <Animated.View style={[styles.chatArea, { opacity: chatSlide, transform: [{ translateY: chatSlide.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
+                    {/* Collapse handle at top */}
+                    <TouchableOpacity
+                      onPress={() => { dismissChat(); Keyboard.dismiss(); }}
+                      style={styles.collapseBar}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.collapseHandle} />
+                    </TouchableOpacity>
 
-                  {/* Dismiss button */}
-                  <TouchableOpacity
-                    onPress={() => { dismissChat(); Keyboard.dismiss(); }}
-                    style={styles.collapseBar}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.collapseHandle} />
-                    <Ionicons name="chevron-down" size={16} color="rgba(0,0,0,0.3)" />
-                  </TouchableOpacity>
-                </Animated.View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <ArrivalLogo width={48} color="#FFF" />
-                  <Text style={styles.emptyTitle}>Arrival AI</Text>
-                  <Text style={styles.emptySubtitle}>Type a question to get started</Text>
-                </View>
-              )}
-
-              {/* Processing indicator */}
-              {isProcessing && (
-                <View style={styles.processingRow}>
-                  <Text style={styles.processingText}>Thinking...</Text>
-                </View>
-              )}
-
-              {/* Image preview strip */}
-              {pendingImage && (
-                <View style={styles.imagePreviewStrip}>
-                  <View style={styles.imagePreviewThumb}>
-                    <Ionicons name="image" size={16} color={Colors.accent} />
+                    <FlatList
+                      ref={flatListRef}
+                      data={textMessages}
+                      keyboardDismissMode="on-drag"
+                      keyExtractor={(item) => item.id}
+                      renderItem={({ item }) => (
+                        <ChatBubble
+                          message={item}
+                          onSave={item.role === 'assistant' ? () => {
+                            saveAnswer({
+                              id: item.id, question: '', answer: item.content,
+                              source: item.source, trade: currentConversation?.trade || 'General',
+                              savedAt: new Date(),
+                            });
+                          } : undefined}
+                        />
+                      )}
+                      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8, paddingTop: 4 }}
+                      showsVerticalScrollIndicator={false}
+                      inverted={false}
+                      onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                      keyboardShouldPersistTaps="handled"
+                    />
+                  </Animated.View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <ArrivalLogo width={48} color="#FFF" />
+                    <Text style={styles.emptyTitle}>Arrival AI</Text>
+                    <Text style={styles.emptySubtitle}>Type a question to get started</Text>
                   </View>
-                  <Text style={styles.imagePreviewText}>Photo attached</Text>
-                  <TouchableOpacity onPress={() => setPendingImage(undefined)} style={styles.imagePreviewRemove}>
-                    <Ionicons name="close-circle" size={18} color="rgba(0,0,0,0.4)" />
-                  </TouchableOpacity>
+                )}
+
+                {/* Processing indicator */}
+                {isProcessing && (
+                  <View style={styles.processingRow}>
+                    <Text style={styles.processingText}>Thinking...</Text>
+                  </View>
+                )}
+
+                {/* Image preview strip */}
+                {pendingImage && (
+                  <View style={styles.imagePreviewStrip}>
+                    <View style={styles.imagePreviewThumb}>
+                      <Ionicons name="image" size={14} color={Colors.accent} />
+                    </View>
+                    <Text style={styles.imagePreviewText}>Photo attached</Text>
+                    <TouchableOpacity onPress={() => setPendingImage(undefined)} style={styles.imagePreviewRemove}>
+                      <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.5)" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Input bar container — safe area padding goes OUTSIDE the bar */}
+                <View style={{ paddingBottom: Math.max(insets.bottom, 6), paddingHorizontal: 8 }}>
+                  <View style={styles.inputBar}>
+                    {/* Photo picker */}
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                          mediaTypes: ['images'],
+                          base64: true,
+                          quality: 0.5,
+                        });
+                        if (!result.canceled && result.assets[0]?.base64) {
+                          setPendingImage(result.assets[0].base64);
+                        }
+                      }}
+                      style={styles.inputIconBtn}
+                    >
+                      <Ionicons
+                        name="image-outline"
+                        size={20}
+                        color={pendingImage ? Colors.accent : 'rgba(255,255,255,0.5)'}
+                      />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={styles.textInput}
+                      value={inputText}
+                      onChangeText={setInputText}
+                      placeholder="Ask anything..."
+                      placeholderTextColor="rgba(255,255,255,0.35)"
+                      editable={!isProcessing}
+                      multiline={true}
+                      returnKeyType="default"
+                      blurOnSubmit={false}
+                    />
+
+                    <TouchableOpacity
+                      onPress={handleTextSubmit}
+                      disabled={!inputText.trim() || isProcessing}
+                      style={[styles.sendBtn, (!inputText.trim() || isProcessing) && { opacity: 0.25 }]}
+                    >
+                      <Ionicons name="arrow-up" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              )}
-
-              {/* Text input bar */}
-              <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-                {/* Photo picker button */}
-                <TouchableOpacity
-                  onPress={async () => {
-                    const result = await ImagePicker.launchImageLibraryAsync({
-                      mediaTypes: ['images'],
-                      base64: true,
-                      quality: 0.5,
-                    });
-                    if (!result.canceled && result.assets[0]?.base64) {
-                      setPendingImage(result.assets[0].base64);
-                    }
-                  }}
-                  style={styles.inputIconBtn}
-                >
-                  <Ionicons
-                    name="image-outline"
-                    size={22}
-                    color={pendingImage ? Colors.accent : Colors.textSecondary}
-                  />
-                  {pendingImage && <View style={styles.imageBadge} />}
-                </TouchableOpacity>
-
-                <TextInput
-                  style={styles.textInput}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Ask anything..."
-                  placeholderTextColor={Colors.textMuted}
-                  editable={!isProcessing}
-                  multiline={true}
-                  returnKeyType="default"
-                  blurOnSubmit={false}
-                />
-
-                <TouchableOpacity
-                  onPress={handleTextSubmit}
-                  disabled={!inputText.trim() || isProcessing}
-                  style={[styles.sendBtn, (!inputText.trim() || isProcessing) && { opacity: 0.3 }]}
-                >
-                  <Ionicons name="arrow-up" size={20} color="#FFF" />
-                </TouchableOpacity>
               </View>
-            </View>
+            </TouchableWithoutFeedback>
           )}
 
           {interactionMode === 'job' && (
@@ -965,15 +984,14 @@ const styles = StyleSheet.create({
   collapseBar: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 40,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   collapseHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-    marginBottom: 4,
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   processingRow: {
     paddingHorizontal: 16,
@@ -989,52 +1007,45 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    marginHorizontal: 12,
-    marginBottom: 4,
-    paddingLeft: 4,
-    paddingRight: 4,
-    paddingVertical: 4,
-    minHeight: 48,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 22,
+    paddingLeft: 6,
+    paddingRight: 5,
+    paddingVertical: 5,
+    minHeight: 44,
     maxHeight: 120,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   inputIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
   },
   imageBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.accent,
   },
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text,
-    paddingVertical: 8,
+    color: '#FFFFFF',
+    paddingVertical: 6,
     paddingHorizontal: 8,
     maxHeight: 100,
     lineHeight: 20,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1044,18 +1055,18 @@ const styles = StyleSheet.create({
   imagePreviewStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 12,
-    marginHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10,
+    marginHorizontal: 12,
     marginBottom: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   imagePreviewThumb: {
-    width: 28,
-    height: 28,
+    width: 24,
+    height: 24,
     borderRadius: 6,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: 'rgba(212,132,42,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1063,7 +1074,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: 'rgba(255,255,255,0.6)',
   },
   imagePreviewRemove: {
     padding: 4,

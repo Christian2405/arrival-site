@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
 
 // Bug #2: Guard against missing env var — warn loudly instead of silent "undefined/api"
@@ -45,6 +45,44 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+// --- Retry interceptor for Render cold starts ---
+// Render free tier sleeps after 15min of inactivity; first request after
+// sleeping gets a network error or 502/503 while the server boots (~30-60s).
+// Auto-retry up to 2 times with increasing delays so the user doesn't see
+// "Cannot reach server" on cold starts.
+interface RetryConfig extends InternalAxiosRequestConfig {
+  _retryCount?: number;
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const config = error.config as RetryConfig | undefined;
+    if (!config || (config._retryCount ?? 0) >= 2) {
+      return Promise.reject(error);
+    }
+
+    // Only retry on network errors (cold start timeout) or server-starting codes
+    const isNetworkError = !error.response && (
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ERR_NETWORK' ||
+      error.message?.includes('Network') ||
+      error.message?.includes('timeout')
+    );
+    const isServerStarting = error.response?.status === 502 || error.response?.status === 503;
+
+    if (isNetworkError || isServerStarting) {
+      config._retryCount = (config._retryCount ?? 0) + 1;
+      const delay = config._retryCount * 4000; // 4s first retry, 8s second
+      console.log(`[API] Retry ${config._retryCount}/2 after ${delay}ms (server may be waking up)...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return api(config);
+    }
+
+    return Promise.reject(error);
+  },
+);
 
 // --- AI API ---
 
