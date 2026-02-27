@@ -89,11 +89,13 @@ export const aiAPI = {
     imageBase64?: string,
     conversationHistory: any[] = [],
     demoMode: boolean = false,
+    mode: string = 'default',
   ) => {
     const response = await api.post(`/voice-chat${demoMode ? '?demo=true' : ''}`, {
       audio_base64: audioBase64,
       image_base64: imageBase64 || null,
       conversation_history: conversationHistory,
+      mode: mode,
     });
     return response.data as {
       transcript: string;

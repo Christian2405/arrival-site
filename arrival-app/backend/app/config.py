@@ -26,6 +26,7 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 # --- ElevenLabs (Text-to-Speech) ---
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB")
+ELEVENLABS_JOB_VOICE_ID = os.getenv("ELEVENLABS_JOB_VOICE_ID", "TxGEqnHWrfWFTfGW9XjX")  # Josh - calmer, conversational
 
 # --- Supabase ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 ELEVENLABS_URL = "https://api.elevenlabs.io/v1/text-to-speech"
 
 
-async def text_to_speech(text: str) -> str:
+async def text_to_speech(
+    text: str,
+    voice_id: str | None = None,
+    voice_settings: dict | None = None,
+) -> str:
     """
     Convert text to speech using ElevenLabs.
     Returns base64-encoded MP3 audio.
@@ -22,7 +26,15 @@ async def text_to_speech(text: str) -> str:
     if not config.ELEVENLABS_API_KEY:
         raise ValueError("ELEVENLABS_API_KEY not set. Add it to your .env file.")
 
-    url = f"{ELEVENLABS_URL}/{config.ELEVENLABS_VOICE_ID}"
+    url = f"{ELEVENLABS_URL}/{voice_id or config.ELEVENLABS_VOICE_ID}"
+
+    default_voice_settings = {
+        "stability": 0.4,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": True,
+        "speed": 1.15,
+    }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
@@ -35,13 +47,7 @@ async def text_to_speech(text: str) -> str:
             json={
                 "text": text,
                 "model_id": "eleven_turbo_v2_5",
-                "voice_settings": {
-                    "stability": 0.4,
-                    "similarity_boost": 0.75,
-                    "style": 0.0,
-                    "use_speaker_boost": True,
-                    "speed": 1.15,
-                },
+                "voice_settings": voice_settings if voice_settings is not None else default_voice_settings,
             },
         )
 

@@ -98,6 +98,7 @@ export default function HomeScreen() {
         base64: true,
         quality: 0.3,
         exif: false,
+        shutterSound: false,
       });
       return photo?.base64 || undefined;
     } catch {
@@ -251,93 +252,92 @@ export default function HomeScreen() {
     }
   }, [saveAnswer]);
 
-  // --- DEFAULT MODE: PTT handlers ---
-  const handlePTTStart = useCallback(async () => {
-    if (isProcessing) return;
-    // Bug 1: Prevent double-press with mutex
+  // --- DEFAULT MODE: PTT toggle handler ---
+  const handlePTTToggle = useCallback(async () => {
+    if (voiceState === 'processing') return; // busy, ignore
+
+    // Tap during speaking → stop audio
+    if (voiceState === 'speaking') {
+      await stopAudio();
+      setVoiceState('idle');
+      return;
+    }
+
+    // Tap during listening → stop recording and process
+    if (voiceState === 'listening') {
+      // Same logic as the old handlePTTEnd
+      const rec = recordingRef.current;
+      if (!rec) { setVoiceState('idle'); return; }
+      setIsRecording(false);
+      setVoiceState('processing');
+      setIsProcessing(true);
+
+      try {
+        recordingRef.current = null;
+        setRecording(null);
+
+        let uri: string | null | undefined = null;
+        try {
+          await rec.stopAndUnloadAsync();
+          uri = rec.getURI();
+        } catch (stopErr) {
+          console.error('Failed to stop recording:', stopErr);
+        }
+
+        if (!uri) { setVoiceState('idle'); setIsProcessing(false); return; }
+
+        const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+        const frameBase64 = pttFrameRef.current;
+        pttFrameRef.current = undefined;
+
+        const currentDemoMode = useSettingsStore.getState().demoMode;
+        const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+        const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+        const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, currentDemoMode, 'default');
+
+        if (SAVE_COMMANDS.test(result.transcript)) {
+          handleVoiceSaveCommand();
+          setVoiceState('idle');
+          setIsProcessing(false);
+          return;
+        }
+
+        addMessage({
+          id: generateId(), role: 'user', content: result.transcript,
+          displayMode: 'voice', timestamp: new Date(),
+        });
+        addMessage({
+          id: generateId(), role: 'assistant', content: result.response,
+          source: result.source, confidence: validateConfidence(result.confidence),
+          displayMode: 'voice', timestamp: new Date(),
+        });
+
+        if (result.audio_base64) {
+          setVoiceState('speaking');
+          await playAudio(result.audio_base64);
+        }
+        setVoiceState('idle');
+      } catch (error: any) {
+        console.error('Voice chat error:', error);
+        setVoiceState('idle');
+      } finally {
+        setIsProcessing(false);
+        Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
+      }
+      return;
+    }
+
+    // Tap during idle → start recording
     if (pttStartingRef.current) return;
     pttStartingRef.current = true;
     try {
       setVoiceState('listening');
-      // Capture frame silently in background
       captureFrame().then(frame => { pttFrameRef.current = frame; });
       await startRecording();
     } finally {
       pttStartingRef.current = false;
     }
-  }, [isProcessing, captureFrame, startRecording]);
-
-  const handlePTTEnd = useCallback(async () => {
-    // Bug 1: Use ref instead of stale state
-    const rec = recordingRef.current;
-    if (!rec) return;
-    setIsRecording(false);
-    setVoiceState('processing');
-    setIsProcessing(true);
-
-    try {
-      // Bug 7: Null refs BEFORE stopAndUnload so a throw doesn't leave dead refs
-      recordingRef.current = null;
-      setRecording(null);
-
-      let uri: string | null | undefined = null;
-      try {
-        await rec.stopAndUnloadAsync();
-        uri = rec.getURI();
-      } catch (stopErr) {
-        console.error('Failed to stop recording:', stopErr);
-        // Recording ref already nulled above
-      }
-
-      if (!uri) { setVoiceState('idle'); setIsProcessing(false); return; }
-
-      const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
-      const frameBase64 = pttFrameRef.current;
-      pttFrameRef.current = undefined;
-
-      // Bug 5 (partial): Read demoMode from store at call time
-      const currentDemoMode = useSettingsStore.getState().demoMode;
-
-      // Use composite endpoint for speed
-      const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
-      const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-      const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, currentDemoMode);
-
-      // Check for save commands
-      if (SAVE_COMMANDS.test(result.transcript)) {
-        handleVoiceSaveCommand();
-        setVoiceState('idle');
-        setIsProcessing(false);
-        return;
-      }
-
-      // Store messages (hidden from UI in Default Mode, visible in History)
-      addMessage({
-        id: generateId(), role: 'user', content: result.transcript,
-        displayMode: 'voice', timestamp: new Date(),
-      });
-      addMessage({
-        id: generateId(), role: 'assistant', content: result.response,
-        source: result.source, confidence: validateConfidence(result.confidence), // Bug 14
-        displayMode: 'voice', timestamp: new Date(),
-      });
-
-      // Play voice response
-      // Bug 11: Check for audio_base64 before playing
-      if (result.audio_base64) {
-        setVoiceState('speaking');
-        await playAudio(result.audio_base64);
-      }
-      setVoiceState('idle');
-    } catch (error: any) {
-      console.error('Voice chat error:', error);
-      setVoiceState('idle');
-    } finally {
-      setIsProcessing(false);
-      // Bug 6: Reset audio mode in case recording mode was left on after error
-      Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
-    }
-  }, [addMessage, playAudio, handleVoiceSaveCommand, setIsRecording, setIsProcessing]);
+  }, [voiceState, isProcessing, stopAudio, startRecording, captureFrame, addMessage, playAudio, handleVoiceSaveCommand, setIsRecording, setIsProcessing]);
 
   // --- TEXT MODE: Send message ---
   const handleTextSubmit = useCallback(async () => {
@@ -425,9 +425,9 @@ export default function HomeScreen() {
 
     const controller = new JobModeController(
       {
-        cooldownAfterSpeaking: 8000,
-        cooldownAfterDismiss: 15000,
-        maxAlertsPerMinute: 3,
+        cooldownAfterSpeaking: 2000,
+        cooldownAfterDismiss: 5000,
+        maxAlertsPerMinute: 6,
       },
       {
         onAlert: async (message, severity) => {
@@ -453,7 +453,7 @@ export default function HomeScreen() {
             const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
             // Bug 5: Read demoMode from store at call time
             const currentDemoMode = useSettingsStore.getState().demoMode;
-            const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode);
+            const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
 
             addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
             addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() }); // Bug 14
@@ -597,18 +597,23 @@ export default function HomeScreen() {
               {/* Large PTT button at bottom */}
               <View style={styles.pttContainer}>
                 <Pressable
-                  onPressIn={handlePTTStart}
-                  onPressOut={handlePTTEnd}
-                  disabled={isProcessing}
+                  onPress={handlePTTToggle}
+                  disabled={voiceState === 'processing'}
                   style={({ pressed }) => [
                     styles.pttButton,
                     pressed && styles.pttButtonActive,
                     voiceState === 'listening' && styles.pttButtonActive,
-                    isProcessing && styles.pttButtonDisabled,
+                    voiceState === 'speaking' && styles.pttButtonSpeaking,
+                    voiceState === 'processing' && styles.pttButtonDisabled,
                   ]}
                 >
                   <Ionicons
-                    name={voiceState === 'listening' ? 'radio' : 'mic'}
+                    name={
+                      voiceState === 'speaking' ? 'stop-circle' :
+                      voiceState === 'listening' ? 'radio' :
+                      voiceState === 'processing' ? 'hourglass' :
+                      'mic'
+                    }
                     size={32}
                     color="#FFF"
                   />
@@ -625,6 +630,7 @@ export default function HomeScreen() {
                   <FlatList
                     ref={flatListRef}
                     data={textMessages}
+                    keyboardDismissMode="on-drag"
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => (
                       <ChatBubble
@@ -646,8 +652,13 @@ export default function HomeScreen() {
                   />
 
                   {/* Dismiss button */}
-                  <TouchableOpacity onPress={dismissChat} style={styles.dismissBtn}>
-                    <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.6)" />
+                  <TouchableOpacity
+                    onPress={() => { dismissChat(); Keyboard.dismiss(); }}
+                    style={styles.collapseBar}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.collapseHandle} />
+                    <Ionicons name="chevron-down" size={16} color="rgba(0,0,0,0.3)" />
                   </TouchableOpacity>
                 </Animated.View>
               ) : (
@@ -872,6 +883,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.recording,
     transform: [{ scale: 1.1 }],
   },
+  pttButtonSpeaking: {
+    backgroundColor: '#4A90D9',
+  },
   pttButtonDisabled: {
     opacity: 0.4,
   },
@@ -912,6 +926,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 6,
   },
+  collapseBar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 40,
+  },
+  collapseHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    marginBottom: 4,
+  },
   processingRow: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -926,18 +953,21 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.glassBg || 'rgba(255,255,255,0.92)',
-    borderRadius: 26,
-    marginHorizontal: 12,
-    paddingLeft: 6,
-    paddingRight: 5,
-    paddingTop: 6,
-    height: 52,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingLeft: 8,
+    paddingRight: 6,
+    paddingVertical: 8,
+    minHeight: 56,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
   inputIconBtn: {
     width: 40,

@@ -114,7 +114,7 @@ export default class JobModeController {
       this.lastSpeakTime = Date.now();
       this.callbacks.onStateChange('monitoring');
       // BUG 11 FIX: use tracked timeout
-      this.scheduleTimeout(() => this.vad.resume(), 1000);
+      this.scheduleTimeout(() => this.vad.resume(), 500);
       this.operationLock = false;
     }
   }
@@ -144,7 +144,7 @@ export default class JobModeController {
       this.scheduleTimeout(() => {
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
-      }, 1000);
+      }, 500);
       this.operationLock = false;
     }
   }

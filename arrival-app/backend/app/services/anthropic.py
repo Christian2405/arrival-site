@@ -28,6 +28,8 @@ async def chat_with_claude(
     conversation_history: list[dict] | None = None,
     user_memories: list[str] | None = None,
     rag_context: list[dict] | None = None,
+    max_tokens: int = 1024,
+    system_prompt_prefix: str = "",
 ) -> dict:
     """
     Send a message (optionally with an image) to Claude and get a response.
@@ -71,6 +73,9 @@ async def chat_with_claude(
     # Build enhanced system prompt with memories + RAG context
     system_prompt = config.SYSTEM_PROMPT
 
+    if system_prompt_prefix:
+        system_prompt = system_prompt_prefix + "\n\n" + system_prompt
+
     if user_memories:
         memory_block = "\n".join(f"- {m}" for m in user_memories)
         system_prompt += f"""
@@ -98,7 +103,7 @@ When you use information from these documents, cite the filename as your source.
     # Bug #16: Use await with the async client
     response = await client.messages.create(
         model=config.ANTHROPIC_MODEL,
-        max_tokens=1024,
+        max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
     )

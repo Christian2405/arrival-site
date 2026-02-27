@@ -11,6 +11,7 @@ import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from app import config
 from app.services.demo import get_demo_transcription, get_demo_chat_response, generate_silent_audio_base64
 from app.services.deepgram import transcribe_audio
 from app.services.anthropic import chat_with_claude
@@ -79,6 +80,7 @@ class VoiceChatRequest(BaseModel):
     audio_base64: str
     image_base64: str | None = None
     conversation_history: list[dict] = []
+    mode: str = "default"
 
 
 class VoiceChatResponse(BaseModel):
@@ -201,6 +203,24 @@ async def voice_chat(
             logger.warning(f"RAG retrieval failed: {exc}")
             rag_context = []
 
+        # Per-mode response tuning
+        if request.mode == "job":
+            voice_max_tokens = 200
+            voice_prompt_prefix = "You are having a natural, calm conversation with a tradesperson on a job site. Be conversational, warm, and helpful. Keep responses to 2-4 sentences."
+            tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
+            tts_voice_settings = {
+                "stability": 0.6,
+                "similarity_boost": 0.75,
+                "style": 0.15,
+                "use_speaker_boost": True,
+                "speed": 1.0,
+            }
+        else:
+            voice_max_tokens = 150
+            voice_prompt_prefix = "IMPORTANT: Keep your response to 1-3 sentences maximum. Be direct and concise — the user is hearing this spoken aloud on a job site."
+            tts_voice_id = None  # use default
+            tts_voice_settings = None  # use default
+
         # 4. Call Claude chat with transcribed text + image + memories + RAG context + history
         chat_result = await chat_with_claude(
             message=transcript,
@@ -208,10 +228,16 @@ async def voice_chat(
             conversation_history=request.conversation_history,
             user_memories=memories,
             rag_context=rag_context,
+            max_tokens=voice_max_tokens,
+            system_prompt_prefix=voice_prompt_prefix,
         )
 
         # 5. Convert AI response to speech (TTS)
-        audio_base64 = await text_to_speech(chat_result["response"])
+        audio_base64 = await text_to_speech(
+            chat_result["response"],
+            voice_id=tts_voice_id,
+            voice_settings=tts_voice_settings,
+        )
 
         # 6. Fire-and-forget: store memory
         asyncio.create_task(_safe_task(

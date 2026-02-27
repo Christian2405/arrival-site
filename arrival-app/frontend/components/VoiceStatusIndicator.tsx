@@ -13,7 +13,7 @@ const STATE_CONFIG = {
   idle: { icon: 'mic' as const, label: 'Hold to talk', color: 'rgba(255,255,255,0.15)' },
   listening: { icon: 'radio' as const, label: 'Listening...', color: Colors.recording },
   processing: { icon: 'hourglass' as const, label: 'Thinking...', color: Colors.accent },
-  speaking: { icon: 'volume-high' as const, label: 'Speaking...', color: '#4A90D9' },
+  speaking: { icon: 'volume-high' as const, label: 'Speaking — tap to stop', color: '#4A90D9' },
 };
 
 export default function VoiceStatusIndicator({ state }: VoiceStatusIndicatorProps) {
