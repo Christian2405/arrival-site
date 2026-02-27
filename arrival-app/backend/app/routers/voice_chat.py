@@ -5,6 +5,7 @@ for faster voice responses. Accepts audio, returns transcript + AI response + au
 """
 
 import asyncio
+import base64 as b64_module
 import logging
 import time
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -42,6 +43,11 @@ def _check_demo_rate_limit(ip: str) -> bool:
     Returns True if the request should be allowed, False if rate limited.
     """
     now = time.time()
+
+    # Prune stale entries if dict is too large to prevent unbounded growth
+    if len(_demo_rate_limits) > 10000:
+        _demo_rate_limits.clear()
+
     if ip in _demo_rate_limits:
         count, window_start = _demo_rate_limits[ip]
         if now - window_start > DEMO_RATE_WINDOW:
@@ -63,6 +69,8 @@ async def _safe_task(coro, task_name: str = "background_task"):
     """Wrap a coroutine so exceptions are logged instead of swallowed."""
     try:
         await coro
+    except asyncio.CancelledError:
+        logger.debug(f"[{task_name}] Task cancelled")
     except Exception as e:
         logger.error(f"[{task_name}] Background task failed: {e}", exc_info=True)
 
@@ -93,10 +101,24 @@ async def voice_chat(
     Pass ?demo=true for canned responses without API keys.
     """
     # Validate input sizes
+    if len(request.audio_base64) < 100:
+        raise HTTPException(status_code=400, detail="Audio data too short")
     if len(request.audio_base64) > MAX_AUDIO_SIZE * 1.37:
         raise HTTPException(status_code=400, detail="Audio too large (max 10 MB)")
+
+    # Validate base64 encoding
+    try:
+        b64_module.b64decode(request.audio_base64, validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 audio data")
+
     if request.image_base64 and len(request.image_base64) > MAX_IMAGE_SIZE:
         raise HTTPException(status_code=400, detail="Image too large (max 10 MB)")
+    if request.image_base64:
+        try:
+            b64_module.b64decode(request.image_base64, validate=True)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid base64 image data")
     if len(request.conversation_history) > MAX_HISTORY_ITEMS:
         raise HTTPException(
             status_code=400,
@@ -104,7 +126,7 @@ async def voice_chat(
         )
 
     # Sanitize conversation_history — only allow valid roles, truncate content
-    request.conversation_history = [
+    safe_history = [
         {
             "role": msg["role"],
             "content": str(msg.get("content", ""))[:MAX_CONTENT_LENGTH],
@@ -114,6 +136,15 @@ async def voice_chat(
         and msg.get("role") in ("user", "assistant")
         and msg.get("content")
     ]
+
+    # Enforce alternating user/assistant roles (required by Claude API)
+    cleaned_history: list[dict] = []
+    for msg in safe_history:
+        if cleaned_history and cleaned_history[-1]["role"] == msg["role"]:
+            cleaned_history[-1]["content"] += "\n" + msg["content"]
+        else:
+            cleaned_history.append(msg)
+    request.conversation_history = cleaned_history
 
     try:
         if demo:
@@ -150,13 +181,25 @@ async def voice_chat(
         if not transcript:
             raise HTTPException(status_code=400, detail="Could not transcribe audio — no speech detected")
 
-        # 3. Concurrently fetch user memories + RAG context + team_id
-        team_id = await get_user_team_id(user_id)
-
-        memories, rag_context = await asyncio.gather(
+        # 3. Concurrently fetch team_id + user memories, then RAG context
+        phase1_results = await asyncio.gather(
+            get_user_team_id(user_id),
             retrieve_memories(user_id, transcript),
-            retrieve_context(user_id, transcript, team_id=team_id),
+            return_exceptions=True,
         )
+        team_id = phase1_results[0] if not isinstance(phase1_results[0], Exception) else None
+        memories = phase1_results[1] if not isinstance(phase1_results[1], Exception) else []
+        if isinstance(phase1_results[0], Exception):
+            logger.warning(f"Team ID retrieval failed: {phase1_results[0]}")
+        if isinstance(phase1_results[1], Exception):
+            logger.warning(f"Memory retrieval failed: {phase1_results[1]}")
+
+        # Fetch RAG context (depends on team_id from phase 1)
+        try:
+            rag_context = await retrieve_context(user_id, transcript, team_id=team_id)
+        except Exception as exc:
+            logger.warning(f"RAG retrieval failed: {exc}")
+            rag_context = []
 
         # 4. Call Claude chat with transcribed text + image + memories + RAG context + history
         chat_result = await chat_with_claude(
@@ -181,7 +224,6 @@ async def voice_chat(
 
         # 7. Fire-and-forget: log query for team activity
         async def _log():
-            log_team_id = team_id or await get_user_team_id(user_id)
             await log_query(
                 user_id=user_id,
                 question=transcript,
@@ -189,7 +231,7 @@ async def voice_chat(
                 source=chat_result.get("source"),
                 confidence=chat_result.get("confidence"),
                 has_image=bool(request.image_base64),
-                team_id=log_team_id,
+                team_id=team_id,
             )
         asyncio.create_task(_safe_task(_log(), task_name="voice_chat_log_query"))
 
@@ -204,6 +246,12 @@ async def voice_chat(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = str(e)
+        if "not set" in error_msg.lower() or "api_key" in error_msg.lower():
+            logger.error(f"Server config error: {error_msg}")
+            raise HTTPException(status_code=500, detail="Service temporarily unavailable")
+        logger.warning(f"Validation error in voice chat: {error_msg}")
+        raise HTTPException(status_code=400, detail="Invalid request parameters")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Voice chat failed: {str(e)}")
+        logger.error(f"Voice chat failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Voice chat failed. Please try again.")

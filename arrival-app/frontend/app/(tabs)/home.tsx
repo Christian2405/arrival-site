@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
-  Animated, Keyboard, Platform, Alert, KeyboardAvoidingView,
+  Animated, Keyboard, Platform, Alert, KeyboardAvoidingView, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import { Colors } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
-import { useConversationStore } from '../../store/conversationStore';
+import { useConversationStore, Message } from '../../store/conversationStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useSavedAnswersStore } from '../../store/savedAnswersStore';
 import { useAuthStore } from '../../store/authStore';
@@ -31,6 +31,11 @@ function generateId(): string {
 // Voice save command detection
 const SAVE_COMMANDS = /^(save|save that|save this|save it|save answer|bookmark|keep that|remember that)\.?$/i;
 
+// Bug 14: Confidence value validator
+function validateConfidence(v?: string): Message['confidence'] | undefined {
+  return v && ['high', 'medium', 'low'].includes(v) ? v as Message['confidence'] : undefined;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -41,6 +46,8 @@ export default function HomeScreen() {
 
   // Recording
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null); // Bug 1: ref to avoid stale closure
+  const pttStartingRef = useRef(false); // Bug 1: mutex to prevent double-press
   const recordingPulse = useRef(new Animated.Value(1)).current;
 
   // Voice state machine (for Default Mode)
@@ -63,6 +70,7 @@ export default function HomeScreen() {
 
   // Audio playback
   const currentSoundRef = useRef<Audio.Sound | null>(null);
+  const currentAudioFileRef = useRef<string | null>(null); // Bug 2: track temp file for cleanup
 
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -99,6 +107,9 @@ export default function HomeScreen() {
 
   // --- Audio playback (with stop capability) ---
   const playAudio = useCallback(async (audioBase64: string): Promise<void> => {
+    // Bug 12: Guard null cacheDirectory
+    if (!cacheDirectory) throw new Error('No cache directory');
+
     // Stop any currently playing audio
     if (currentSoundRef.current) {
       try {
@@ -107,24 +118,68 @@ export default function HomeScreen() {
       } catch (_) {}
       currentSoundRef.current = null;
     }
+    // Bug 2: Clean up previous temp file if still around
+    if (currentAudioFileRef.current) {
+      await deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
+      currentAudioFileRef.current = null;
+    }
 
     await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
 
     const fileUri = cacheDirectory + `tts_${Date.now()}.mp3`;
     await writeAsStringAsync(fileUri, audioBase64, { encoding: EncodingType.Base64 });
+    currentAudioFileRef.current = fileUri; // Bug 2: track the file
     const { sound } = await Audio.Sound.createAsync({ uri: fileUri });
     currentSoundRef.current = sound;
 
-    return new Promise((resolve) => {
+    // Bug 3: Wrap in a promise with timeout and error handling
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Audio playback timed out'));
+      }, 30000);
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        sound.setOnPlaybackStatusUpdate(null);
+      };
+
       sound.setOnPlaybackStatusUpdate(async (status: any) => {
-        if (status.isLoaded && status.didJustFinish) {
+        // Bug 3: Reject if sound becomes unloaded mid-playback
+        if (!status.isLoaded) {
+          cleanup();
+          currentSoundRef.current = null;
+          // Bug 2: Clean up temp file
+          if (currentAudioFileRef.current) {
+            await deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
+            currentAudioFileRef.current = null;
+          }
+          reject(new Error('Audio playback failed: sound unloaded'));
+          return;
+        }
+        if (status.didJustFinish) {
+          cleanup();
           currentSoundRef.current = null;
           await sound.unloadAsync();
-          await deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+          // Bug 2: Clean up temp file
+          if (currentAudioFileRef.current) {
+            await deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
+            currentAudioFileRef.current = null;
+          }
           resolve();
         }
       });
-      sound.playAsync();
+
+      // Bug 3: Catch playAsync errors
+      sound.playAsync().catch((err) => {
+        cleanup();
+        currentSoundRef.current = null;
+        if (currentAudioFileRef.current) {
+          deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
+          currentAudioFileRef.current = null;
+        }
+        reject(err);
+      });
     });
   }, []);
 
@@ -136,22 +191,30 @@ export default function HomeScreen() {
       } catch (_) {}
       currentSoundRef.current = null;
     }
+    // Bug 2: Delete temp file on early stop (didJustFinish won't fire)
+    if (currentAudioFileRef.current) {
+      await deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
+      currentAudioFileRef.current = null;
+    }
   }, []);
 
   // --- Recording cleanup on unmount ---
+  // Bug 18: Use ref instead of stale state closure
   useEffect(() => {
     return () => {
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => {});
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
       }
     };
-  }, [recording]);
+  }, []);
 
   // --- Start recording ---
   const startRecording = useCallback(async () => {
     try {
-      if (recording) {
-        await recording.stopAndUnloadAsync().catch(() => {});
+      // Bug 1: Use ref to check existing recording (avoids stale closure)
+      if (recordingRef.current) {
+        await recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
         setRecording(null);
       }
       const { status } = await Audio.requestPermissionsAsync();
@@ -161,56 +224,84 @@ export default function HomeScreen() {
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      // Bug 1: Set ref synchronously so handlePTTEnd always sees it
+      recordingRef.current = rec;
       setRecording(rec);
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
     }
-  }, [recording, setIsRecording]);
+  }, [setIsRecording]);
 
   // --- Voice save command handler ---
+  // Bug 15: Read messages from store at call time to avoid stale closure
   const handleVoiceSaveCommand = useCallback(() => {
-    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+    const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+    const lastAssistant = [...currentMessages].reverse().find(m => m.role === 'assistant');
     if (lastAssistant) {
+      const currentTrade = useConversationStore.getState().currentConversation?.trade || 'General';
       saveAnswer({
         id: generateId(),
-        question: [...messages].reverse().find(m => m.role === 'user')?.content || '',
+        question: [...currentMessages].reverse().find(m => m.role === 'user')?.content || '',
         answer: lastAssistant.content,
         source: lastAssistant.source,
-        trade: currentConversation?.trade || 'General',
+        trade: currentTrade,
         savedAt: new Date(),
       });
     }
-  }, [messages, currentConversation, saveAnswer]);
+  }, [saveAnswer]);
 
   // --- DEFAULT MODE: PTT handlers ---
   const handlePTTStart = useCallback(async () => {
     if (isProcessing) return;
-    setVoiceState('listening');
-    // Capture frame silently in background
-    captureFrame().then(frame => { pttFrameRef.current = frame; });
-    await startRecording();
+    // Bug 1: Prevent double-press with mutex
+    if (pttStartingRef.current) return;
+    pttStartingRef.current = true;
+    try {
+      setVoiceState('listening');
+      // Capture frame silently in background
+      captureFrame().then(frame => { pttFrameRef.current = frame; });
+      await startRecording();
+    } finally {
+      pttStartingRef.current = false;
+    }
   }, [isProcessing, captureFrame, startRecording]);
 
   const handlePTTEnd = useCallback(async () => {
-    if (!recording) return;
+    // Bug 1: Use ref instead of stale state
+    const rec = recordingRef.current;
+    if (!rec) return;
     setIsRecording(false);
     setVoiceState('processing');
     setIsProcessing(true);
 
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+      // Bug 7: Null refs BEFORE stopAndUnload so a throw doesn't leave dead refs
+      recordingRef.current = null;
       setRecording(null);
+
+      let uri: string | null | undefined = null;
+      try {
+        await rec.stopAndUnloadAsync();
+        uri = rec.getURI();
+      } catch (stopErr) {
+        console.error('Failed to stop recording:', stopErr);
+        // Recording ref already nulled above
+      }
+
       if (!uri) { setVoiceState('idle'); setIsProcessing(false); return; }
 
       const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
       const frameBase64 = pttFrameRef.current;
       pttFrameRef.current = undefined;
 
+      // Bug 5 (partial): Read demoMode from store at call time
+      const currentDemoMode = useSettingsStore.getState().demoMode;
+
       // Use composite endpoint for speed
-      const history = messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-      const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, demoMode);
+      const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+      const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+      const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, currentDemoMode);
 
       // Check for save commands
       if (SAVE_COMMANDS.test(result.transcript)) {
@@ -227,21 +318,26 @@ export default function HomeScreen() {
       });
       addMessage({
         id: generateId(), role: 'assistant', content: result.response,
-        source: result.source, confidence: result.confidence as any,
+        source: result.source, confidence: validateConfidence(result.confidence), // Bug 14
         displayMode: 'voice', timestamp: new Date(),
       });
 
       // Play voice response
-      setVoiceState('speaking');
-      await playAudio(result.audio_base64);
+      // Bug 11: Check for audio_base64 before playing
+      if (result.audio_base64) {
+        setVoiceState('speaking');
+        await playAudio(result.audio_base64);
+      }
       setVoiceState('idle');
     } catch (error: any) {
       console.error('Voice chat error:', error);
       setVoiceState('idle');
     } finally {
       setIsProcessing(false);
+      // Bug 6: Reset audio mode in case recording mode was left on after error
+      Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
     }
-  }, [recording, messages, demoMode, addMessage, playAudio, handleVoiceSaveCommand, setIsRecording, setIsProcessing]);
+  }, [addMessage, playAudio, handleVoiceSaveCommand, setIsRecording, setIsProcessing]);
 
   // --- TEXT MODE: Send message ---
   const handleTextSubmit = useCallback(async () => {
@@ -267,7 +363,7 @@ export default function HomeScreen() {
 
       addMessage({
         id: generateId(), role: 'assistant', content: response.response,
-        source: response.source, confidence: response.confidence as any,
+        source: response.source, confidence: validateConfidence(response.confidence), // Bug 14
         displayMode: 'text', timestamp: new Date(),
       });
 
@@ -284,24 +380,10 @@ export default function HomeScreen() {
   }, [inputText, isProcessing, pendingImage, messages, demoMode, addMessage, setIsProcessing]);
 
   // --- MODE SWITCHING ---
-  const handleModeChange = useCallback((newMode: 'default' | 'text' | 'job') => {
-    // Cancel in-progress work
-    if (recording) {
-      recording.stopAndUnloadAsync().catch(() => {});
-      setRecording(null);
-      setIsRecording(false);
-    }
-    stopAudio();
-    setIsProcessing(false);
-    setVoiceState('idle');
-
-    // Clean up Job Mode
-    if (interactionMode === 'job' && jobControllerRef.current) {
-      jobControllerRef.current.stop();
-      jobControllerRef.current = null;
-    }
-
-    // Tier gates
+  // Bug 4: Tier gate checks FIRST, before any cleanup
+  // Bug 16: Make async to await stopAudio
+  const handleModeChange = useCallback(async (newMode: 'default' | 'text' | 'job') => {
+    // Tier gates — check BEFORE destroying any work
     if (newMode === 'job' && !tierLimits.jobMode) {
       Alert.alert('Business Plan Required', 'Job Mode is available on the Business plan.');
       return;
@@ -311,8 +393,25 @@ export default function HomeScreen() {
       return;
     }
 
+    // Cancel in-progress work (Bug 1: use ref)
+    if (recordingRef.current) {
+      recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      recordingRef.current = null;
+      setRecording(null);
+      setIsRecording(false);
+    }
+    await stopAudio(); // Bug 16: await
+    setIsProcessing(false);
+    setVoiceState('idle');
+
+    // Clean up Job Mode
+    if (interactionMode === 'job' && jobControllerRef.current) {
+      jobControllerRef.current.stop();
+      jobControllerRef.current = null;
+    }
+
     setInteractionMode(newMode);
-  }, [recording, interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
+  }, [interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
 
   // --- JOB MODE EFFECT ---
   useEffect(() => {
@@ -338,7 +437,10 @@ export default function HomeScreen() {
             source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
           });
           try {
-            const ttsResp = await aiAPI.textToSpeech(message, demoMode);
+            // Bug 5: Read demoMode from store at call time
+            const currentDemoMode = useSettingsStore.getState().demoMode;
+            const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
+            // Bug 11: Check audio_base64 before playing
             if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
           } catch (e) {
             console.log('Job Mode TTS error:', e);
@@ -349,12 +451,17 @@ export default function HomeScreen() {
             const frame = await captureFrame();
             const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
             const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
-            const result = await aiAPI.voiceChat(audioBase64, frame, history, demoMode);
+            // Bug 5: Read demoMode from store at call time
+            const currentDemoMode = useSettingsStore.getState().demoMode;
+            const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode);
 
             addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
-            addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: result.confidence as any, displayMode: 'job', timestamp: new Date() });
+            addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() }); // Bug 14
 
-            await playAudio(result.audio_base64);
+            // Bug 11: Check audio_base64 before playing
+            if (result.audio_base64) {
+              await playAudio(result.audio_base64);
+            }
           } catch (e) {
             console.log('Job Mode voice error:', e);
           }
@@ -387,18 +494,23 @@ export default function HomeScreen() {
   }, [interactionMode, permission?.granted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- TEXT MODE: Chat show/hide effects ---
+  // Bug 20: Animate instead of snapping to 1
   useEffect(() => {
     if (interactionMode !== 'text') return;
     if (messages.length > 0 && !showChat) {
       setShowChat(true);
-      chatSlide.setValue(1);
+      Animated.timing(chatSlide, { toValue: 1, duration: 250, useNativeDriver: true }).start();
     }
   }, [messages.length, showChat, interactionMode, chatSlide]);
 
+  // Bug 13: Only create new conversation if current one has messages
   const dismissChat = useCallback(() => {
     Animated.timing(chatSlide, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
       setShowChat(false);
-      createNewConversation();
+      const current = useConversationStore.getState().currentConversation;
+      if (current?.messages?.length && current.messages.length > 0) {
+        createNewConversation();
+      }
     });
   }, [createNewConversation, chatSlide]);
 
@@ -417,7 +529,8 @@ export default function HomeScreen() {
   }, [isRecording, recordingPulse]);
 
   // --- DRAWER ---
-  const SCREEN_WIDTH = 350;
+  // Bug 8: Use actual device width instead of hardcoded 350
+  const SCREEN_WIDTH = Dimensions.get('window').width;
   const DRAWER_WIDTH = SCREEN_WIDTH * 0.78;
 
   const toggleDrawer = useCallback(() => {
@@ -565,7 +678,7 @@ export default function HomeScreen() {
                   <Ionicons
                     name="camera"
                     size={22}
-                    color={pendingImage ? Colors.accent : 'rgba(255,255,255,0.5)'}
+                    color={pendingImage ? Colors.accent : Colors.textSecondary}
                   />
                   {pendingImage && <View style={styles.imageBadge} />}
                 </TouchableOpacity>
@@ -575,7 +688,7 @@ export default function HomeScreen() {
                   value={inputText}
                   onChangeText={setInputText}
                   placeholder="Type a message..."
-                  placeholderTextColor="rgba(255,255,255,0.35)"
+                  placeholderTextColor={Colors.textMuted}
                   editable={!isProcessing}
                   returnKeyType="send"
                   onSubmitEditing={handleTextSubmit}
@@ -595,11 +708,13 @@ export default function HomeScreen() {
               <JobModeView
                 aiState={jobAIState}
                 onPause={() => {
+                  // Bug 17: Guard null controller
+                  if (!jobControllerRef.current) return;
                   if (jobPaused) {
-                    jobControllerRef.current?.vad.resume();
+                    jobControllerRef.current.vad.resume();
                   } else {
-                    jobControllerRef.current?.vad.pause();
-                    jobControllerRef.current?.dismiss();
+                    jobControllerRef.current.vad.pause();
+                    jobControllerRef.current.dismiss();
                   }
                   setJobPaused(!jobPaused);
                 }}
@@ -754,7 +869,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pttButtonActive: {
-    backgroundColor: Colors.recording || '#FF3B30',
+    backgroundColor: Colors.recording,
     transform: [{ scale: 1.1 }],
   },
   pttButtonDisabled: {

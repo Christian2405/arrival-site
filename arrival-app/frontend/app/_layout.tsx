@@ -25,7 +25,7 @@ export default function RootLayout() {
   // Bug #32: Load conversations and saved answers only after auth is initialized
   // Cloud sync inside loadConversations needs an active session
   useEffect(() => {
-    if (isInitialized && session) {
+    if (isInitialized) {
       loadConversations();
       loadAnswers();
     }
@@ -57,7 +57,7 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
         <Stack.Screen name="signup" />

@@ -8,7 +8,7 @@ export interface VADConfig {
   silenceMaxDuration: number;   // ms of silence before ending (default: 1500)
   meteringInterval: number;     // ms between metering checks (default: 100)
   onSpeechStart: () => void;
-  onSpeechEnd: (audioBase64: string) => void;
+  onSpeechEnd: (audioBase64: string) => Promise<void>; // BUG 2 FIX: returns Promise
 }
 
 export default class VoiceActivityDetector {
@@ -21,6 +21,8 @@ export default class VoiceActivityDetector {
   private lastSpeechTime: number = 0;
   private isProcessing: boolean = false;
   private enabled: boolean = false;
+  private isPausing: boolean = false;    // BUG 1 FIX: guard against pause/resume race
+  private hasPermission: boolean = false; // BUG 5 FIX: cache permission result
 
   constructor(config: VADConfig) {
     this.config = config;
@@ -34,25 +36,32 @@ export default class VoiceActivityDetector {
   async stop() {
     this.enabled = false;
     this.stopMetering();
-    if (this.recording) {
+    // BUG 6 FIX: defensively access recording in a try block
+    const rec = this.recording;
+    this.recording = null;
+    if (rec) {
       try {
-        const status = await this.recording.getStatusAsync();
+        const status = await rec.getStatusAsync();
         if (status.isRecording) {
-          await this.recording.stopAndUnloadAsync();
+          await rec.stopAndUnloadAsync();
         }
       } catch (_) {}
-      this.recording = null;
     }
   }
 
-  pause() {
+  // BUG 1 FIX: pause is now async, awaits stop before nulling
+  async pause() {
+    this.isPausing = true;
     this.stopMetering();
     if (this.recording) {
-      this.recording.stopAndUnloadAsync().catch(() => {});
+      try {
+        await this.recording.stopAndUnloadAsync();
+      } catch (_) {}
       this.recording = null;
     }
     this.isSpeaking = false;
     this.speechConfirmed = false;
+    this.isPausing = false;
   }
 
   async resume() {
@@ -69,11 +78,16 @@ export default class VoiceActivityDetector {
   }
 
   private async startListening() {
-    if (!this.enabled || this.isProcessing) return;
+    // BUG 1 FIX: don't start if a pause is in progress
+    if (!this.enabled || this.isProcessing || this.isPausing) return;
 
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') return;
+      // BUG 5 FIX: only request permission if not already cached
+      if (!this.hasPermission) {
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') return;
+        this.hasPermission = true;
+      }
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -146,11 +160,22 @@ export default class VoiceActivityDetector {
       const uri = this.recording.getURI();
       this.recording = null;
 
+      // BUG 4 FIX: reset audio mode so TTS plays through speaker, not earpiece
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      }).catch(() => {});
+
       if (uri) {
         const audioBase64 = await FileSystem.readAsStringAsync(uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        this.config.onSpeechEnd(audioBase64);
+
+        // BUG 3 FIX: clean up temp audio file
+        await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+
+        // BUG 2 FIX: await onSpeechEnd so restart delay begins after pipeline completes
+        await this.config.onSpeechEnd(audioBase64);
       }
     } catch (e) {
       console.log('[VAD] speech end error:', e);

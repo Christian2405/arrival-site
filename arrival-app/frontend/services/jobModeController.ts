@@ -24,6 +24,9 @@ export default class JobModeController {
   private aiSpeaking: boolean = false;
   private dismissed: boolean = false;
   private dismissTime: number = 0;
+  private operationLock: boolean = false;                             // BUG 7 FIX: mutex for concurrent operations
+  private dismissTimeout: ReturnType<typeof setTimeout> | null = null; // BUG 10 FIX: track dismiss timeout
+  private pendingTimeouts: ReturnType<typeof setTimeout>[] = [];       // BUG 11 FIX: track all pending timeouts
 
   constructor(
     config: JobModeConfig,
@@ -46,10 +49,16 @@ export default class JobModeController {
       onSpeechStart: () => {
         this.callbacks.onStateChange('listening');
       },
-      onSpeechEnd: (audioBase64) => {
-        this.handleUserSpeech(audioBase64);
+      onSpeechEnd: async (audioBase64) => {
+        await this.handleUserSpeech(audioBase64);
       },
     });
+  }
+
+  // BUG 13 FIX: shared pruning method used at the top of both handlers
+  private pruneAlertTimestamps() {
+    const now = Date.now();
+    this.alertTimestamps = this.alertTimestamps.filter(t => now - t < 60000);
   }
 
   canSpeak(): boolean {
@@ -59,7 +68,7 @@ export default class JobModeController {
     if (this.dismissed && now - this.dismissTime < this.config.cooldownAfterDismiss) return false;
 
     // Prune old timestamps and check rate limit
-    this.alertTimestamps = this.alertTimestamps.filter(t => now - t < 60000);
+    this.pruneAlertTimestamps();
     if (this.alertTimestamps.length >= this.config.maxAlertsPerMinute) return false;
 
     if (this.aiSpeaking) return false;
@@ -67,12 +76,34 @@ export default class JobModeController {
     return true;
   }
 
+  // BUG 11 FIX: helper to schedule timeouts and track them for cleanup
+  private scheduleTimeout(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+    const id = setTimeout(() => {
+      this.pendingTimeouts = this.pendingTimeouts.filter(t => t !== id);
+      fn();
+    }, ms);
+    this.pendingTimeouts.push(id);
+    return id;
+  }
+
   async handleFrameAlert(message: string, severity: string) {
-    // Critical alerts ALWAYS get through (safety first)
-    if (severity !== 'critical' && !this.canSpeak()) return;
+    // BUG 13 FIX: prune timestamps before any check
+    this.pruneAlertTimestamps();
+
+    // BUG 7 FIX: mutex guard against concurrent operations
+    if (this.operationLock) return;
+
+    // BUG 8 FIX: even critical alerts must check if AI is already speaking
+    if (severity === 'critical') {
+      if (this.aiSpeaking) return;
+    } else {
+      if (!this.canSpeak()) return;
+    }
+
+    this.operationLock = true;
 
     this.alertTimestamps.push(Date.now());
-    this.vad.pause();
+    await this.vad.pause();
     this.aiSpeaking = true;
     this.callbacks.onStateChange('speaking');
 
@@ -82,35 +113,53 @@ export default class JobModeController {
       this.aiSpeaking = false;
       this.lastSpeakTime = Date.now();
       this.callbacks.onStateChange('monitoring');
-      setTimeout(() => this.vad.resume(), 1000);
+      // BUG 11 FIX: use tracked timeout
+      this.scheduleTimeout(() => this.vad.resume(), 1000);
+      this.operationLock = false;
     }
   }
 
   async handleUserSpeech(audioBase64: string) {
-    this.vad.pause();
+    // BUG 13 FIX: prune timestamps before any check
+    this.pruneAlertTimestamps();
+
+    // BUG 7 FIX: mutex guard against concurrent operations
+    if (this.operationLock) return;
+    this.operationLock = true;
+
+    await this.vad.pause();
     this.aiSpeaking = true;
     this.callbacks.onStateChange('processing');
 
     try {
-      await this.callbacks.onVoiceResponse(audioBase64);
+      // BUG 9 FIX: set 'speaking' state BEFORE the voice response (which includes TTS playback)
       this.callbacks.onStateChange('speaking');
+      await this.callbacks.onVoiceResponse(audioBase64);
     } catch (e) {
       console.log('[JobMode] voice response error:', e);
-      this.callbacks.onStateChange('monitoring');
     } finally {
       this.aiSpeaking = false;
       this.lastSpeakTime = Date.now();
-      setTimeout(() => {
+      // BUG 11 FIX: use tracked timeout
+      this.scheduleTimeout(() => {
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
       }, 1000);
+      this.operationLock = false;
     }
   }
 
   dismiss() {
     this.dismissed = true;
     this.dismissTime = Date.now();
-    setTimeout(() => { this.dismissed = false; }, this.config.cooldownAfterDismiss);
+    // BUG 10 FIX: store the timeout so it can be cleared in stop()
+    if (this.dismissTimeout) {
+      clearTimeout(this.dismissTimeout);
+    }
+    this.dismissTimeout = this.scheduleTimeout(() => {
+      this.dismissed = false;
+      this.dismissTimeout = null;
+    }, this.config.cooldownAfterDismiss);
   }
 
   async start(captureFrame: () => Promise<string | undefined>) {
@@ -120,7 +169,26 @@ export default class JobModeController {
   }
 
   async stop() {
+    // BUG 11 FIX: clear all pending timeouts so nothing fires on a stopped controller
+    for (const id of this.pendingTimeouts) {
+      clearTimeout(id);
+    }
+    this.pendingTimeouts = [];
+
+    // BUG 10 FIX: clear dismiss timeout
+    if (this.dismissTimeout) {
+      clearTimeout(this.dismissTimeout);
+      this.dismissTimeout = null;
+    }
+
     this.frameBatcher.stop();
     await this.vad.stop();
+
+    // BUG 12 FIX: reset all internal state
+    this.aiSpeaking = false;
+    this.dismissed = false;
+    this.alertTimestamps = [];
+    this.lastSpeakTime = 0;
+    this.operationLock = false;
   }
 }

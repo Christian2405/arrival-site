@@ -45,6 +45,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setInteractionMode: async (value) => {
     set({ interactionMode: value, jobMode: value === 'job' });
     await AsyncStorage.setItem('interaction_mode', value);
+    await AsyncStorage.setItem('job_mode', (value === 'job').toString());
   },
   setVoiceSpeed: async (value) => {
     set({ voiceSpeed: value });
@@ -79,7 +80,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         voiceOutput: voiceOutput !== 'false',
         demoMode: demoMode === 'true', // Only enable if explicitly set
         jobMode: jobMode === 'true',
-        interactionMode: (interactionMode as 'default' | 'text' | 'job') || 'default',
+        interactionMode: (['default', 'text', 'job'].includes(interactionMode || '') ? interactionMode : 'default') as 'default' | 'text' | 'job',
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',

@@ -26,6 +26,7 @@ export default function JobModeView({ aiState, onPause, isPaused }: JobModeViewP
   useEffect(() => {
     pulseAnim.stopAnimation();
     ringOpacity.stopAnimation();
+    dotOpacity.stopAnimation();
 
     if (aiState === 'monitoring') {
       // Slow, calm pulse

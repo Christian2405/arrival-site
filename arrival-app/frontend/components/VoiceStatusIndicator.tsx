@@ -11,7 +11,7 @@ interface VoiceStatusIndicatorProps {
 
 const STATE_CONFIG = {
   idle: { icon: 'mic' as const, label: 'Hold to talk', color: 'rgba(255,255,255,0.15)' },
-  listening: { icon: 'radio' as const, label: 'Listening...', color: Colors.recording || '#FF3B30' },
+  listening: { icon: 'radio' as const, label: 'Listening...', color: Colors.recording },
   processing: { icon: 'hourglass' as const, label: 'Thinking...', color: Colors.accent },
   speaking: { icon: 'volume-high' as const, label: 'Speaking...', color: '#4A90D9' },
 };
@@ -71,6 +71,9 @@ export default function VoiceStatusIndicator({ state }: VoiceStatusIndicatorProp
       pulseAnim.stopAnimation();
       opacityAnim.stopAnimation();
       [bar1, bar2, bar3].forEach(b => b.stopAnimation());
+      bar1.setValue(0.3);
+      bar2.setValue(0.5);
+      bar3.setValue(0.4);
     };
   }, [state]);
 

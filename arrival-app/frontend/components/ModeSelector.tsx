@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 
@@ -17,18 +17,6 @@ const modes = [
 ];
 
 export default function ModeSelector({ currentMode, onModeChange, jobModeAllowed, voiceAllowed }: ModeSelectorProps) {
-  const handlePress = (mode: 'default' | 'text' | 'job') => {
-    if (mode === 'job' && !jobModeAllowed) {
-      Alert.alert('Business Plan Required', 'Job Mode with always-on monitoring is available on the Business plan.');
-      return;
-    }
-    if (mode === 'default' && !voiceAllowed) {
-      Alert.alert('Pro Plan Required', 'Voice mode is available on the Pro plan and above.');
-      return;
-    }
-    onModeChange(mode);
-  };
-
   return (
     <View style={styles.container}>
       {modes.map((mode) => {
@@ -38,9 +26,11 @@ export default function ModeSelector({ currentMode, onModeChange, jobModeAllowed
         return (
           <TouchableOpacity
             key={mode.key}
-            onPress={() => handlePress(mode.key)}
+            onPress={() => onModeChange(mode.key)}
             style={[styles.pill, isActive && styles.pillActive]}
             activeOpacity={0.7}
+            accessibilityLabel={`${mode.label} mode${isLocked ? ', locked' : ''}${isActive ? ', selected' : ''}`}
+            accessibilityRole="button"
           >
             <Ionicons
               name={isLocked ? 'lock-closed' : mode.icon}

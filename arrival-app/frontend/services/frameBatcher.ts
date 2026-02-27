@@ -21,6 +21,8 @@ export default class FrameBatcher {
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private config: FrameBatcherConfig;
   private isAnalyzing: boolean = false;
+  private isCapturing: boolean = false;  // BUG 15 FIX: guard against concurrent captures
+  private generation: number = 0;        // BUG 14 FIX: cancellation token for in-flight analyze()
   private captureFrame: (() => Promise<string | undefined>) | null = null;
 
   constructor(config: FrameBatcherConfig) {
@@ -32,8 +34,10 @@ export default class FrameBatcher {
     this.lastAnalysisTime = Date.now();
 
     this.intervalId = setInterval(async () => {
-      if (this.isAnalyzing || !this.captureFrame) return;
+      // BUG 15 FIX: return early if already capturing or analyzing
+      if (this.isCapturing || this.isAnalyzing || !this.captureFrame) return;
 
+      this.isCapturing = true;
       try {
         const frame = await this.captureFrame();
         if (!frame) return;
@@ -56,17 +60,23 @@ export default class FrameBatcher {
         }
       } catch (e) {
         console.log('[FrameBatcher] capture error:', e);
+      } finally {
+        this.isCapturing = false;
       }
     }, this.config.captureInterval);
   }
 
   stop() {
+    // BUG 14 FIX: increment generation to invalidate any in-flight analyze()
+    this.generation++;
+
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
     this.lastFrame = null;
     this.captureFrame = null;
+    this.isCapturing = false;
   }
 
   private hasSignificantChange(newFrame: string): boolean {
@@ -91,16 +101,25 @@ export default class FrameBatcher {
   }
 
   private async analyze(frame: string) {
+    // BUG 14 FIX: capture generation before async work
+    const gen = this.generation;
+
     this.isAnalyzing = true;
     this.lastFrame = frame;
     this.lastAnalysisTime = Date.now();
 
     try {
       await this.config.onAnalyze(frame);
+
+      // BUG 14 FIX: if stop() was called during onAnalyze, bail out
+      if (gen !== this.generation) return;
     } catch (e) {
       console.log('[FrameBatcher] analysis error:', e);
     } finally {
-      this.isAnalyzing = false;
+      // Only reset isAnalyzing if this is still the current generation
+      if (gen === this.generation) {
+        this.isAnalyzing = false;
+      }
     }
   }
 }

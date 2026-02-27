@@ -364,6 +364,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         'voice_speed',
         'units',
         'text_size',
+        'interaction_mode',
+        'settings_v2_migrated',
       ]);
     } catch (e) {
       console.error('Failed to clear AsyncStorage on signout:', e);
@@ -447,7 +449,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.log('[Auth] Profile loaded:', profile?.email || 'NULL', '| account_type:', profile?.account_type || 'NULL');
 
       // Load active subscription — order so highest plan wins if duplicates exist
-      const planOrder = { business: 1, enterprise: 1, pro: 2, free: 3 };
+      const planOrder = { enterprise: 0, business: 1, pro: 2, free: 3 };
       const { data: subscriptions, error: subError } = await supabase
         .from('subscriptions')
         .select('*')
