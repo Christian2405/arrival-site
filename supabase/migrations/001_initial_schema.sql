@@ -62,13 +62,14 @@ create table public.documents (
   file_size bigint not null,
   storage_path text not null,
   category text not null check (category in (
-    'equipment_manuals', 'wiring_diagrams', 'parts_lists', 'technical_bulletins',
-    'warranty_docs', 'spec_sheets', 'building_plans', 'engineering_reports',
-    'site_surveys', 'permits', 'inspection_reports', 'project_specs',
-    'scope_of_work', 'material_specs', 'local_codes', 'safety_data_sheets',
-    'osha_docs', 'inspection_checklists', 'sops', 'safety_protocols',
+    'equipment_manuals', 'manufacturer_manuals', 'wiring_diagrams', 'parts_lists',
+    'technical_bulletins', 'warranty_docs', 'spec_sheets', 'equipment_spec_sheets',
+    'building_plans', 'engineering_reports', 'site_surveys', 'permits',
+    'inspection_reports', 'project_specs', 'scope_of_work', 'material_specs',
+    'local_codes', 'safety_data_sheets', 'osha_docs', 'inspection_checklists',
+    'sops', 'company_sops', 'safety_protocols', 'diagnostic_workflows',
     'installation_checklists', 'training_materials', 'maintenance_guides',
-    'client_docs', 'service_reports', 'site_requirements'
+    'client_docs', 'service_reports', 'site_requirements', 'photo', 'video'
   )),
   project_tag text,
   notes text,

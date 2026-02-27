@@ -70,12 +70,12 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'No Stripe subscription found' }) };
     }
 
-    // Verify user is a team admin or owner
+    // Verify user is a team admin (DB role constraint only allows admin/manager/technician)
     const { data: teamRole } = await supabase
       .from('team_members')
-      .select('role')
+      .select('role, team_id')
       .eq('user_id', user.id)
-      .in('role', ['admin', 'owner'])
+      .eq('role', 'admin')
       .limit(1)
       .single();
 
@@ -104,19 +104,12 @@ exports.handler = async (event) => {
       newQuantity = Math.max(0, currentQuantity - seatCount);
 
       // Validate: make sure we're not removing below active member count
-      const { data: teamMember } = await supabase
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
-        .eq('role', 'owner')
-        .limit(1)
-        .single();
-
-      if (teamMember) {
+      // Use team_id from the admin role check above (teamRole already includes team_id)
+      if (teamRole && teamRole.team_id) {
         const { count: activeMembers } = await supabase
           .from('team_members')
           .select('*', { count: 'exact', head: true })
-          .eq('team_id', teamMember.team_id)
+          .eq('team_id', teamRole.team_id)
           .in('status', ['active', 'invited']);
 
         const baseSeats = 10;
