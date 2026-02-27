@@ -180,7 +180,7 @@ async def delete_document(
         get_resp = await client.get(
             f"{config.SUPABASE_URL}/rest/v1/documents",
             headers=_db_headers(user_token),
-            params={"id": f"eq.{document_id}", "select": "storage_path,uploaded_by"},
+            params={"id": f"eq.{document_id}", "select": "storage_path,uploaded_by,team_id"},
         )
         get_resp.raise_for_status()
         rows = get_resp.json()
@@ -211,7 +211,7 @@ async def delete_document(
     # Remove vectors from RAG index (non-blocking)
     try:
         from app.services.rag import delete_document_vectors
-        await delete_document_vectors(document_id, user_id)
+        await delete_document_vectors(document_id, user_id, team_id=doc.get("team_id"))
     except Exception as e:
         print(f"[supabase] RAG vector delete failed (non-blocking): {e}")
 
