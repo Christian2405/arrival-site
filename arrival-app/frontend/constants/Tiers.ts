@@ -12,6 +12,13 @@ export interface TierLimits {
 }
 
 export const TIER_LIMITS: Record<string, TierLimits> = {
+  free: {
+    maxDocs: 0,
+    jobMode: false,
+    proactiveAlerts: false,
+    teamDocs: false,
+    voiceOutput: false,
+  },
   pro: {
     maxDocs: 50,
     jobMode: false,
@@ -36,5 +43,5 @@ export const TIER_LIMITS: Record<string, TierLimits> = {
 };
 
 export function getTierLimits(plan: string): TierLimits {
-  return TIER_LIMITS[plan] || TIER_LIMITS.pro;
+  return TIER_LIMITS[plan] || TIER_LIMITS.free;
 }

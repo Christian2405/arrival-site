@@ -19,19 +19,25 @@ export interface Document {
   created_at: string;
 }
 
-// Category groupings (matching website's dashboard-business.js)
+// Category groupings — include both legacy DB names and dashboard upload names
 export const CODE_CATEGORIES = [
   'diagnostic_workflows',
   'safety_protocols',
+  'inspection_checklists',
 ];
 
 export const MANUAL_CATEGORIES = [
   'equipment_manuals',
+  'manufacturer_manuals',
   'spec_sheets',
+  'equipment_spec_sheets',
   'training_materials',
   'company_sops',
+  'sops',
   'building_plans',
   'parts_lists',
+  'maintenance_guides',
+  'wiring_diagrams',
 ];
 
 export const MEDIA_CATEGORIES = ['photo', 'video'];

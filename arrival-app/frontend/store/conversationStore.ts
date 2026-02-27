@@ -2,6 +2,20 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 
+// Bug #11: Collision-safe ID generator (replaces Date.now().toString())
+function generateId(): string {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10);
+}
+
+// Bug #34: Debounced save — avoids JSON.stringify on every message
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave(conversations: Conversation[]) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    AsyncStorage.setItem('conversations', JSON.stringify(conversations)).catch(console.error);
+  }, 1000);
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -11,6 +25,7 @@ export interface Message {
   source?: string;
   confidence?: 'high' | 'medium' | 'low';
   alertType?: 'warning' | 'critical';
+  displayMode?: 'voice' | 'text' | 'job';
   timestamp: Date;
 }
 
@@ -30,7 +45,7 @@ interface ConversationState {
 
   setCurrentConversation: (conversation: Conversation | null) => void;
   addMessage: (message: Message) => void;
-  createNewConversation: () => void;
+  createNewConversation: (trade?: string) => void;
   setIsRecording: (isRecording: boolean) => void;
   setIsProcessing: (isProcessing: boolean) => void;
   loadConversations: () => Promise<void>;
@@ -84,6 +99,7 @@ async function syncMessageToSupabase(msg: Message, conversationId: string) {
         source: msg.source ?? null,
         confidence: msg.confidence ?? null,
         alert_type: msg.alertType ?? null,
+        display_mode: msg.displayMode ?? null,
         timestamp: msg.timestamp.toISOString(),
       },
       { onConflict: 'id' }
@@ -132,6 +148,7 @@ async function fetchConversationsFromSupabase(): Promise<Conversation[] | null> 
         source: m.source ?? undefined,
         confidence: m.confidence ?? undefined,
         alertType: m.alert_type ?? undefined,
+        displayMode: m.display_mode ?? undefined,
         timestamp: new Date(m.timestamp),
       });
     }
@@ -161,11 +178,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   setIsRecording: (isRecording) => set({ isRecording }),
   setIsProcessing: (isProcessing) => set({ isProcessing }),
 
-  createNewConversation: () => {
+  createNewConversation: (trade?: string) => {
     const newConversation: Conversation = {
-      id: Date.now().toString(),
+      id: generateId(),
       title: 'New Conversation',
-      trade: 'HVAC',
+      trade: trade || 'General',
       messages: [],
       createdAt: new Date(),
     };
@@ -178,9 +195,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (!currentConversation) {
       // Auto-create a conversation if none exists
       const newConv: Conversation = {
-        id: Date.now().toString(),
+        id: generateId(),
         title: message.content.slice(0, 50),
-        trade: 'HVAC',
+        trade: 'General',
         messages: [message],
         createdAt: new Date(),
       };
@@ -188,7 +205,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         currentConversation: newConv,
         conversations: [newConv, ...conversations],
       });
-      get().saveConversations();
+      debouncedSave(get().conversations);
 
       // Sync to Supabase (non-blocking)
       syncConversationToSupabase(newConv).then(() =>
@@ -216,7 +233,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       set({ conversations: [updatedConversation, ...conversations] });
     }
 
-    get().saveConversations();
+    debouncedSave(get().conversations);
 
     // Sync to Supabase (non-blocking)
     syncConversationToSupabase(updatedConversation).then(() =>

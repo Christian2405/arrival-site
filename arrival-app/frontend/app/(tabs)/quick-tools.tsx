@@ -305,8 +305,11 @@ function OhmsLawCalc() {
   const i = parseFloat(ampsVal);
   const r = parseFloat(ohms);
 
+  // Bug #45: When all 3 values are entered (overdetermined), prioritize voltage + current
+  // and calculate resistance from those, ignoring the manually entered resistance.
   let results: { label: string; value: string; unit: string }[] = [];
   if (v && i) {
+    // V + I provided (or all 3) → calculate R and P from V and I
     results = [
       { label: 'Resistance', value: (v / i).toFixed(2), unit: 'Ω' },
       { label: 'Power', value: (v * i).toFixed(2), unit: 'W' },
@@ -338,6 +341,10 @@ function OhmsLawCalc() {
       {results.length > 0 ? (
         <View style={s.resultCard}>
           <Text style={s.resultLabel}>Results</Text>
+          {/* Bug #45: Note when all 3 values are entered */}
+          {filledCount === 3 && (
+            <Text style={s.disclaimer}>All 3 values entered. Using Voltage + Current; entered Resistance is ignored.</Text>
+          )}
           {results.map((r) => (
             <View key={r.label} style={s.ohmsRow}>
               <Text style={s.ohmsLabel}>{r.label}</Text>

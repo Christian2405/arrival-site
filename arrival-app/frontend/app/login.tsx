@@ -35,7 +35,8 @@ export default function LoginScreen() {
       return;
     }
 
-    const result = await signIn(email.trim(), password.trim());
+    // Bug #41: Don't trim password — spaces may be intentional
+    const result = await signIn(email.trim(), password);
     if (result.error) {
       // Make Supabase's generic error more helpful
       if (result.error.includes('Invalid login credentials')) {

@@ -84,7 +84,7 @@ export default function SettingsScreen() {
         'To revoke access, open your device settings for Arrival.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
         ]
       );
     } else {
@@ -99,7 +99,7 @@ export default function SettingsScreen() {
             'Microphone access was denied. You can enable it in your device settings.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
             ]
           );
         }
@@ -113,7 +113,7 @@ export default function SettingsScreen() {
             'Camera access was denied. You can enable it in your device settings.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
             ]
           );
         }
@@ -343,7 +343,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.row}
             activeOpacity={0.6}
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`)}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`).catch(() => Alert.alert('Error', 'Could not open link'))}
           >
             <View style={styles.rowLeft}>
               <Ionicons name="card-outline" size={18} color="#2A2622" />
@@ -362,7 +362,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.row}
             activeOpacity={0.6}
-            onPress={() => Linking.openURL(`mailto:support@arrivalcompany.com?subject=Help%20Request`)}
+            onPress={() => Linking.openURL(`mailto:support@arrivalcompany.com?subject=Help%20Request`).catch(() => Alert.alert('Error', 'Could not open link'))}
           >
             <View style={styles.rowLeft}>
               <Ionicons name="help-circle-outline" size={18} color="#2A2622" />
@@ -376,7 +376,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.row}
             activeOpacity={0.6}
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/terms`)}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/terms`).catch(() => Alert.alert('Error', 'Could not open link'))}
           >
             <View style={styles.rowLeft}>
               <Ionicons name="document-text-outline" size={18} color="#2A2622" />

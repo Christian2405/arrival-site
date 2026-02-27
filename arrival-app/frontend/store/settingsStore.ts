@@ -5,6 +5,7 @@ interface SettingsState {
   voiceOutput: boolean;
   demoMode: boolean;
   jobMode: boolean;
+  interactionMode: 'default' | 'text' | 'job';
   voiceSpeed: 'slow' | 'normal' | 'fast';
   units: 'imperial' | 'metric';
   textSize: 'small' | 'medium' | 'large';
@@ -12,6 +13,7 @@ interface SettingsState {
   setVoiceOutput: (value: boolean) => void;
   setDemoMode: (value: boolean) => void;
   setJobMode: (value: boolean) => void;
+  setInteractionMode: (value: 'default' | 'text' | 'job') => void;
   setVoiceSpeed: (value: 'slow' | 'normal' | 'fast') => void;
   setUnits: (value: 'imperial' | 'metric') => void;
   setTextSize: (value: 'small' | 'medium' | 'large') => void;
@@ -22,6 +24,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   voiceOutput: true,
   demoMode: false, // Real API keys are configured — use live mode
   jobMode: false,
+  interactionMode: 'default',
   voiceSpeed: 'normal',
   units: 'imperial',
   textSize: 'medium',
@@ -35,8 +38,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     await AsyncStorage.setItem('demo_mode', value.toString());
   },
   setJobMode: async (value) => {
-    set({ jobMode: value });
+    set({ jobMode: value, interactionMode: value ? 'job' : 'default' });
     await AsyncStorage.setItem('job_mode', value.toString());
+    await AsyncStorage.setItem('interaction_mode', value ? 'job' : 'default');
+  },
+  setInteractionMode: async (value) => {
+    set({ interactionMode: value, jobMode: value === 'job' });
+    await AsyncStorage.setItem('interaction_mode', value);
   },
   setVoiceSpeed: async (value) => {
     set({ voiceSpeed: value });
@@ -62,6 +70,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const voiceOutput = await AsyncStorage.getItem('voice_output');
       const demoMode = await AsyncStorage.getItem('demo_mode');
       const jobMode = await AsyncStorage.getItem('job_mode');
+      const interactionMode = await AsyncStorage.getItem('interaction_mode');
       const voiceSpeed = await AsyncStorage.getItem('voice_speed');
       const units = await AsyncStorage.getItem('units');
       const textSize = await AsyncStorage.getItem('text_size');
@@ -70,6 +79,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         voiceOutput: voiceOutput !== 'false',
         demoMode: demoMode === 'true', // Only enable if explicitly set
         jobMode: jobMode === 'true',
+        interactionMode: (interactionMode as 'default' | 'text' | 'job') || 'default',
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',

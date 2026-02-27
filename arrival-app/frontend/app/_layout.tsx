@@ -16,13 +16,20 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  // Initialize auth + load local data on launch
+  // Initialize auth + load local-only data on launch
   useEffect(() => {
     initialize();
     loadSettings();
-    loadConversations();
-    loadAnswers();
   }, []);
+
+  // Bug #32: Load conversations and saved answers only after auth is initialized
+  // Cloud sync inside loadConversations needs an active session
+  useEffect(() => {
+    if (isInitialized && session) {
+      loadConversations();
+      loadAnswers();
+    }
+  }, [isInitialized, session]);
 
   // Auth-gate navigation
   useEffect(() => {
@@ -33,8 +40,8 @@ export default function RootLayout() {
     if (!session && !inAuthGroup) {
       // Not signed in → go to login
       router.replace('/login');
-    } else if (session && inAuthGroup) {
-      // Signed in but on login/signup → go to home
+    } else if (session && segments[0] !== '(tabs)') {
+      // Signed in but not on a tab screen (login/signup/index) → go to home
       router.replace('/(tabs)/home');
     }
   }, [session, isInitialized, segments]);

@@ -23,16 +23,16 @@ const TRADES = [
   { label: 'HVAC', value: 'hvac' },
   { label: 'Plumbing', value: 'plumbing' },
   { label: 'Electrical', value: 'electrical' },
-  { label: 'General Contractor', value: 'general' },
+  { label: 'General Contractor', value: 'general_construction' },
   { label: 'Other', value: 'other' },
 ];
 
 const EXPERIENCE = [
-  { label: '< 1 year', value: 'less_1_year' },
+  { label: '< 1 year', value: 'apprentice' },
   { label: '1–3 years', value: '1_3_years' },
-  { label: '3–5 years', value: '3_5_years' },
-  { label: '5–10 years', value: '5_10_years' },
+  { label: '3–10 years', value: '3_10_years' },
   { label: '10+ years', value: '10_plus_years' },
+  { label: 'DIY / Homeowner', value: 'diy_homeowner' },
 ];
 
 export default function SignupScreen() {
@@ -67,7 +67,7 @@ export default function SignupScreen() {
 
     const result = await signUp({
       email: email.trim(),
-      password: password.trim(),
+      password: password, // Bug #41: Don't trim — spaces may be intentional
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       trade,
@@ -94,7 +94,7 @@ export default function SignupScreen() {
         [
           {
             text: 'Choose a Plan',
-            onPress: () => Linking.openURL('https://arrivalcompany.com/#pricing'),
+            onPress: () => Linking.openURL('https://arrivalcompany.com/#pricing').catch(() => Alert.alert('Error', 'Could not open link')),
           },
           { text: 'Later', style: 'cancel' },
         ]

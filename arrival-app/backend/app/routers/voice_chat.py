@@ -1,0 +1,209 @@
+"""
+Voice Chat router — POST /api/voice-chat
+Composite endpoint that combines STT + Chat + TTS into a single round-trip
+for faster voice responses. Accepts audio, returns transcript + AI response + audio.
+"""
+
+import asyncio
+import logging
+import time
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
+
+from app.services.demo import get_demo_transcription, get_demo_chat_response, generate_silent_audio_base64
+from app.services.deepgram import transcribe_audio
+from app.services.anthropic import chat_with_claude
+from app.services.elevenlabs import text_to_speech
+from app.services.memory import retrieve_memories, store_memory
+from app.services.rag import retrieve_context
+from app.services.supabase import log_query, get_user_team_id
+from app.middleware.auth import get_current_user
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+MAX_AUDIO_SIZE = 10 * 1024 * 1024  # 10 MB raw; base64 is ~1.37x larger
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB base64
+MAX_HISTORY_ITEMS = 50
+MAX_CONTENT_LENGTH = 10_000
+
+
+# Simple in-memory rate limiter for demo mode (same pattern as chat.py)
+_demo_rate_limits: dict[str, tuple[int, float]] = {}  # IP -> (count, window_start)
+DEMO_RATE_LIMIT = 10      # max requests
+DEMO_RATE_WINDOW = 60.0   # per 60 seconds
+
+
+def _check_demo_rate_limit(ip: str) -> bool:
+    """
+    Check if this IP has exceeded the demo rate limit.
+    Returns True if the request should be allowed, False if rate limited.
+    """
+    now = time.time()
+    if ip in _demo_rate_limits:
+        count, window_start = _demo_rate_limits[ip]
+        if now - window_start > DEMO_RATE_WINDOW:
+            # Window expired, reset
+            _demo_rate_limits[ip] = (1, now)
+            return True
+        elif count >= DEMO_RATE_LIMIT:
+            return False
+        else:
+            _demo_rate_limits[ip] = (count + 1, window_start)
+            return True
+    else:
+        _demo_rate_limits[ip] = (1, now)
+        return True
+
+
+# Safe task wrapper that catches and logs exceptions (same pattern as chat.py)
+async def _safe_task(coro, task_name: str = "background_task"):
+    """Wrap a coroutine so exceptions are logged instead of swallowed."""
+    try:
+        await coro
+    except Exception as e:
+        logger.error(f"[{task_name}] Background task failed: {e}", exc_info=True)
+
+
+class VoiceChatRequest(BaseModel):
+    audio_base64: str
+    image_base64: str | None = None
+    conversation_history: list[dict] = []
+
+
+class VoiceChatResponse(BaseModel):
+    transcript: str
+    response: str
+    audio_base64: str
+    source: str | None = None
+    confidence: str | None = None
+
+
+@router.post("/voice-chat", response_model=VoiceChatResponse)
+async def voice_chat(
+    request: VoiceChatRequest,
+    req: Request,
+    demo: bool = Query(False, description="Use demo mode (no API key needed)"),
+):
+    """
+    Voice Chat — composite STT + Chat + TTS in a single round-trip.
+    Accepts audio (and optional image), returns transcript, AI response, and TTS audio.
+    Pass ?demo=true for canned responses without API keys.
+    """
+    # Validate input sizes
+    if len(request.audio_base64) > MAX_AUDIO_SIZE * 1.37:
+        raise HTTPException(status_code=400, detail="Audio too large (max 10 MB)")
+    if request.image_base64 and len(request.image_base64) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="Image too large (max 10 MB)")
+    if len(request.conversation_history) > MAX_HISTORY_ITEMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Conversation history too long (max {MAX_HISTORY_ITEMS} messages)",
+        )
+
+    # Sanitize conversation_history — only allow valid roles, truncate content
+    request.conversation_history = [
+        {
+            "role": msg["role"],
+            "content": str(msg.get("content", ""))[:MAX_CONTENT_LENGTH],
+        }
+        for msg in request.conversation_history
+        if isinstance(msg, dict)
+        and msg.get("role") in ("user", "assistant")
+        and msg.get("content")
+    ]
+
+    try:
+        if demo:
+            # Rate limit demo requests
+            client_ip = req.client.host if req.client else "unknown"
+            if not _check_demo_rate_limit(client_ip):
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Demo rate limit exceeded. Max {DEMO_RATE_LIMIT} requests per minute.",
+                )
+
+            # Demo mode: use canned responses
+            transcript = get_demo_transcription()
+            chat_result = get_demo_chat_response(transcript)
+            audio_base64 = generate_silent_audio_base64(duration_seconds=0.5)
+
+            return VoiceChatResponse(
+                transcript=transcript,
+                response=chat_result["response"],
+                audio_base64=audio_base64,
+                source=chat_result.get("source"),
+                confidence=chat_result.get("confidence"),
+            )
+
+        # --- Authenticated flow ---
+
+        # 1. Get authenticated user
+        user = await get_current_user(req)
+        user_id = user["user_id"]
+
+        # 2. Transcribe audio (STT)
+        transcript = await transcribe_audio(request.audio_base64)
+
+        if not transcript:
+            raise HTTPException(status_code=400, detail="Could not transcribe audio — no speech detected")
+
+        # 3. Concurrently fetch user memories + RAG context + team_id
+        team_id = await get_user_team_id(user_id)
+
+        memories, rag_context = await asyncio.gather(
+            retrieve_memories(user_id, transcript),
+            retrieve_context(user_id, transcript, team_id=team_id),
+        )
+
+        # 4. Call Claude chat with transcribed text + image + memories + RAG context + history
+        chat_result = await chat_with_claude(
+            message=transcript,
+            image_base64=request.image_base64,
+            conversation_history=request.conversation_history,
+            user_memories=memories,
+            rag_context=rag_context,
+        )
+
+        # 5. Convert AI response to speech (TTS)
+        audio_base64 = await text_to_speech(chat_result["response"])
+
+        # 6. Fire-and-forget: store memory
+        asyncio.create_task(_safe_task(
+            store_memory(user_id, [
+                {"role": "user", "content": transcript},
+                {"role": "assistant", "content": chat_result["response"]},
+            ]),
+            task_name="voice_chat_store_memory",
+        ))
+
+        # 7. Fire-and-forget: log query for team activity
+        async def _log():
+            log_team_id = team_id or await get_user_team_id(user_id)
+            await log_query(
+                user_id=user_id,
+                question=transcript,
+                response=chat_result.get("response"),
+                source=chat_result.get("source"),
+                confidence=chat_result.get("confidence"),
+                has_image=bool(request.image_base64),
+                team_id=log_team_id,
+            )
+        asyncio.create_task(_safe_task(_log(), task_name="voice_chat_log_query"))
+
+        return VoiceChatResponse(
+            transcript=transcript,
+            response=chat_result["response"],
+            audio_base64=audio_base64,
+            source=chat_result.get("source"),
+            confidence=chat_result.get("confidence"),
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Voice chat failed: {str(e)}")

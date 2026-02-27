@@ -1,7 +1,12 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL + '/api';
+// Bug #2: Guard against missing env var — warn loudly instead of silent "undefined/api"
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+if (!BASE_URL) {
+  console.error('EXPO_PUBLIC_BACKEND_URL is not set! All API calls will fail.');
+}
+const API_URL = (BASE_URL || '') + '/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -11,9 +16,30 @@ const api = axios.create({
   timeout: 45000, // 45s — real STT + Claude + TTS can take time
 });
 
+// Bug #10: Mutex for token refresh — prevents concurrent refresh race condition
+let refreshPromise: Promise<any> | null = null;
+
 // Add Supabase JWT to every request so FastAPI backend can validate
 api.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
+  let { data } = await supabase.auth.getSession();
+
+  // If token expires within 60 seconds, refresh it
+  if (data.session?.expires_at) {
+    const expiresAt = data.session.expires_at * 1000;
+    if (Date.now() > expiresAt - 60000) {
+      // Only one concurrent refresh — others wait on the same promise
+      if (!refreshPromise) {
+        refreshPromise = supabase.auth.refreshSession().finally(() => {
+          refreshPromise = null;
+        });
+      }
+      const { data: refreshed } = await refreshPromise;
+      if (refreshed?.session) {
+        data = refreshed;
+      }
+    }
+  }
+
   if (data.session?.access_token) {
     config.headers.Authorization = `Bearer ${data.session.access_token}`;
   }
@@ -56,6 +82,26 @@ export const aiAPI = {
       image_base64: imageBase64,
     });
     return response.data;
+  },
+
+  voiceChat: async (
+    audioBase64: string,
+    imageBase64?: string,
+    conversationHistory: any[] = [],
+    demoMode: boolean = false,
+  ) => {
+    const response = await api.post(`/voice-chat${demoMode ? '?demo=true' : ''}`, {
+      audio_base64: audioBase64,
+      image_base64: imageBase64 || null,
+      conversation_history: conversationHistory,
+    });
+    return response.data as {
+      transcript: string;
+      response: string;
+      audio_base64: string;
+      source?: string;
+      confidence?: string;
+    };
   },
 };
 

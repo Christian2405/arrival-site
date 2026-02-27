@@ -79,14 +79,14 @@ export const useSavedAnswersStore = create<SavedAnswersState>((set, get) => ({
     // Try loading from Supabase first (source of truth)
     try {
       const result = await savedAnswersAPI.list();
-      if (result.answers && result.answers.length > 0) {
+      if (result.answers) {
         const answers: SavedAnswer[] = result.answers.map((a: any) => ({
           id: a.id,
           question: a.question,
           answer: a.answer,
           source: a.source || undefined,
           confidence: a.confidence || undefined,
-          savedAt: new Date(a.saved_at),
+          savedAt: new Date(a.saved_at || a.savedAt || Date.now()),
           trade: a.trade || 'HVAC',
         }));
         set({ answers });
@@ -105,7 +105,7 @@ export const useSavedAnswersStore = create<SavedAnswersState>((set, get) => ({
         const parsed = JSON.parse(stored);
         const answers = parsed.map((a: any) => ({
           ...a,
-          savedAt: new Date(a.savedAt || a.saved_at),
+          savedAt: new Date(a.savedAt || a.saved_at || Date.now()),
         }));
         set({ answers });
       }

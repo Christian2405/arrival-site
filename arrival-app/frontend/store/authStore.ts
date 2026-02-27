@@ -12,6 +12,9 @@ import * as WebBrowser from 'expo-web-browser';
 // Required so the browser dismisses properly on iOS
 WebBrowser.maybeCompleteAuthSession();
 
+// Bug #25: Guard flag to prevent auth listener from firing during initial load
+let _initializing = false;
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -85,7 +88,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isInitialized: false,
 
   initialize: async () => {
+    // Bug #25: Prevent auth listener from processing events during initial load
+    _initializing = true;
     try {
+      // Bug #26: Safe optional chaining — _authSubscription may not exist on first render
+      // Listen for auth state changes (clean up previous listener if re-initialized)
+      (get() as any)?._authSubscription?.unsubscribe();
+
       // Check for existing session
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -100,8 +109,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await get().loadProfile();
       }
 
-      // Listen for auth state changes
-      supabase.auth.onAuthStateChange(async (event, session) => {
+      // Bug #25: Initial load complete — allow listener to process events
+      _initializing = false;
+
+      const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        // Bug #25: Skip processing while initial load is in progress
+        if (_initializing) return;
+
         set({ session, user: session?.user || null });
 
         if (event === 'SIGNED_IN' && session) {
@@ -118,8 +132,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           });
         }
       });
+      (set as any)({ _authSubscription: authSub });
     } catch (error) {
       console.error('Auth init error:', error);
+      _initializing = false;
     } finally {
       set({ isLoading: false, isInitialized: true });
     }
@@ -273,19 +289,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         account_type: 'pro',
       });
 
+      // Bug #13: If profile insert failed, do not continue to subscription insert
       if (profileError) {
         console.error('Profile insert error:', profileError);
+        return { error: 'Failed to create user profile. Please try again.' };
       }
 
-      // 3. Insert pro subscription (lowest tier — no free tier)
+      // 3. Insert pro subscription with 7-day trial (matches website signup)
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + 7);
       const { error: subError } = await supabase.from('subscriptions').insert({
         user_id: userId,
         plan: 'pro',
         status: 'active',
+        trial_ends_at: trialEnd.toISOString(),
       });
 
       if (subError) {
         console.error('Subscription insert error:', subError);
+      }
+
+      // 4. Send welcome email (fire-and-forget, matches website auth.js)
+      const accessToken = data.session?.access_token;
+      if (accessToken) {
+        const siteUrl = process.env.EXPO_PUBLIC_SITE_URL || 'https://arrivalcompany.com';
+        fetch(`${siteUrl}/.netlify/functions/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] }),
+        }).catch((err) => console.error('Welcome email error:', err));
       }
 
       return {};
@@ -307,6 +339,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    // Bug #39: Unsubscribe auth listener before signing out
+    const sub = (get() as any)?._authSubscription;
+    if (sub) sub.unsubscribe();
+
     await supabase.auth.signOut();
     set({
       session: null,
@@ -315,6 +351,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       subscription: null,
       teamMembership: null,
     });
+
+    // Bug #28: Clear actual settings keys used by settingsStore (not the old 'settings_v2')
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.multiRemove([
+        'conversations',
+        'saved_answers',
+        'voice_output',
+        'demo_mode',
+        'job_mode',
+        'voice_speed',
+        'units',
+        'text_size',
+      ]);
+    } catch (e) {
+      console.error('Failed to clear AsyncStorage on signout:', e);
+    }
   },
 
   /**
@@ -362,12 +415,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         account_type: 'pro',
       }, { onConflict: 'id', ignoreDuplicates: true });
 
-      // Insert pro subscription only if none exists
-      await supabase.from('subscriptions').insert({
+      // Bug #35: Use upsert to prevent duplicate subscriptions on repeated OAuth sign-ins
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + 7);
+      await supabase.from('subscriptions').upsert({
         user_id: user.id,
         plan: 'pro',
         status: 'active',
-      });
+        trial_ends_at: trialEnd.toISOString(),
+      }, { onConflict: 'user_id' });
     } catch (error) {
       console.error('[Auth] ensureProfileExists error:', error);
     }
@@ -412,13 +468,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       console.log('[Auth] Subscription loaded:', subscription?.plan || 'NULL', '| rows:', subscriptions?.length || 0);
 
-      // Clean up duplicate subscriptions — keep only the highest-tier one
-      if (subscriptions && subscriptions.length > 1 && subscription) {
-        const dupes = subscriptions.filter((s: any) => s.id !== subscription.id);
-        for (const dupe of dupes) {
-          console.log('[Auth] Removing duplicate subscription:', dupe.plan, dupe.id);
-          await supabase.from('subscriptions').delete().eq('id', dupe.id);
-        }
+      // Bug #12: Log duplicate subscriptions but do NOT auto-delete them
+      if (subscriptions && subscriptions.length > 1) {
+        console.warn(
+          '[Auth] Multiple active subscriptions found (' + subscriptions.length + '). Using highest tier:',
+          subscription?.plan,
+        );
       }
 
       // Load team membership (with team details)

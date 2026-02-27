@@ -1,5 +1,4 @@
-import { Redirect } from 'expo-router';
-
+// Bug #30: Return null instead of Redirect to prevent flash of home screen before auth check
 export default function Index() {
-  return <Redirect href="/(tabs)/home" />;
+  return null;
 }

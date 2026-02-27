@@ -1,226 +1,408 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  Platform,
-  Alert,
-  Animated,
-  Dimensions,
-  Keyboard,
-  ActivityIndicator,
+  View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
+  Animated, Keyboard, Platform, Alert, KeyboardAvoidingView,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { cacheDirectory, readAsStringAsync, writeAsStringAsync, EncodingType } from 'expo-file-system/legacy';
-
+import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import { Colors } from '../../constants/Colors';
-import { useConversationStore, Message } from '../../store/conversationStore';
-import { useSettingsStore } from '../../store/settingsStore';
-import { useAuthStore } from '../../store/authStore';
-import { useSavedAnswersStore } from '../../store/savedAnswersStore';
 import { getTierLimits } from '../../constants/Tiers';
+import { useConversationStore } from '../../store/conversationStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { useSavedAnswersStore } from '../../store/savedAnswersStore';
+import { useAuthStore } from '../../store/authStore';
 import { aiAPI } from '../../services/api';
 import ChatBubble from '../../components/ChatBubble';
 import ArrivalLogo from '../../components/ArrivalLogo';
+import ModeSelector from '../../components/ModeSelector';
+import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIndicator';
+import JobModeView, { JobAIState } from '../../components/JobModeView';
+import JobModeController from '../../services/jobModeController';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const DRAWER_WIDTH = SCREEN_WIDTH * 0.78;
-
-type IoniconsName = keyof typeof Ionicons.glyphMap;
-
-interface DrawerItem {
-  icon: IoniconsName;
-  label: string;
-  route: string;
-  badge?: number;
+// Collision-safe ID generator
+function generateId(): string {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10);
 }
 
-const DRAWER_ITEMS: DrawerItem[] = [
-  { icon: 'document-text-outline', label: 'Codes', route: '/(tabs)/codes' },
-  { icon: 'book-outline', label: 'Manuals', route: '/(tabs)/manuals' },
-  { icon: 'build-outline', label: 'Quick Tools', route: '/(tabs)/quick-tools' },
-  { icon: 'bookmark-outline', label: 'Saved Answers', route: '/(tabs)/saved-answers' },
-  { icon: 'time-outline', label: 'History', route: '/(tabs)/history' },
-  { icon: 'settings-outline', label: 'Settings', route: '/(tabs)/settings' },
-];
+// Voice save command detection
+const SAVE_COMMANDS = /^(save|save that|save this|save it|save answer|bookmark|keep that|remember that)\.?$/i;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  // Camera
+  const cameraRef = useRef<CameraView>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // Recording
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const recordingPulse = useRef(new Animated.Value(1)).current;
+
+  // Voice state machine (for Default Mode)
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+
+  // Job Mode state
+  const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
+  const [jobPaused, setJobPaused] = useState(false);
+  const jobControllerRef = useRef<JobModeController | null>(null);
+
+  // Text Mode state
+  const [inputText, setInputText] = useState('');
+  const [pendingImage, setPendingImage] = useState<string | undefined>();
+  const [showChat, setShowChat] = useState(false);
+  const chatSlide = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef<FlatList>(null);
+
+  // PTT frame capture ref
+  const pttFrameRef = useRef<string | undefined>(undefined);
+
+  // Audio playback
+  const currentSoundRef = useRef<Audio.Sound | null>(null);
+
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerAnim = useRef(new Animated.Value(0)).current;
 
-  // Camera
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
-  const [flashOn, setFlashOn] = useState(false);
-
-  // Audio recording
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const recordingPulse = useRef(new Animated.Value(1)).current;
-
-  // Chat state
-  const [inputText, setInputText] = useState('');
-  const [showChat, setShowChat] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
-  const chatSlide = useRef(new Animated.Value(0)).current;
-
   // Stores
   const {
-    currentConversation,
-    isRecording,
-    isProcessing,
-    addMessage,
-    createNewConversation,
-    setIsRecording,
-    setIsProcessing,
+    currentConversation, conversations, addMessage, createNewConversation, setCurrentConversation,
+    isRecording, isProcessing, setIsRecording, setIsProcessing,
   } = useConversationStore();
-
-  const { demoMode, voiceOutput, jobMode, setJobMode } = useSettingsStore();
-  const { saveAnswer } = useSavedAnswersStore();
-
-  // Auth + tier data for drawer footer and Job Mode gating
-  const { profile, subscription, teamMembership } = useAuthStore();
-  const plan = subscription?.plan;
-  const tierLimits = getTierLimits(plan || '');
-  const displayName = profile
-    ? `${profile.first_name} ${profile.last_name}`
-    : 'Arrival User';
-  const planLabel = plan
-    ? plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan'
-    : '';
-  const planColor =
-    plan === 'business' ? '#4A90D9' : plan === 'pro' ? Colors.accent : Colors.textSecondary;
-
   const messages = currentConversation?.messages || [];
 
-  // --- Job Mode: Periodic frame analysis ---
-  const jobModeProcessing = useRef(false);
+  const { demoMode, voiceOutput, interactionMode, setInteractionMode } = useSettingsStore();
+  const { saveAnswer } = useSavedAnswersStore();
+  const { profile, subscription } = useAuthStore();
 
-  useEffect(() => {
-    if (!jobMode || !permission?.granted) return;
+  const plan = subscription?.plan || 'free';
+  const tierLimits = getTierLimits(plan);
 
-    const analyzeInterval = setInterval(async () => {
-      // Skip if already processing a frame or a chat message
-      if (jobModeProcessing.current || isProcessing || isRecording) return;
+  // --- Camera capture (silent, no shutter) ---
+  const captureFrame = useCallback(async (): Promise<string | undefined> => {
+    if (!cameraRef.current) return undefined;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.3,
+        exif: false,
+      });
+      return photo?.base64 || undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
 
-      jobModeProcessing.current = true;
+  // --- Audio playback (with stop capability) ---
+  const playAudio = useCallback(async (audioBase64: string): Promise<void> => {
+    // Stop any currently playing audio
+    if (currentSoundRef.current) {
       try {
-        const frameBase64 = await captureFrame();
-        if (!frameBase64) {
-          jobModeProcessing.current = false;
-          return;
+        await currentSoundRef.current.stopAsync();
+        await currentSoundRef.current.unloadAsync();
+      } catch (_) {}
+      currentSoundRef.current = null;
+    }
+
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+
+    const fileUri = cacheDirectory + `tts_${Date.now()}.mp3`;
+    await writeAsStringAsync(fileUri, audioBase64, { encoding: EncodingType.Base64 });
+    const { sound } = await Audio.Sound.createAsync({ uri: fileUri });
+    currentSoundRef.current = sound;
+
+    return new Promise((resolve) => {
+      sound.setOnPlaybackStatusUpdate(async (status: any) => {
+        if (status.isLoaded && status.didJustFinish) {
+          currentSoundRef.current = null;
+          await sound.unloadAsync();
+          await deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+          resolve();
         }
+      });
+      sound.playAsync();
+    });
+  }, []);
 
-        const result = await aiAPI.analyzeFrame(frameBase64);
+  const stopAudio = useCallback(async () => {
+    if (currentSoundRef.current) {
+      try {
+        await currentSoundRef.current.stopAsync();
+        await currentSoundRef.current.unloadAsync();
+      } catch (_) {}
+      currentSoundRef.current = null;
+    }
+  }, []);
 
-        if (result.alert && result.message) {
-          // Ensure a conversation exists before adding messages
-          if (!currentConversation) createNewConversation();
-
-          const alertMessage: Message = {
-            id: Date.now().toString(),
-            role: 'assistant',
-            content: result.message,
-            alertType: result.severity === 'critical' ? 'critical' : 'warning',
-            source: 'Job Mode Analysis',
-            timestamp: new Date(),
-          };
-          addMessage(alertMessage);
-
-          // Play TTS for CRITICAL alerts so worker hears safety hazards aloud
-          if (result.severity === 'critical') {
-            try {
-              const ttsResponse = await aiAPI.textToSpeech(result.message, demoMode);
-              if (ttsResponse.audio_base64) await playAudio(ttsResponse.audio_base64);
-            } catch (e) {
-              console.log('Job Mode TTS error:', e);
-            }
-          }
-        }
-      } catch (error) {
-        console.log('Job Mode analysis error:', error);
-      } finally {
-        jobModeProcessing.current = false;
-      }
-    }, 8000);
-
-    return () => clearInterval(analyzeInterval);
-  }, [jobMode, permission?.granted, isProcessing, isRecording]);
-
-  // --- Keyboard height (instant, no animation) ---
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
+  // --- Recording cleanup on unmount ---
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    return () => {
+      if (recording) {
+        recording.stopAndUnloadAsync().catch(() => {});
+      }
+    };
+  }, [recording]);
 
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
+  // --- Start recording ---
+  const startRecording = useCallback(async () => {
+    try {
+      if (recording) {
+        await recording.stopAndUnloadAsync().catch(() => {});
+        setRecording(null);
+      }
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Microphone access is needed for voice input.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(rec);
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+    }
+  }, [recording, setIsRecording]);
+
+  // --- Voice save command handler ---
+  const handleVoiceSaveCommand = useCallback(() => {
+    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+    if (lastAssistant) {
+      saveAnswer({
+        id: generateId(),
+        question: [...messages].reverse().find(m => m.role === 'user')?.content || '',
+        answer: lastAssistant.content,
+        source: lastAssistant.source,
+        trade: currentConversation?.trade || 'General',
+        savedAt: new Date(),
+      });
+    }
+  }, [messages, currentConversation, saveAnswer]);
+
+  // --- DEFAULT MODE: PTT handlers ---
+  const handlePTTStart = useCallback(async () => {
+    if (isProcessing) return;
+    setVoiceState('listening');
+    // Capture frame silently in background
+    captureFrame().then(frame => { pttFrameRef.current = frame; });
+    await startRecording();
+  }, [isProcessing, captureFrame, startRecording]);
+
+  const handlePTTEnd = useCallback(async () => {
+    if (!recording) return;
+    setIsRecording(false);
+    setVoiceState('processing');
+    setIsProcessing(true);
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      if (!uri) { setVoiceState('idle'); setIsProcessing(false); return; }
+
+      const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+      const frameBase64 = pttFrameRef.current;
+      pttFrameRef.current = undefined;
+
+      // Use composite endpoint for speed
+      const history = messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+      const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, demoMode);
+
+      // Check for save commands
+      if (SAVE_COMMANDS.test(result.transcript)) {
+        handleVoiceSaveCommand();
+        setVoiceState('idle');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Store messages (hidden from UI in Default Mode, visible in History)
+      addMessage({
+        id: generateId(), role: 'user', content: result.transcript,
+        displayMode: 'voice', timestamp: new Date(),
+      });
+      addMessage({
+        id: generateId(), role: 'assistant', content: result.response,
+        source: result.source, confidence: result.confidence as any,
+        displayMode: 'voice', timestamp: new Date(),
+      });
+
+      // Play voice response
+      setVoiceState('speaking');
+      await playAudio(result.audio_base64);
+      setVoiceState('idle');
+    } catch (error: any) {
+      console.error('Voice chat error:', error);
+      setVoiceState('idle');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [recording, messages, demoMode, addMessage, playAudio, handleVoiceSaveCommand, setIsRecording, setIsProcessing]);
+
+  // --- TEXT MODE: Send message ---
+  const handleTextSubmit = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text || isProcessing) return;
+
+    Keyboard.dismiss();
+    setInputText('');
+    setIsProcessing(true);
+
+    const imageForThisMessage = pendingImage;
+    setPendingImage(undefined);
+
+    // Add user message (visible as bubble in Text Mode)
+    addMessage({
+      id: generateId(), role: 'user', content: text,
+      image: imageForThisMessage, displayMode: 'text', timestamp: new Date(),
     });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
+
+    try {
+      const history = messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+      const response = await aiAPI.chat(text, imageForThisMessage, history, demoMode);
+
+      addMessage({
+        id: generateId(), role: 'assistant', content: response.response,
+        source: response.source, confidence: response.confidence as any,
+        displayMode: 'text', timestamp: new Date(),
+      });
+
+      // NO TTS in Text Mode -- text in = text out
+    } catch (error: any) {
+      addMessage({
+        id: generateId(), role: 'assistant',
+        content: error?.message?.includes('Network') ? 'Cannot reach the server. Please check your connection.' : 'Something went wrong. Please try again.',
+        displayMode: 'text', timestamp: new Date(),
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [inputText, isProcessing, pendingImage, messages, demoMode, addMessage, setIsProcessing]);
+
+  // --- MODE SWITCHING ---
+  const handleModeChange = useCallback((newMode: 'default' | 'text' | 'job') => {
+    // Cancel in-progress work
+    if (recording) {
+      recording.stopAndUnloadAsync().catch(() => {});
+      setRecording(null);
+      setIsRecording(false);
+    }
+    stopAudio();
+    setIsProcessing(false);
+    setVoiceState('idle');
+
+    // Clean up Job Mode
+    if (interactionMode === 'job' && jobControllerRef.current) {
+      jobControllerRef.current.stop();
+      jobControllerRef.current = null;
+    }
+
+    // Tier gates
+    if (newMode === 'job' && !tierLimits.jobMode) {
+      Alert.alert('Business Plan Required', 'Job Mode is available on the Business plan.');
+      return;
+    }
+    if (newMode === 'default' && !tierLimits.voiceOutput) {
+      Alert.alert('Pro Plan Required', 'Voice mode requires the Pro plan or above.');
+      return;
+    }
+
+    setInteractionMode(newMode);
+  }, [recording, interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
+
+  // --- JOB MODE EFFECT ---
+  useEffect(() => {
+    if (interactionMode !== 'job' || !permission?.granted) {
+      if (jobControllerRef.current) {
+        jobControllerRef.current.stop();
+        jobControllerRef.current = null;
+      }
+      return;
+    }
+
+    const controller = new JobModeController(
+      {
+        cooldownAfterSpeaking: 8000,
+        cooldownAfterDismiss: 15000,
+        maxAlertsPerMinute: 3,
+      },
+      {
+        onAlert: async (message, severity) => {
+          addMessage({
+            id: generateId(), role: 'assistant', content: message,
+            alertType: severity === 'critical' ? 'critical' : 'warning',
+            source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
+          });
+          try {
+            const ttsResp = await aiAPI.textToSpeech(message, demoMode);
+            if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
+          } catch (e) {
+            console.log('Job Mode TTS error:', e);
+          }
+        },
+        onVoiceResponse: async (audioBase64) => {
+          try {
+            const frame = await captureFrame();
+            const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+            const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+            const result = await aiAPI.voiceChat(audioBase64, frame, history, demoMode);
+
+            addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
+            addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: result.confidence as any, displayMode: 'job', timestamp: new Date() });
+
+            await playAudio(result.audio_base64);
+          } catch (e) {
+            console.log('Job Mode voice error:', e);
+          }
+        },
+        onStateChange: setJobAIState,
+      },
+      { minInterval: 3000, maxInterval: 15000, changeThreshold: 0.05, captureInterval: 2000 },
+      { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1500, meteringInterval: 100 },
+    );
+
+    // Wire up the frame batcher to call analyzeFrame
+    controller.frameBatcher['config'].onAnalyze = async (frame: string) => {
+      try {
+        const result = await aiAPI.analyzeFrame(frame);
+        if (result.alert && result.message) {
+          await controller.handleFrameAlert(result.message, result.severity || 'warning');
+        }
+      } catch (e) {
+        console.log('Job Mode frame error:', e);
+      }
+    };
+
+    controller.start(captureFrame);
+    jobControllerRef.current = controller;
 
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      controller.stop();
+      jobControllerRef.current = null;
     };
-  }, []);
+  }, [interactionMode, permission?.granted]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Drawer ---
-  const openDrawer = useCallback(() => {
-    setDrawerOpen(true);
-    Animated.spring(drawerAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      damping: 24,
-      stiffness: 200,
-    }).start();
-  }, []);
-
-  const closeDrawer = useCallback(() => {
-    Animated.timing(drawerAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => setDrawerOpen(false));
-  }, []);
-
-  const navigateFromDrawer = (route: string) => {
-    closeDrawer();
-    setTimeout(() => router.push(route as any), 250);
-  };
-
-  // Show chat when messages exist — instant, no animation delay
+  // --- TEXT MODE: Chat show/hide effects ---
   useEffect(() => {
+    if (interactionMode !== 'text') return;
     if (messages.length > 0 && !showChat) {
       setShowChat(true);
       chatSlide.setValue(1);
     }
-  }, [messages.length]);
+  }, [messages.length, showChat, interactionMode, chatSlide]);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (messages.length > 0 && flatListRef.current) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages.length, isProcessing]);
+  const dismissChat = useCallback(() => {
+    Animated.timing(chatSlide, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+      setShowChat(false);
+      createNewConversation();
+    });
+  }, [createNewConversation, chatSlide]);
 
-  // Recording pulse animation
+  // --- Recording pulse animation ---
   useEffect(() => {
     if (isRecording) {
       const pulse = Animated.loop(
@@ -232,476 +414,293 @@ export default function HomeScreen() {
       pulse.start();
       return () => pulse.stop();
     }
-  }, [isRecording]);
+  }, [isRecording, recordingPulse]);
 
-  // --- Dismiss chat ---
-  const dismissChat = useCallback(() => {
-    Animated.timing(chatSlide, {
-      toValue: 0,
+  // --- DRAWER ---
+  const SCREEN_WIDTH = 350;
+  const DRAWER_WIDTH = SCREEN_WIDTH * 0.78;
+
+  const toggleDrawer = useCallback(() => {
+    Animated.timing(drawerAnim, {
+      toValue: drawerOpen ? 0 : 1,
       duration: 250,
       useNativeDriver: true,
-    }).start(() => {
-      setShowChat(false);
-    });
-  }, []);
+    }).start();
+    setDrawerOpen(!drawerOpen);
+  }, [drawerOpen, drawerAnim]);
 
-  // --- Camera Frame Capture ---
-  const captureFrame = async (): Promise<string | undefined> => {
-    if (!cameraRef.current) return undefined;
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.3,
-        exif: false,
-      });
-      return photo?.base64 || undefined;
-    } catch (error) {
-      console.log('Camera capture failed:', error);
-      return undefined;
-    }
-  };
+  // --- Display name ---
+  const displayName = profile
+    ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Arrival User'
+    : 'Arrival User';
 
-  // --- Audio Recording (PTT) ---
-  const startRecording = async () => {
-    try {
-      // Clean up any stale recording first
-      if (recording) {
-        try { await recording.stopAndUnloadAsync(); } catch (_) {}
-        setRecording(null);
-      }
+  // --- Filtered messages for Text Mode ---
+  const textMessages = messages.filter(m => m.displayMode === 'text' || !m.displayMode);
 
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Microphone access is required for voice input.');
-        return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(rec);
-      setIsRecording(true);
-    } catch (error: any) {
-      console.error('Failed to start recording:', error);
-      Alert.alert('Mic Error', error?.message || 'Could not start recording. Check microphone permissions in Settings.');
-    }
-  };
-
-  // --- Voice Command Detection ---
-  const SAVE_COMMANDS = /^\s*(save\s+(that|this|the)\s*(answer|response|reply)?|bookmark\s+(that|this|the)\s*(answer|response|reply)?)\s*[.!?]?\s*$/i;
-
-  const handleVoiceSaveCommand = () => {
-    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
-    if (!lastAssistant) {
-      Alert.alert('Nothing to save', 'Ask a question first, then say "save that answer".');
-      return;
-    }
-    const userMsg = [...messages].reverse().find((m) => m.role === 'user');
-    saveAnswer({
-      id: lastAssistant.id,
-      question: userMsg?.content || 'Voice question',
-      answer: lastAssistant.content,
-      source: lastAssistant.source,
-      confidence: lastAssistant.confidence,
-      savedAt: new Date(),
-      trade: profile?.primary_trade || 'General',
-    });
-    Alert.alert('Saved!', 'Answer bookmarked to your Saved Answers.');
-  };
-
-  const stopRecording = async () => {
-    if (!recording) return;
-    setIsRecording(false);
-    setIsProcessing(true);
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
-      if (!uri) { setIsProcessing(false); return; }
-      const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
-      const { text } = await aiAPI.transcribe(audioBase64, demoMode);
-      if (text) {
-        // Check for voice save command before sending as chat
-        if (SAVE_COMMANDS.test(text)) {
-          handleVoiceSaveCommand();
-          setIsProcessing(false);
-        } else {
-          await sendMessage(text);
-        }
-      } else {
-        setIsProcessing(false);
-        Alert.alert('Could not hear you', 'Tap the mic, speak clearly, then tap again to send.');
-      }
-    } catch (error: any) {
-      console.error('Recording failed:', error);
-      setIsProcessing(false);
-      const msg = error?.message?.includes('Network')
-        ? 'Cannot reach the server. Make sure the backend is running.'
-        : 'Voice recording failed. Please try again.';
-      Alert.alert('Voice Error', msg);
-    }
-  };
-
-  // --- Send Message ---
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
-    Keyboard.dismiss();
-    setInputText('');
-    setIsProcessing(true);
-
-    if (!currentConversation) createNewConversation();
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date(),
-    };
-    addMessage(userMessage);
-
-    try {
-      const history = messages.map((m) => ({ role: m.role, content: m.content }));
-      const response = await aiAPI.chat(text.trim(), undefined, history, demoMode);
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.response,
-        source: response.source,
-        confidence: response.confidence,
-        timestamp: new Date(),
-      };
-      addMessage(assistantMessage);
-
-      if (voiceOutput && response.response) {
-        try {
-          const ttsResponse = await aiAPI.textToSpeech(response.response, demoMode);
-          if (ttsResponse.audio_base64) await playAudio(ttsResponse.audio_base64);
-        } catch (e) {
-          console.log('TTS error:', e);
-          // Voice output failed silently — text response still visible
-        }
-      }
-    } catch (error: any) {
-      console.error('Chat failed:', error);
-      const isNetwork = error?.message?.includes('Network') || error?.code === 'ECONNABORTED';
-      addMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: isNetwork
-          ? 'Cannot reach the server. Check that the backend is running and you\'re on the same WiFi network.'
-          : 'Sorry, I had trouble processing that. Please try again.',
-        confidence: 'low',
-        timestamp: new Date(),
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // --- Audio Playback ---
-  const playAudio = async (audioBase64: string) => {
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-      const fileUri = cacheDirectory + 'tts_response.mp3';
-      await writeAsStringAsync(fileUri, audioBase64, { encoding: EncodingType.Base64 });
-      const { sound } = await Audio.Sound.createAsync({ uri: fileUri });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
-      });
-    } catch (error) { console.log('Audio playback error:', error); }
-  };
-
-  const handleSubmit = () => {
-    if (inputText.trim() && !isProcessing) sendMessage(inputText);
-  };
-
-  // --- Permission screen ---
-  if (!permission) return <View style={styles.container} />;
-  if (!permission.granted) {
-    return (
-      <View style={[styles.container, styles.centered, { backgroundColor: Colors.background }]}>
-        <View style={styles.permIconWrap}>
-          <Ionicons name="camera-outline" size={48} color={Colors.accent} />
-        </View>
-        <Text style={styles.permTitle}>Camera Access</Text>
-        <Text style={styles.permSubtitle}>
-          Arrival uses your camera to see equipment and help diagnose issues in real-time.
-        </Text>
-        <TouchableOpacity style={styles.permButton} onPress={requestPermission}>
-          <Ionicons name="lock-open-outline" size={18} color="#FFF" />
-          <Text style={styles.permButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const drawerTranslateX = drawerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-DRAWER_WIDTH, 0],
-  });
-
-  const overlayOpacity = drawerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.5],
-  });
-
+  // --- RENDER ---
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <View style={styles.container}>
-      {/* Camera Background */}
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        enableTorch={flashOn}
-      />
+      {/* Camera background - always visible */}
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
 
-      {/* Subtle overlay */}
-      <View style={[StyleSheet.absoluteFill, styles.cameraOverlay]} />
+      {/* Dark overlay */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
 
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* ===== TOP BAR ===== */}
-        <View style={styles.topBar}>
-          {/* Left: Hamburger */}
-          <TouchableOpacity style={styles.topIconBtn} onPress={openDrawer}>
-            <Ionicons name="menu" size={24} color="#FFF" />
-          </TouchableOpacity>
+      {/* Main content */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={[styles.content, { paddingTop: insets.top }]}>
 
-          {/* Center: Job Mode toggle (business/enterprise only) */}
-          {tierLimits.jobMode ? (
-            <TouchableOpacity
-              style={[styles.recordingPill, jobMode && styles.recordingPillActive]}
-              onPress={() => setJobMode(!jobMode)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.recordDot, jobMode && styles.recordDotActive]} />
-              <Text style={styles.recordText}>
-                {jobMode ? 'Job Mode ON' : 'Job Mode'}
-              </Text>
+          {/* TOP BAR: Hamburger + Mode Selector + New Chat */}
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={toggleDrawer} style={styles.iconBtn}>
+              <Ionicons name="menu" size={24} color="#FFF" />
             </TouchableOpacity>
-          ) : (
-            <View style={styles.recordingPill}>
-              <ArrivalLogo width={80} color="#FFF" />
-            </View>
-          )}
 
-          {/* Right: Flash */}
-          <TouchableOpacity style={styles.topIconBtn} onPress={() => setFlashOn(!flashOn)}>
-            <Ionicons name={flashOn ? 'flash' : 'flash-outline'} size={22} color="#FFF" />
-          </TouchableOpacity>
-        </View>
+            <ModeSelector
+              currentMode={interactionMode}
+              onModeChange={handleModeChange}
+              jobModeAllowed={tierLimits.jobMode}
+              voiceAllowed={tierLimits.voiceOutput}
+            />
 
-        {/* Demo badge */}
-        {demoMode && (
-          <View style={styles.demoBadge}>
-            <Text style={styles.demoBadgeText}>DEMO MODE</Text>
+            <TouchableOpacity onPress={() => createNewConversation()} style={styles.iconBtn}>
+              <Ionicons name="add-circle-outline" size={24} color="#FFF" />
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* ===== CHAT AREA ===== */}
-        <View style={[styles.chatArea, { paddingBottom: keyboardHeight > 0 ? keyboardHeight - insets.bottom : 0 }]}>
-
-          {/* Empty state */}
-          {!showChat && messages.length === 0 && (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="chatbubble-ellipses" size={32} color="rgba(255,255,255,0.6)" />
-              </View>
-              <Text style={styles.emptyTitle}>How can I help you today?</Text>
-              <Text style={styles.emptySubtitle}>
-                Point your camera at equipment and ask a question
-              </Text>
+          {/* Demo mode badge */}
+          {demoMode && (
+            <View style={styles.demoBadge}>
+              <Text style={styles.demoBadgeText}>DEMO MODE</Text>
             </View>
           )}
 
-          {/* Messages */}
-          {(showChat || messages.length > 0) && (
-            <Animated.View
-              style={[
-                styles.messagesContainer,
-                {
-                  opacity: chatSlide,
-                  transform: [{ translateY: chatSlide.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
-                },
-              ]}
-            >
-              {/* Dismiss button */}
-              <TouchableOpacity style={styles.dismissBtn} onPress={dismissChat}>
-                <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.7)" />
-              </TouchableOpacity>
+          {/* ===== MODE-SPECIFIC CONTENT ===== */}
 
-              <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item, index }) => (
-                  <ChatBubble
-                    message={item}
-                    onSave={item.role === 'assistant' ? () => {
-                      // Find the preceding user message as the "question"
-                      const prevMessages = messages.slice(0, index);
-                      const userMsg = [...prevMessages].reverse().find((m) => m.role === 'user');
-                      saveAnswer({
-                        id: item.id,
-                        question: userMsg?.content || 'Voice question',
-                        answer: item.content,
-                        source: item.source,
-                        confidence: item.confidence,
-                        savedAt: new Date(),
-                        trade: profile?.trade || 'General',
-                      });
-                    } : undefined}
+          {interactionMode === 'default' && (
+            <View style={styles.modeContainer}>
+              <VoiceStatusIndicator state={voiceState} />
+
+              {/* Large PTT button at bottom */}
+              <View style={styles.pttContainer}>
+                <Pressable
+                  onPressIn={handlePTTStart}
+                  onPressOut={handlePTTEnd}
+                  disabled={isProcessing}
+                  style={({ pressed }) => [
+                    styles.pttButton,
+                    pressed && styles.pttButtonActive,
+                    voiceState === 'listening' && styles.pttButtonActive,
+                    isProcessing && styles.pttButtonDisabled,
+                  ]}
+                >
+                  <Ionicons
+                    name={voiceState === 'listening' ? 'radio' : 'mic'}
+                    size={32}
+                    color="#FFF"
                   />
-                )}
-                style={styles.messagesScroll}
-                contentContainerStyle={styles.messagesContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={true}
-                onContentSizeChange={() => {
-                  flatListRef.current?.scrollToEnd({ animated: true });
-                }}
-                ListFooterComponent={
-                  isProcessing ? (
-                    <View style={styles.thinkingRow}>
-                      <View style={styles.thinkingDot} />
-                      <ActivityIndicator color={Colors.accent} size="small" />
-                      <Text style={styles.thinkingText}>Thinking...</Text>
-                    </View>
-                  ) : null
-                }
-              />
-            </Animated.View>
+                </Pressable>
+              </View>
+            </View>
           )}
 
-          {/* ===== INPUT BAR ===== */}
-          <View style={[styles.inputBarWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <View style={styles.inputBar}>
-              {/* Camera snap button */}
-              <TouchableOpacity style={styles.inputIconBtn} onPress={captureFrame}>
-                <Ionicons name="camera-outline" size={22} color={Colors.textSecondary} />
-              </TouchableOpacity>
+          {interactionMode === 'text' && (
+            <View style={styles.modeContainer}>
+              {/* Chat messages */}
+              {showChat && textMessages.length > 0 ? (
+                <Animated.View style={[styles.chatArea, { opacity: chatSlide, transform: [{ translateY: chatSlide.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
+                  <FlatList
+                    ref={flatListRef}
+                    data={textMessages}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                      <ChatBubble
+                        message={item}
+                        onSave={item.role === 'assistant' ? () => {
+                          saveAnswer({
+                            id: item.id, question: '', answer: item.content,
+                            source: item.source, trade: currentConversation?.trade || 'General',
+                            savedAt: new Date(),
+                          });
+                        } : undefined}
+                      />
+                    )}
+                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+                    showsVerticalScrollIndicator={false}
+                    inverted={false}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    keyboardShouldPersistTaps="handled"
+                  />
 
-              {/* Text input */}
-              <TextInput
-                style={styles.textInput}
-                placeholder="Ask anything..."
-                placeholderTextColor={Colors.textLight}
-                value={inputText}
-                onChangeText={setInputText}
-                onSubmitEditing={handleSubmit}
-                returnKeyType="send"
-                editable={!isProcessing}
-                multiline={false}
-              />
-
-              {/* Send or Mic */}
-              {inputText.trim() ? (
-                <TouchableOpacity style={styles.sendBtn} onPress={handleSubmit} disabled={isProcessing}>
-                  <Ionicons name="arrow-up" size={20} color="#FFF" />
-                </TouchableOpacity>
-              ) : (
-                <Animated.View style={{ transform: [{ scale: isRecording ? recordingPulse : 1 }] }}>
-                  <TouchableOpacity
-                    style={[styles.micBtn, isRecording && styles.micBtnActive]}
-                    onPress={isRecording ? stopRecording : startRecording}
-                    disabled={isProcessing}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={isRecording ? 'radio' : 'mic'}
-                      size={22}
-                      color={isRecording ? '#FFF' : Colors.accent}
-                    />
+                  {/* Dismiss button */}
+                  <TouchableOpacity onPress={dismissChat} style={styles.dismissBtn}>
+                    <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.6)" />
                   </TouchableOpacity>
                 </Animated.View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <ArrivalLogo width={48} color="#FFF" />
+                  <Text style={styles.emptyTitle}>Arrival AI</Text>
+                  <Text style={styles.emptySubtitle}>Type a question to get started</Text>
+                </View>
               )}
+
+              {/* Processing indicator */}
+              {isProcessing && (
+                <View style={styles.processingRow}>
+                  <Text style={styles.processingText}>Thinking...</Text>
+                </View>
+              )}
+
+              {/* Text input bar */}
+              <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+                {/* Camera snap button */}
+                <TouchableOpacity
+                  onPress={async () => {
+                    const frame = await captureFrame();
+                    if (frame) setPendingImage(frame);
+                  }}
+                  style={styles.inputIconBtn}
+                >
+                  <Ionicons
+                    name="camera"
+                    size={22}
+                    color={pendingImage ? Colors.accent : 'rgba(255,255,255,0.5)'}
+                  />
+                  {pendingImage && <View style={styles.imageBadge} />}
+                </TouchableOpacity>
+
+                <TextInput
+                  style={styles.textInput}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder="Type a message..."
+                  placeholderTextColor="rgba(255,255,255,0.35)"
+                  editable={!isProcessing}
+                  returnKeyType="send"
+                  onSubmitEditing={handleTextSubmit}
+                />
+
+                {inputText.trim() ? (
+                  <TouchableOpacity onPress={handleTextSubmit} style={styles.sendBtn}>
+                    <Ionicons name="send" size={20} color="#FFF" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          )}
+
+          {interactionMode === 'job' && (
+            <View style={styles.modeContainer}>
+              <JobModeView
+                aiState={jobAIState}
+                onPause={() => {
+                  if (jobPaused) {
+                    jobControllerRef.current?.vad.resume();
+                  } else {
+                    jobControllerRef.current?.vad.pause();
+                    jobControllerRef.current?.dismiss();
+                  }
+                  setJobPaused(!jobPaused);
+                }}
+                isPaused={jobPaused}
+              />
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* DRAWER OVERLAY */}
+      {drawerOpen && (
+        <TouchableOpacity
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 10 }]}
+          activeOpacity={1}
+          onPress={toggleDrawer}
+        />
+      )}
+
+      {/* DRAWER */}
+      <Animated.View style={[styles.drawer, {
+        transform: [{ translateX: drawerAnim.interpolate({ inputRange: [0, 1], outputRange: [-DRAWER_WIDTH, 0] }) }],
+        width: DRAWER_WIDTH,
+      }]}>
+        <View style={[styles.drawerContent, { paddingTop: insets.top + 16 }]}>
+          {/* Profile section */}
+          <View style={styles.drawerProfile}>
+            <View style={styles.drawerAvatar}>
+              <Ionicons name="person" size={24} color="#FFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.drawerName}>{displayName}</Text>
+              <Text style={styles.drawerPlan}>{(plan || 'free').charAt(0).toUpperCase() + (plan || 'free').slice(1)} Plan</Text>
             </View>
           </View>
-        </View>
-      </SafeAreaView>
 
-      {/* ===== DRAWER OVERLAY ===== */}
-      {drawerOpen && (
-        <TouchableWithoutFeedback onPress={closeDrawer}>
-          <Animated.View style={[styles.drawerOverlay, { opacity: overlayOpacity }]} />
-        </TouchableWithoutFeedback>
-      )}
-
-      {/* ===== DRAWER ===== */}
-      {drawerOpen && (
-        <Animated.View
-          style={[
-            styles.drawer,
-            {
-              width: DRAWER_WIDTH,
-              transform: [{ translateX: drawerTranslateX }],
-            },
-          ]}
-        >
-          <SafeAreaView style={styles.drawerSafe}>
-            {/* Drawer Header — Arrival Logo */}
-            <View style={styles.drawerHeader}>
-              <ArrivalLogo width={140} color={Colors.text} />
-            </View>
-
-            <View style={styles.drawerDivider} />
-
-            {/* Drawer Items */}
-            <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={false}>
-              {DRAWER_ITEMS.map((item) => (
-                <TouchableOpacity
-                  key={item.route}
-                  style={styles.drawerItem}
-                  onPress={() => navigateFromDrawer(item.route)}
-                  activeOpacity={0.6}
-                >
-                  <View style={styles.drawerItemIcon}>
-                    <Ionicons name={item.icon} size={20} color={Colors.text} />
-                  </View>
-                  <Text style={styles.drawerItemLabel}>{item.label}</Text>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <View style={styles.drawerBadge}>
-                      <Text style={styles.drawerBadgeText}>{item.badge}</Text>
-                    </View>
-                  )}
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Drawer Footer */}
-            <View style={styles.drawerFooter}>
-              <View style={styles.drawerDivider} />
+          {/* Conversations */}
+          <Text style={styles.drawerSectionTitle}>Recent Conversations</Text>
+          <FlatList
+            data={conversations.slice(0, 20)}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
               <TouchableOpacity
-                style={styles.drawerFooterContent}
-                onPress={() => navigateFromDrawer('/(tabs)/settings')}
-                activeOpacity={0.6}
+                style={styles.drawerConvItem}
+                onPress={() => {
+                  setCurrentConversation(item);
+                  toggleDrawer();
+                }}
               >
-                <View style={[styles.drawerAvatar, { backgroundColor: planColor + '20' }]}>
-                  <Ionicons name="person" size={18} color={planColor} />
-                </View>
-                <View style={styles.drawerFooterInfo}>
-                  <Text style={styles.drawerFooterName}>{displayName}</Text>
-                  <Text style={[styles.drawerFooterPlan, { color: planColor }]}>{planLabel}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
+                <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.drawerConvText} numberOfLines={1}>{item.title}</Text>
               </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </Animated.View>
+            )}
+            contentContainerStyle={{ paddingHorizontal: 16 }}
+            showsVerticalScrollIndicator={false}
+          />
+
+          {/* Navigation links */}
+          <View style={styles.drawerNav}>
+            {([
+              { icon: 'bookmark-outline' as const, label: 'Saved Answers', route: '/saved-answers' },
+              { icon: 'document-text-outline' as const, label: 'Manuals', route: '/manuals' },
+              { icon: 'code-slash-outline' as const, label: 'Codes', route: '/codes' },
+              { icon: 'calculator-outline' as const, label: 'Quick Tools', route: '/quick-tools' },
+            ]).map((item) => (
+              <TouchableOpacity
+                key={item.route}
+                style={styles.drawerNavItem}
+                onPress={() => { toggleDrawer(); router.push(item.route as any); }}
+              >
+                <Ionicons name={item.icon} size={20} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.drawerNavText}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Camera permission request */}
+      {!permission?.granted && (
+        <View style={[StyleSheet.absoluteFill, styles.permissionOverlay]}>
+          <Ionicons name="camera-outline" size={48} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.permissionTitle}>Camera Access Needed</Text>
+          <Text style={styles.permissionSubtitle}>Arrival needs camera access for visual analysis</Text>
+          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+            <Text style={styles.permissionBtnText}>Grant Access</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
-    </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  centered: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  cameraOverlay: { backgroundColor: 'rgba(0,0,0,0.08)' },
-  safeArea: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  content: {
+    flex: 1,
+  },
 
   // --- Top Bar ---
   topBar: {
@@ -711,40 +710,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  topIconBtn: {
+  iconBtn: {
     width: 42,
     height: 42,
     borderRadius: 21,
     backgroundColor: Colors.glassDark,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  recordingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.glassDark,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 24,
-    gap: 8,
-  },
-  recordingPillActive: {
-    backgroundColor: Colors.recording,
-  },
-  recordDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  recordDotActive: {
-    backgroundColor: '#FFF',
-  },
-  recordText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: -0.2,
   },
 
   // --- Demo badge ---
@@ -763,24 +735,41 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
 
-  // --- Chat area ---
-  chatArea: { flex: 1, justifyContent: 'flex-end' },
+  // --- Mode container (wrapper for each mode) ---
+  modeContainer: {
+    flex: 1,
+  },
 
-  // --- Empty state ---
+  // --- Default Mode: PTT ---
+  pttContainer: {
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  pttButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pttButtonActive: {
+    backgroundColor: Colors.recording || '#FF3B30',
+    transform: [{ scale: 1.1 }],
+  },
+  pttButtonDisabled: {
+    opacity: 0.4,
+  },
+
+  // --- Text Mode: Chat area ---
+  chatArea: {
+    flex: 1,
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 80,
-  },
-  emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 18,
   },
   emptyTitle: {
     color: 'rgba(255,255,255,0.9)',
@@ -788,6 +777,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.5,
     textAlign: 'center',
+    marginTop: 16,
   },
   emptySubtitle: {
     color: 'rgba(255,255,255,0.45)',
@@ -797,11 +787,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     lineHeight: 22,
   },
-
-  // --- Messages ---
-  messagesContainer: {
-    flex: 1,
-  },
   dismissBtn: {
     alignSelf: 'center',
     width: 40,
@@ -810,43 +795,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginVertical: 6,
   },
-  messagesScroll: { flex: 1 },
-  messagesContent: {
+  processingRow: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    paddingBottom: 4,
   },
-  thinkingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  thinkingDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.accentMuted,
-  },
-  thinkingText: {
+  processingText: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
+    fontStyle: 'italic',
   },
 
-  // --- Input Bar ---
-  inputBarWrap: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
+  // --- Text Mode: Input bar ---
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.glassBg || 'rgba(255,255,255,0.92)',
     borderRadius: 26,
+    marginHorizontal: 12,
     paddingLeft: 6,
     paddingRight: 5,
+    paddingTop: 6,
     height: 52,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -860,6 +830,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  imageBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.accent,
   },
   textInput: {
     flex: 1,
@@ -882,80 +861,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  micBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.accentMuted,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  micBtnActive: {
-    backgroundColor: Colors.recording,
-    shadowColor: Colors.recording,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-
-  // --- Permission ---
-  permIconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: Colors.accentMuted,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  permTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  permSubtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  permButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  permButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
 
   // --- Drawer ---
-  drawerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
-    zIndex: 10,
-  },
   drawer: {
     position: 'absolute',
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundDark || '#1C1C1E',
     zIndex: 11,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
@@ -963,86 +876,113 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 20,
   },
-  drawerSafe: {
+  drawerContent: {
     flex: 1,
+    paddingHorizontal: 0,
   },
-  drawerHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 18,
-  },
-  drawerDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: 20,
-  },
-  drawerScroll: {
-    flex: 1,
-    paddingTop: 8,
-  },
-  drawerItem: {
+  drawerProfile: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  drawerItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#F2F2F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  drawerItemLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.text,
-    letterSpacing: -0.2,
-  },
-  drawerBadge: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginRight: 8,
-  },
-  drawerBadgeText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  drawerFooter: {
-    paddingBottom: 16,
-  },
-  drawerFooterContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 20,
     gap: 12,
   },
   drawerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.border,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  drawerFooterInfo: {
-    flex: 1,
-  },
-  drawerFooterName: {
-    fontSize: 14,
+  drawerName: {
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.text,
+    color: '#FFF',
   },
-  drawerFooterPlan: {
+  drawerPlan: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 1,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+  drawerSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  drawerConvItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  drawerConvText: {
+    flex: 1,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  drawerNav: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 12,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    gap: 4,
+  },
+  drawerNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  drawerNavText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
+  },
+
+  // --- Permission overlay ---
+  permissionOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    zIndex: 20,
+  },
+  permissionTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  permissionSubtitle: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 15,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  permissionBtn: {
+    marginTop: 28,
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  permissionBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
