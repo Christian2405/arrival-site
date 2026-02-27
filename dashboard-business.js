@@ -466,7 +466,7 @@ async function handleDocUpload() {
             project_tag: projectInput.value.trim() || null,
             notes: notesInput.value.trim() || null,
             status: 'ready'
-        });
+        }).select();
         if (insertResult.error) throw insertResult.error;
 
         hideUploadOverlay();
@@ -485,11 +485,11 @@ async function handleDocUpload() {
         // Trigger RAG indexing in background (non-blocking, best-effort)
         try {
             var session = (await sb.auth.getSession()).data.session;
-            if (session) {
+            if (session && insertResult.data && insertResult.data.length > 0) {
                 fetch(BACKEND_URL + '/index-document', {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ document_id: insertResult.data ? insertResult.data[0].id : null, storage_path: storagePath })
+                    body: JSON.stringify({ document_id: insertResult.data[0].id, storage_path: storagePath })
                 }).catch(function() { /* RAG indexing is best-effort */ });
             }
         } catch (_) { /* ignore RAG errors */ }
@@ -533,19 +533,8 @@ async function deleteDocument(docId, storagePath) {
         await loadDocuments();
         loadHome();
     } catch (err) {
-        console.error('Delete error (backend):', err);
-        // Fallback: direct delete if backend is unreachable
-        try {
-            await sb.storage.from('documents').remove([storagePath]);
-            var dbResult = await sb.from('documents').delete().eq('id', docId);
-            if (dbResult.error) throw dbResult.error;
-            showToast('Document deleted.');
-            await loadDocuments();
-            loadHome();
-        } catch (fallbackErr) {
-            console.error('Delete fallback error:', fallbackErr);
-            showToast('Failed to delete document.', 'error');
-        }
+        console.error('Delete error:', err);
+        showToast('Failed to delete document. Please try again later.', 'error');
     }
 }
 
@@ -1126,25 +1115,47 @@ async function handleDeleteAccount() {
     }
 
     try {
-        // 1. Delete all team files from storage
+        // 1. Clean up Pinecone vectors by deleting each document through the backend API
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
+        var teamDocsResult = await sb.from('documents')
+            .select('id')
+            .eq('team_id', currentTeam.id);
+        var personalDocsResult = await sb.from('documents')
+            .select('id')
+            .eq('uploaded_by', currentUser.id)
+            .is('team_id', null);
+        var allDocs = [].concat(teamDocsResult.data || [], personalDocsResult.data || []);
+        if (allDocs.length > 0 && token) {
+            for (var i = 0; i < allDocs.length; i++) {
+                try {
+                    await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(allDocs[i].id), {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                } catch (_) { /* best-effort vector cleanup */ }
+            }
+        }
+
+        // 2. Delete all team files from storage
         var listResult = await sb.storage.from('documents').list('teams/' + currentTeam.id);
         if (listResult.data && listResult.data.length > 0) {
             var paths = listResult.data.map(function(f) { return 'teams/' + currentTeam.id + '/' + f.name; });
             await sb.storage.from('documents').remove(paths);
         }
 
-        // 2. Delete personal files
+        // 3. Delete personal files
         var personalResult = await sb.storage.from('documents').list(currentUser.id);
         if (personalResult.data && personalResult.data.length > 0) {
             var personalPaths = personalResult.data.map(function(f) { return currentUser.id + '/' + f.name; });
             await sb.storage.from('documents').remove(personalPaths);
         }
 
-        // 3. Delete auth user via RPC (cascades to all DB rows)
+        // 4. Delete auth user via RPC (cascades to all DB rows)
         var rpcResult = await sb.rpc('delete_own_account');
         if (rpcResult.error) throw rpcResult.error;
 
-        // 4. Sign out and redirect
+        // 5. Sign out and redirect
         await sb.auth.signOut();
         window.location.href = '/';
     } catch (err) {
@@ -1166,7 +1177,7 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
     if (!str) return '';
-    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function capitalize(str) {

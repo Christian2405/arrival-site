@@ -6,6 +6,7 @@ Supports both HS256 (legacy) and ES256 (current) Supabase JWTs
 by fetching the JWKS public keys from Supabase.
 """
 
+import asyncio
 import time
 import jwt
 import json
@@ -21,9 +22,16 @@ security = HTTPBearer(auto_error=False)
 _jwks_cache: dict = {"data": None, "fetched_at": 0.0}
 _JWKS_TTL_SECONDS = 3600  # 1 hour
 
+# Bug #42: Lock to prevent concurrent JWKS fetches
+_jwks_lock = asyncio.Lock()
 
-def _get_jwks():
-    """Fetch and cache the Supabase JWKS public keys with a 1-hour TTL."""
+
+async def _get_jwks():
+    """
+    Fetch and cache the Supabase JWKS public keys with a 1-hour TTL.
+    Bug #15: Uses asyncio.Lock to prevent concurrent fetches (Bug #42)
+    and httpx.AsyncClient to avoid blocking the event loop.
+    """
     if not config.SUPABASE_URL:
         return None
 
@@ -31,17 +39,26 @@ def _get_jwks():
     if _jwks_cache["data"] is not None and (now - _jwks_cache["fetched_at"]) < _JWKS_TTL_SECONDS:
         return _jwks_cache["data"]
 
-    url = f"{config.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-    try:
-        resp = httpx.get(url, headers={"apikey": config.SUPABASE_ANON_KEY}, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        _jwks_cache["data"] = data
-        _jwks_cache["fetched_at"] = now
-        return data
-    except Exception as e:
-        print(f"[Auth] Failed to fetch JWKS: {e}")
-        return _jwks_cache["data"]  # return stale data if available
+    # Bug #42: Acquire lock to prevent concurrent fetches
+    async with _jwks_lock:
+        # Double-check after acquiring the lock (another task may have just fetched)
+        now = time.time()
+        if _jwks_cache["data"] is not None and (now - _jwks_cache["fetched_at"]) < _JWKS_TTL_SECONDS:
+            return _jwks_cache["data"]
+
+        url = f"{config.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+        try:
+            # Bug #15: Use async httpx client instead of synchronous httpx.get()
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, headers={"apikey": config.SUPABASE_ANON_KEY})
+                resp.raise_for_status()
+                data = resp.json()
+            _jwks_cache["data"] = data
+            _jwks_cache["fetched_at"] = time.time()
+            return data
+        except Exception as e:
+            print(f"[Auth] Failed to fetch JWKS: {e}")
+            return _jwks_cache["data"]  # return stale data if available
 
 
 def _clear_jwks_cache():
@@ -50,7 +67,7 @@ def _clear_jwks_cache():
     _jwks_cache["fetched_at"] = 0.0
 
 
-def _get_signing_key(token: str):
+async def _get_signing_key(token: str):
     """
     Get the correct signing key for the token.
     Tries JWKS first (for ES256), falls back to JWT secret (for HS256).
@@ -61,7 +78,7 @@ def _get_signing_key(token: str):
     kid = header.get("kid")
 
     if alg == "ES256" and kid:
-        jwks_data = _get_jwks()
+        jwks_data = await _get_jwks()
         if jwks_data and "keys" in jwks_data:
             for key_data in jwks_data["keys"]:
                 if key_data.get("kid") == kid:
@@ -104,7 +121,7 @@ async def get_current_user(request: Request) -> dict:
     token = auth_header.replace("Bearer ", "")
 
     try:
-        signing_key, algorithms = _get_signing_key(token)
+        signing_key, algorithms = await _get_signing_key(token)
 
         payload = jwt.decode(
             token,
@@ -130,7 +147,7 @@ async def get_current_user(request: Request) -> dict:
         # Keys may have rotated — clear cache and retry once
         _clear_jwks_cache()
         try:
-            signing_key, algorithms = _get_signing_key(token)
+            signing_key, algorithms = await _get_signing_key(token)
             payload = jwt.decode(
                 token,
                 signing_key,

@@ -1,6 +1,7 @@
 """
 LLM service using Anthropic Claude API with vision support.
 Supports memory injection, RAG context, and Job Mode frame analysis.
+Bug #16: Uses AsyncAnthropic client to avoid blocking the event loop.
 """
 
 import json
@@ -9,14 +10,15 @@ import anthropic
 from app import config
 
 # Lazy singleton — avoid re-creating the client on every request
-_client: anthropic.Anthropic | None = None
+# Bug #16: Changed from synchronous Anthropic to AsyncAnthropic
+_client: anthropic.AsyncAnthropic | None = None
 
 
-def _get_client() -> anthropic.Anthropic:
-    """Return a shared Anthropic client, creating it on first use."""
+def _get_client() -> anthropic.AsyncAnthropic:
+    """Return a shared async Anthropic client, creating it on first use."""
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        _client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
     return _client
 
 
@@ -93,7 +95,8 @@ The following excerpts are from the user's uploaded documents. Reference them wh
 {context_block}
 When you use information from these documents, cite the filename as your source."""
 
-    response = client.messages.create(
+    # Bug #16: Use await with the async client
+    response = await client.messages.create(
         model=config.ANTHROPIC_MODEL,
         max_tokens=1024,
         system=system_prompt,
@@ -161,7 +164,8 @@ Be concise — the worker is on a job site and will hear this via text-to-speech
         ],
     }]
 
-    response = client.messages.create(
+    # Bug #16: Use await with the async client
+    response = await client.messages.create(
         model=config.ANTHROPIC_MODEL,
         max_tokens=256,
         system=analysis_prompt,

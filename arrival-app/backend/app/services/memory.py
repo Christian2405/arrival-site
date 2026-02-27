@@ -2,7 +2,10 @@
 Memory service — persistent user memory via Mem0 Platform.
 Retrieves relevant memories before chat, stores new facts after.
 Gracefully degrades if MEM0_API_KEY is not set.
+Bug #17: Wraps synchronous mem0 client calls in asyncio.to_thread().
 """
+
+import asyncio
 
 from app import config
 
@@ -28,13 +31,17 @@ async def retrieve_memories(user_id: str, query: str, limit: int = 5) -> list[st
     """
     Retrieve relevant memories for this user given the current query.
     Returns a list of memory strings, or empty list on failure.
+    Bug #17: Runs the synchronous client.search() in a thread to avoid blocking.
     """
     client = _get_client()
     if not client:
         return []
 
     try:
-        results = client.search(query=query, user_id=user_id, limit=limit)
+        # Bug #17: Wrap synchronous call in asyncio.to_thread()
+        results = await asyncio.to_thread(
+            client.search, query=query, user_id=user_id, limit=limit
+        )
         # mem0 returns list of dicts with 'memory' key
         memories = []
         if isinstance(results, list):
@@ -53,12 +60,14 @@ async def store_memory(user_id: str, messages: list[dict]) -> None:
     Store new facts from the conversation exchange.
     Mem0 auto-extracts meaningful facts from the messages.
     This is fire-and-forget — errors are logged but not raised.
+    Bug #17: Runs the synchronous client.add() in a thread to avoid blocking.
     """
     client = _get_client()
     if not client:
         return
 
     try:
-        client.add(messages=messages, user_id=user_id)
+        # Bug #17: Wrap synchronous call in asyncio.to_thread()
+        await asyncio.to_thread(client.add, messages=messages, user_id=user_id)
     except Exception as e:
         print(f"[memory] Store error: {e}")

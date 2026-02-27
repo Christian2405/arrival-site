@@ -275,7 +275,7 @@ async function handleDocUpload() {
                 project_tag: projectInput.value.trim() || null,
                 notes: notesInput.value.trim() || null,
                 status: 'ready'
-            });
+            }).select();
             if (insertResult.error) throw insertResult.error;
 
             uploaded++;
@@ -795,18 +795,35 @@ async function handleDeleteAccount() {
     }
 
     try {
-        // 1. Delete all user files from storage
+        // 1. Clean up Pinecone vectors by deleting each document through the backend API
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
+        var docsResult = await sb.from('documents')
+            .select('id')
+            .eq('uploaded_by', currentUser.id);
+        if (docsResult.data && docsResult.data.length > 0 && token) {
+            for (var i = 0; i < docsResult.data.length; i++) {
+                try {
+                    await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docsResult.data[i].id), {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                } catch (_) { /* best-effort vector cleanup */ }
+            }
+        }
+
+        // 2. Delete all user files from storage
         var listResult = await sb.storage.from('documents').list(currentUser.id);
         if (listResult.data && listResult.data.length > 0) {
             var paths = listResult.data.map(function(f) { return currentUser.id + '/' + f.name; });
             await sb.storage.from('documents').remove(paths);
         }
 
-        // 2. Delete auth user via RPC (cascades to all DB rows via FK)
+        // 3. Delete auth user via RPC (cascades to all DB rows via FK)
         var rpcResult = await sb.rpc('delete_own_account');
         if (rpcResult.error) throw rpcResult.error;
 
-        // 3. Sign out and redirect
+        // 4. Sign out and redirect
         await sb.auth.signOut();
         window.location.href = '/';
     } catch (err) {

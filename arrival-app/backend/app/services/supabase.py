@@ -75,12 +75,28 @@ async def upload_document(
         if team_id:
             doc_row["team_id"] = team_id
 
-        db_resp = await client.post(
-            f"{config.SUPABASE_URL}/rest/v1/documents",
-            headers=_db_headers(user_token),
-            json=doc_row,
-        )
-        db_resp.raise_for_status()
+        try:
+            db_resp = await client.post(
+                f"{config.SUPABASE_URL}/rest/v1/documents",
+                headers=_db_headers(user_token),
+                json=doc_row,
+            )
+            db_resp.raise_for_status()
+        except Exception as db_err:
+            # Bug #9: DB insert failed after storage upload — rollback the storage file
+            print(f"[supabase] DB insert failed, rolling back storage upload: {db_err}")
+            try:
+                await client.request(
+                    "DELETE",
+                    f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_STORAGE_BUCKET}",
+                    headers={**_storage_headers(), "Content-Type": "application/json"},
+                    json={"prefixes": [storage_path]},
+                )
+                print(f"[supabase] Rolled back storage file: {storage_path}")
+            except Exception as rollback_err:
+                print(f"[supabase] Storage rollback also failed: {rollback_err}")
+            raise db_err
+
         inserted = db_resp.json()
 
     # Return the first (and only) inserted row
@@ -95,6 +111,7 @@ async def upload_document(
             filename=filename,
             file_bytes=file_bytes,
             content_type=content_type,
+            team_id=team_id,
         )
     except Exception as e:
         print(f"[supabase] RAG indexing failed (non-blocking): {e}")
