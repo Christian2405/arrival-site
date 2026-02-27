@@ -173,36 +173,53 @@ async def voice_chat(
             )
 
         # --- Authenticated flow ---
+        t0 = time.monotonic()
 
-        # 1. Get authenticated user
-        user = await get_current_user(req)
-        user_id = user["user_id"]
-
-        # 2. Transcribe audio (STT)
-        transcript = await transcribe_audio(request.audio_base64)
+        # 1. Auth + STT in parallel (independent of each other)
+        user_result, transcript = await asyncio.gather(
+            get_current_user(req),
+            transcribe_audio(request.audio_base64),
+        )
+        user_id = user_result["user_id"]
 
         if not transcript:
             raise HTTPException(status_code=400, detail="Could not transcribe audio — no speech detected")
 
-        # 3. Concurrently fetch team_id + user memories, then RAG context
-        phase1_results = await asyncio.gather(
+        logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…'")
+
+        # 2. Memory + team_id + RAG(user-ns) all in parallel
+        t1 = time.monotonic()
+        phase_results = await asyncio.gather(
             get_user_team_id(user_id),
             retrieve_memories(user_id, transcript),
+            retrieve_context(user_id, transcript, team_id=None),
             return_exceptions=True,
         )
-        team_id = phase1_results[0] if not isinstance(phase1_results[0], Exception) else None
-        memories = phase1_results[1] if not isinstance(phase1_results[1], Exception) else []
-        if isinstance(phase1_results[0], Exception):
-            logger.warning(f"Team ID retrieval failed: {phase1_results[0]}")
-        if isinstance(phase1_results[1], Exception):
-            logger.warning(f"Memory retrieval failed: {phase1_results[1]}")
+        team_id = phase_results[0] if not isinstance(phase_results[0], Exception) else None
+        memories = phase_results[1] if not isinstance(phase_results[1], Exception) else []
+        rag_context = phase_results[2] if not isinstance(phase_results[2], Exception) else []
+        if isinstance(phase_results[0], Exception):
+            logger.warning(f"Team ID retrieval failed: {phase_results[0]}")
+        if isinstance(phase_results[1], Exception):
+            logger.warning(f"Memory retrieval failed: {phase_results[1]}")
+        if isinstance(phase_results[2], Exception):
+            logger.warning(f"RAG retrieval failed: {phase_results[2]}")
 
-        # Fetch RAG context (depends on team_id from phase 1)
-        try:
-            rag_context = await retrieve_context(user_id, transcript, team_id=team_id)
-        except Exception as exc:
-            logger.warning(f"RAG retrieval failed: {exc}")
-            rag_context = []
+        # Quick team namespace search if team_id available
+        if team_id and not isinstance(phase_results[2], Exception):
+            try:
+                team_rag = await retrieve_context(user_id, transcript, team_id=team_id)
+                seen = {r["text"][:200] for r in rag_context}
+                for r in team_rag:
+                    if r["text"][:200] not in seen:
+                        rag_context.append(r)
+                        seen.add(r["text"][:200])
+                rag_context.sort(key=lambda x: x["score"], reverse=True)
+                rag_context = rag_context[:5]
+            except Exception as exc:
+                logger.warning(f"Team RAG search failed (continuing): {exc}")
+
+        logger.info(f"[voice-chat] Context fetched in {time.monotonic()-t1:.2f}s")
 
         # Per-mode response tuning
         if request.mode == "job":

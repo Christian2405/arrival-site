@@ -2,10 +2,15 @@
 Chat router — POST /api/chat
 Sends a message (optionally with camera image) to Claude, returns AI response.
 Now includes: JWT auth, Mem0 memory retrieval/storage, RAG document context.
+
+Performance paths:
+  • Fast path — simple greetings/acknowledgements skip memory & RAG → ~2-3s
+  • Full path  — everything in parallel (memory + team_id + RAG user-ns) → ~5-8s
 """
 
 import asyncio
 import logging
+import re
 import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -25,6 +30,24 @@ router = APIRouter()
 MAX_MESSAGE_LENGTH = 10_000  # 10K chars
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB base64
 MAX_HISTORY_ITEMS = 50
+
+
+# --- Fast-path detection ---
+# Simple messages that don't benefit from memory/RAG lookups.
+_SIMPLE_MESSAGES = frozenset({
+    "hello", "hi", "hey", "yo", "sup", "hiya",
+    "thanks", "thank you", "thx", "cheers", "ta",
+    "ok", "okay", "sure", "yep", "yup", "yeah", "yes", "no", "nah", "nope",
+    "bye", "goodbye", "see ya", "later", "cya",
+    "good morning", "good afternoon", "good evening", "gday", "g'day",
+    "how are you", "whats up", "what's up",
+})
+
+
+def _is_simple_message(msg: str) -> bool:
+    """Return True if the message is a simple greeting/acknowledgement."""
+    cleaned = re.sub(r"[!?.,]+$", "", msg.strip().lower())
+    return len(cleaned) < 40 and cleaned in _SIMPLE_MESSAGES
 
 
 # Bug #37: Simple in-memory rate limiter for demo mode
@@ -86,6 +109,8 @@ async def chat(
     AI Chat — send a question with an optional camera frame.
     Pass ?demo=true for canned trade responses without API keys.
     """
+    t0 = time.monotonic()
+
     # Validate input sizes
     if len(request.message) > MAX_MESSAGE_LENGTH:
         raise HTTPException(status_code=400, detail=f"Message too long (max {MAX_MESSAGE_LENGTH} chars)")
@@ -122,50 +147,87 @@ async def chat(
             user = await get_current_user(req)
             user_id = user["user_id"]
 
-            # 2. Parallel fetch: memories + team_id
-            memories, team_id = await asyncio.gather(
-                retrieve_memories(user_id, request.message),
-                get_user_team_id(user_id),
-            )
+            simple = _is_simple_message(request.message) and not request.image_base64
 
-            # 3. Retrieve relevant document context (RAG) — needs team_id, so runs after
-            rag_context = await retrieve_context(user_id, request.message, team_id=team_id)
-
-            # 4. Call Claude with memories + RAG context
-            result = await chat_with_claude(
-                message=request.message,
-                image_base64=request.image_base64,
-                conversation_history=request.conversation_history,
-                user_memories=memories,
-                rag_context=rag_context,
-                max_tokens=300,
-                system_prompt_prefix="Keep responses concise — 2-4 sentences for simple questions, more detail only when the user asks a technical or safety question.",
-            )
-
-            # 5. Store new memories (fire-and-forget, non-blocking)
-            # Bug #36: Use safe wrapper to log exceptions
-            asyncio.create_task(_safe_task(
-                store_memory(user_id, [
-                    {"role": "user", "content": request.message},
-                    {"role": "assistant", "content": result["response"]},
-                ]),
-                task_name="store_memory",
-            ))
-
-            # 6. Log query for team activity (fire-and-forget, non-blocking)
-            # Bug #36: Use safe wrapper to log exceptions
-            async def _log():
-                log_team_id = team_id or await get_user_team_id(user_id)
-                await log_query(
-                    user_id=user_id,
-                    question=request.message,
-                    response=result.get("response"),
-                    source=result.get("source"),
-                    confidence=result.get("confidence"),
-                    has_image=bool(request.image_base64),
-                    team_id=log_team_id,
+            if simple:
+                # ── FAST PATH ── Skip memory & RAG for simple greetings
+                logger.info(f"[chat] Fast path for '{request.message}' ({user_id[:8]}…)")
+                result = await chat_with_claude(
+                    message=request.message,
+                    conversation_history=request.conversation_history,
+                    max_tokens=150,
+                    system_prompt_prefix=(
+                        "You are Arrival AI, a helpful assistant for trade workers. "
+                        "Be warm, friendly, and concise — 1-2 sentences max."
+                    ),
                 )
-            asyncio.create_task(_safe_task(_log(), task_name="log_query"))
+
+                # Fire-and-forget: store memory + log (no await)
+                asyncio.create_task(_safe_task(
+                    store_memory(user_id, [
+                        {"role": "user", "content": request.message},
+                        {"role": "assistant", "content": result["response"]},
+                    ]),
+                    task_name="store_memory",
+                ))
+                asyncio.create_task(_safe_task(
+                    _log_query(user_id, request, result),
+                    task_name="log_query",
+                ))
+            else:
+                # ── FULL PATH ── Memory + team_id + RAG(user-ns) all in parallel
+                logger.info(f"[chat] Full path for '{request.message[:40]}…' ({user_id[:8]}…)")
+
+                memories, team_id, user_rag = await asyncio.gather(
+                    retrieve_memories(user_id, request.message),
+                    get_user_team_id(user_id),
+                    retrieve_context(user_id, request.message, team_id=None),
+                )
+
+                # If user belongs to a team, quick async team-namespace search
+                rag_context = user_rag
+                if team_id:
+                    try:
+                        team_rag = await retrieve_context(
+                            user_id, request.message, team_id=team_id,
+                        )
+                        # Merge team results that aren't duplicates
+                        seen = {r["text"][:200] for r in rag_context}
+                        for r in team_rag:
+                            if r["text"][:200] not in seen:
+                                rag_context.append(r)
+                                seen.add(r["text"][:200])
+                        rag_context.sort(key=lambda x: x["score"], reverse=True)
+                        rag_context = rag_context[:5]
+                    except Exception as e:
+                        logger.warning(f"[chat] Team RAG search failed (continuing): {e}")
+
+                # Call Claude with all context
+                result = await chat_with_claude(
+                    message=request.message,
+                    image_base64=request.image_base64,
+                    conversation_history=request.conversation_history,
+                    user_memories=memories,
+                    rag_context=rag_context,
+                    max_tokens=300,
+                    system_prompt_prefix="Keep responses concise — 2-4 sentences for simple questions, more detail only when the user asks a technical or safety question.",
+                )
+
+                # Fire-and-forget background tasks
+                asyncio.create_task(_safe_task(
+                    store_memory(user_id, [
+                        {"role": "user", "content": request.message},
+                        {"role": "assistant", "content": result["response"]},
+                    ]),
+                    task_name="store_memory",
+                ))
+                asyncio.create_task(_safe_task(
+                    _log_query(user_id, request, result),
+                    task_name="log_query",
+                ))
+
+        elapsed = time.monotonic() - t0
+        logger.info(f"[chat] Responded in {elapsed:.2f}s")
 
         return ChatResponse(
             response=result["response"],
@@ -180,3 +242,17 @@ async def chat(
     except Exception as e:
         logger.error(f"Chat failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
+
+
+async def _log_query(user_id: str, request: ChatRequest, result: dict):
+    """Background helper to log the query to Supabase."""
+    team_id = await get_user_team_id(user_id)
+    await log_query(
+        user_id=user_id,
+        question=request.message,
+        response=result.get("response"),
+        source=result.get("source"),
+        confidence=result.get("confidence"),
+        has_image=bool(request.image_base64),
+        team_id=team_id,
+    )
