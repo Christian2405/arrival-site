@@ -54,9 +54,14 @@ async def chat_with_claude(
     content_parts = []
 
     if image_base64:
-        media_type = "image/jpeg"
         if image_base64.startswith("iVBOR"):
             media_type = "image/png"
+        elif image_base64.startswith("UklGR"):
+            media_type = "image/webp"
+        elif image_base64.startswith("R0lGOD"):
+            media_type = "image/gif"
+        else:
+            media_type = "image/jpeg"
 
         content_parts.append({
             "type": "image",
@@ -74,7 +79,7 @@ async def chat_with_claude(
     system_prompt = config.SYSTEM_PROMPT
 
     if system_prompt_prefix:
-        system_prompt = system_prompt_prefix + "\n\n" + system_prompt
+        system_prompt = system_prompt + "\n\n" + system_prompt_prefix
 
     if user_memories:
         memory_block = "\n".join(f"- {m}" for m in user_memories)
@@ -154,6 +159,15 @@ If you DO see something notable, respond with a JSON object:
 Use "warning" for general notices, "critical" for safety hazards.
 Be concise — the worker is on a job site and will hear this via text-to-speech."""
 
+    if image_base64.startswith("iVBOR"):
+        media_type = "image/png"
+    elif image_base64.startswith("UklGR"):
+        media_type = "image/webp"
+    elif image_base64.startswith("R0lGOD"):
+        media_type = "image/gif"
+    else:
+        media_type = "image/jpeg"
+
     messages = [{
         "role": "user",
         "content": [
@@ -161,7 +175,7 @@ Be concise — the worker is on a job site and will hear this via text-to-speech
                 "type": "image",
                 "source": {
                     "type": "base64",
-                    "media_type": "image/jpeg",
+                    "media_type": media_type,
                     "data": image_base64,
                 },
             },

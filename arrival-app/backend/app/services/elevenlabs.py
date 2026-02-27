@@ -52,10 +52,8 @@ async def text_to_speech(
         )
 
         if response.status_code != 200:
-            logger.error(
-                f"[tts] ElevenLabs returned {response.status_code}: "
-                f"{response.text[:200]}"
-            )
+            detail = response.text[:200]
+            logger.error(f"[tts] ElevenLabs returned {response.status_code}: {detail}")
+            raise ValueError(f"TTS failed ({response.status_code}): {detail}")
 
-        response.raise_for_status()
         return base64.b64encode(response.content).decode("utf-8")

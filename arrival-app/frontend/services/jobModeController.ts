@@ -25,6 +25,7 @@ export default class JobModeController {
   private dismissed: boolean = false;
   private dismissTime: number = 0;
   private operationLock: boolean = false;                             // BUG 7 FIX: mutex for concurrent operations
+  private pendingCriticalAlert: { message: string; severity: string } | null = null; // BUG 2 FIX: queue critical alerts when lock is held
   private dismissTimeout: ReturnType<typeof setTimeout> | null = null; // BUG 10 FIX: track dismiss timeout
   private pendingTimeouts: ReturnType<typeof setTimeout>[] = [];       // BUG 11 FIX: track all pending timeouts
 
@@ -91,7 +92,13 @@ export default class JobModeController {
     this.pruneAlertTimestamps();
 
     // BUG 7 FIX: mutex guard against concurrent operations
-    if (this.operationLock) return;
+    // BUG 2 FIX: queue critical alerts for retry when lock releases instead of dropping them
+    if (this.operationLock) {
+      if (severity === 'critical') {
+        this.pendingCriticalAlert = { message, severity };
+      }
+      return;
+    }
 
     // BUG 8 FIX: even critical alerts must check if AI is already speaking
     if (severity === 'critical') {
@@ -112,10 +119,19 @@ export default class JobModeController {
     } finally {
       this.aiSpeaking = false;
       this.lastSpeakTime = Date.now();
-      this.callbacks.onStateChange('monitoring');
       // BUG 11 FIX: use tracked timeout
-      this.scheduleTimeout(() => this.vad.resume(), 500);
-      this.operationLock = false;
+      // BUG 1 FIX: release lock INSIDE timeout so concurrent handlers cannot enter during the 500ms window
+      this.scheduleTimeout(() => {
+        this.callbacks.onStateChange('monitoring');
+        this.vad.resume();
+        this.operationLock = false;
+        // Process any queued critical alert
+        if (this.pendingCriticalAlert) {
+          const alert = this.pendingCriticalAlert;
+          this.pendingCriticalAlert = null;
+          this.handleFrameAlert(alert.message, alert.severity);
+        }
+      }, 500);
     }
   }
 
@@ -132,8 +148,7 @@ export default class JobModeController {
     this.callbacks.onStateChange('processing');
 
     try {
-      // BUG 9 FIX: set 'speaking' state BEFORE the voice response (which includes TTS playback)
-      this.callbacks.onStateChange('speaking');
+      // BUG 3 FIX: Don't set 'speaking' here - let the callback (home.tsx) handle it when audio actually plays
       await this.callbacks.onVoiceResponse(audioBase64);
     } catch (e) {
       console.log('[JobMode] voice response error:', e);
@@ -141,11 +156,18 @@ export default class JobModeController {
       this.aiSpeaking = false;
       this.lastSpeakTime = Date.now();
       // BUG 11 FIX: use tracked timeout
+      // BUG 1 FIX: release lock INSIDE timeout so concurrent handlers cannot enter during the 500ms window
       this.scheduleTimeout(() => {
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
+        this.operationLock = false;
+        // Process any queued critical alert
+        if (this.pendingCriticalAlert) {
+          const alert = this.pendingCriticalAlert;
+          this.pendingCriticalAlert = null;
+          this.handleFrameAlert(alert.message, alert.severity);
+        }
       }, 500);
-      this.operationLock = false;
     }
   }
 
@@ -190,5 +212,7 @@ export default class JobModeController {
     this.alertTimestamps = [];
     this.lastSpeakTime = 0;
     this.operationLock = false;
+    // BUG 4 FIX: clear any queued critical alert on stop
+    this.pendingCriticalAlert = null;
   }
 }

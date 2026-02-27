@@ -7,7 +7,9 @@ for faster voice responses. Accepts audio, returns transcript + AI response + au
 import asyncio
 import base64 as b64_module
 import logging
+import re as re_module
 import time
+from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
@@ -80,7 +82,7 @@ class VoiceChatRequest(BaseModel):
     audio_base64: str
     image_base64: str | None = None
     conversation_history: list[dict] = []
-    mode: str = "default"
+    mode: Literal["default", "job"] = "default"
 
 
 class VoiceChatResponse(BaseModel):
@@ -108,11 +110,9 @@ async def voice_chat(
     if len(request.audio_base64) > MAX_AUDIO_SIZE * 1.37:
         raise HTTPException(status_code=400, detail="Audio too large (max 10 MB)")
 
-    # Validate base64 encoding
-    try:
-        b64_module.b64decode(request.audio_base64, validate=True)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid base64 audio data")
+    # Validate base64 encoding (lightweight check — avoid full decode to save memory)
+    if not re_module.match(r'^[A-Za-z0-9+/\n]+=*$', request.audio_base64[:1000]):
+        raise HTTPException(status_code=400, detail="Invalid audio data format")
 
     if request.image_base64 and len(request.image_base64) > MAX_IMAGE_SIZE:
         raise HTTPException(status_code=400, detail="Image too large (max 10 MB)")
@@ -136,6 +136,7 @@ async def voice_chat(
         for msg in request.conversation_history
         if isinstance(msg, dict)
         and msg.get("role") in ("user", "assistant")
+        and isinstance(msg.get("content"), str)
         and msg.get("content")
     ]
 

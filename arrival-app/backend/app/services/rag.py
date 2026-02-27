@@ -202,7 +202,7 @@ async def index_document(
             success = False
             for attempt in range(2):  # Bug #20: 1 retry (2 attempts total)
                 try:
-                    index.upsert_records(namespace=namespace, records=batch)
+                    await asyncio.to_thread(index.upsert_records, namespace=namespace, records=batch)
                     total_upserted += len(batch)
                     success = True
                     break
@@ -267,7 +267,7 @@ async def delete_document_vectors(document_id: str, user_id: str, team_id: str |
         for batch_start in range(0, len(ids_to_delete), 100):
             batch = ids_to_delete[batch_start : batch_start + 100]
             try:
-                index.delete(ids=batch, namespace=namespace)
+                await asyncio.to_thread(index.delete, ids=batch, namespace=namespace)
             except Exception:
                 pass  # Some IDs won't exist, that's fine
 
@@ -332,12 +332,12 @@ async def retrieve_context(
 
     try:
         # Always search the user's personal namespace
-        user_results = _do_search(user_id)
+        user_results = await asyncio.to_thread(_do_search, user_id)
 
         # Bug #1: If team_id provided, also search the team namespace
         if team_id:
             team_namespace = f"team_{team_id}"
-            team_results = _do_search(team_namespace)
+            team_results = await asyncio.to_thread(_do_search, team_namespace)
 
             # Merge and deduplicate by text content
             seen_texts = set()

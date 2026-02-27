@@ -206,6 +206,15 @@ export default function HomeScreen() {
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch(() => {});
       }
+      if (currentSoundRef.current) {
+        currentSoundRef.current.stopAsync().catch(() => {});
+        currentSoundRef.current.unloadAsync().catch(() => {});
+        currentSoundRef.current = null;
+      }
+      if (currentAudioFileRef.current) {
+        deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
+        currentAudioFileRef.current = null;
+      }
     };
   }, []);
 
@@ -231,6 +240,7 @@ export default function HomeScreen() {
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
+      Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
     }
   }, [setIsRecording]);
 
@@ -319,6 +329,11 @@ export default function HomeScreen() {
         setVoiceState('idle');
       } catch (error: any) {
         console.error('Voice chat error:', error);
+        addMessage({
+          id: generateId(), role: 'assistant',
+          content: 'Voice processing failed. Please check your connection and try again.',
+          displayMode: 'voice', timestamp: new Date(),
+        });
         setVoiceState('idle');
       } finally {
         setIsProcessing(false);
@@ -334,6 +349,12 @@ export default function HomeScreen() {
       setVoiceState('listening');
       captureFrame().then(frame => { pttFrameRef.current = frame; });
       await startRecording();
+      if (!recordingRef.current) {
+        setVoiceState('idle');
+      }
+    } catch {
+      setVoiceState('idle');
+      setIsRecording(false);
     } finally {
       pttStartingRef.current = false;
     }
@@ -358,8 +379,10 @@ export default function HomeScreen() {
     });
 
     try {
-      const history = messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-      const response = await aiAPI.chat(text, imageForThisMessage, history, demoMode);
+      const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+      const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+      const currentDemoMode = useSettingsStore.getState().demoMode;
+      const response = await aiAPI.chat(text, imageForThisMessage, history, currentDemoMode);
 
       addMessage({
         id: generateId(), role: 'assistant', content: response.response,
@@ -395,7 +418,7 @@ export default function HomeScreen() {
 
     // Cancel in-progress work (Bug 1: use ref)
     if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      try { await recordingRef.current.stopAndUnloadAsync(); } catch {}
       recordingRef.current = null;
       setRecording(null);
       setIsRecording(false);
@@ -484,7 +507,7 @@ export default function HomeScreen() {
       }
     };
 
-    controller.start(captureFrame);
+    controller.start(captureFrame).catch(e => console.error('Job Mode start failed:', e));
     jobControllerRef.current = controller;
 
     return () => {
@@ -915,16 +938,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 22,
-  },
-  dismissBtn: {
-    alignSelf: 'center',
-    width: 40,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 6,
   },
   collapseBar: {
     alignItems: 'center',
