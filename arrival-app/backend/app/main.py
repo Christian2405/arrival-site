@@ -6,6 +6,7 @@ FastAPI app with STT, Chat, TTS, and Documents endpoints.
 import asyncio
 import logging
 import os
+import time
 
 import httpx
 from contextlib import asynccontextmanager
@@ -13,6 +14,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers
+
+# Configure logging to show INFO level (Render captures stdout)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -95,3 +99,73 @@ async def health():
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "Arrival API", "version": "2.0.0"}
+
+
+# --- Diagnostics endpoint — times each service independently ---
+
+@app.get("/api/diagnostics")
+async def diagnostics():
+    """
+    Test and time each service independently.
+    Returns latency breakdown for debugging performance.
+    """
+    results = {}
+    total_start = time.monotonic()
+
+    # 1. Supabase DB (team_members query)
+    try:
+        t = time.monotonic()
+        from app.services.supabase import get_user_team_id
+        await get_user_team_id("diagnostics-test-user")
+        results["supabase_team_lookup"] = {"ms": round((time.monotonic() - t) * 1000), "status": "ok"}
+    except Exception as e:
+        results["supabase_team_lookup"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+
+    # 2. Mem0 memory search
+    try:
+        t = time.monotonic()
+        from app.services.memory import retrieve_memories
+        mems = await retrieve_memories("diagnostics-test-user", "hello")
+        results["mem0_search"] = {"ms": round((time.monotonic() - t) * 1000), "status": "ok", "count": len(mems)}
+    except Exception as e:
+        results["mem0_search"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+
+    # 3. Pinecone RAG search
+    try:
+        t = time.monotonic()
+        from app.services.rag import retrieve_context
+        ctx = await retrieve_context("diagnostics-test-user", "hello", team_id=None)
+        results["pinecone_rag"] = {"ms": round((time.monotonic() - t) * 1000), "status": "ok", "count": len(ctx)}
+    except Exception as e:
+        results["pinecone_rag"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+
+    # 4. Claude chat (tiny request)
+    try:
+        t = time.monotonic()
+        from app.services.anthropic import chat_with_claude
+        resp = await chat_with_claude(message="Say hi in 3 words", max_tokens=20)
+        results["claude_chat"] = {
+            "ms": round((time.monotonic() - t) * 1000),
+            "status": "ok",
+            "response": resp["response"][:50],
+        }
+    except Exception as e:
+        results["claude_chat"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+
+    # 5. ElevenLabs TTS (short text)
+    try:
+        t = time.monotonic()
+        from app.services.elevenlabs import text_to_speech
+        audio = await text_to_speech("Hello there.")
+        results["elevenlabs_tts"] = {
+            "ms": round((time.monotonic() - t) * 1000),
+            "status": "ok",
+            "audio_b64_len": len(audio),
+        }
+    except Exception as e:
+        results["elevenlabs_tts"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+
+    total_ms = round((time.monotonic() - total_start) * 1000)
+    results["total_sequential_ms"] = total_ms
+
+    return results

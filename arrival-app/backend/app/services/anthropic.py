@@ -5,9 +5,13 @@ Bug #16: Uses AsyncAnthropic client to avoid blocking the event loop.
 """
 
 import json
+import logging
+import time
 import anthropic
 
 from app import config
+
+logger = logging.getLogger(__name__)
 
 # Lazy singleton — avoid re-creating the client on every request
 # Bug #16: Changed from synchronous Anthropic to AsyncAnthropic
@@ -106,15 +110,24 @@ The following excerpts are from the user's uploaded documents. Reference them wh
 When you use information from these documents, cite the filename as your source."""
 
     # Bug #16: Use await with the async client
+    t0 = time.monotonic()
     response = await client.messages.create(
         model=config.ANTHROPIC_MODEL,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
     )
+    elapsed = time.monotonic() - t0
 
     if not response.content:
         raise ValueError("Empty AI response")
+
+    resp_text = response.content[0].text
+    logger.info(
+        f"[claude] {config.ANTHROPIC_MODEL} max_tokens={max_tokens} "
+        f"→ {len(resp_text)} chars in {elapsed:.2f}s "
+        f"(input_tokens={response.usage.input_tokens}, output_tokens={response.usage.output_tokens})"
+    )
 
     # Determine source attribution
     source = "Claude AI Analysis"
@@ -125,7 +138,7 @@ When you use information from these documents, cite the filename as your source.
             source += f" (+{len(filenames) - 2} more)"
 
     return {
-        "response": response.content[0].text,
+        "response": resp_text,
         "source": source,
         "confidence": "high",
     }

@@ -6,11 +6,14 @@ Gracefully degrades if PINECONE_API_KEY is not set.
 """
 
 import asyncio
+import logging
 import time
 import tempfile
 import os
 
 from app import config
+
+logger = logging.getLogger(__name__)
 
 _pc_index = None
 
@@ -331,6 +334,7 @@ async def retrieve_context(
             return []
 
     try:
+        t0 = time.monotonic()
         # Always search the user's personal namespace
         user_results = await asyncio.to_thread(_do_search, user_id)
 
@@ -350,10 +354,12 @@ async def retrieve_context(
 
             # Sort by relevance score descending
             merged.sort(key=lambda x: x["score"], reverse=True)
+            logger.info(f"[rag] Search user+team → {len(merged[:top_k])} results in {time.monotonic()-t0:.2f}s")
             return merged[:top_k]
 
+        logger.info(f"[rag] Search user-only → {len(user_results)} results in {time.monotonic()-t0:.2f}s")
         return user_results
 
     except Exception as e:
-        print(f"[rag] Retrieve error: {e}")
+        logger.warning(f"[rag] Retrieve error: {e}")
         return []

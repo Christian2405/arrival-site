@@ -6,8 +6,12 @@ Bug #17: Wraps synchronous mem0 client calls in asyncio.to_thread().
 """
 
 import asyncio
+import logging
+import time
 
 from app import config
+
+logger = logging.getLogger(__name__)
 
 _client = None
 
@@ -22,7 +26,7 @@ def _get_client():
             from mem0 import MemoryClient
             _client = MemoryClient(api_key=config.MEM0_API_KEY)
         except Exception as e:
-            print(f"[memory] Failed to initialize Mem0 client: {e}")
+            logger.error(f"[memory] Failed to initialize Mem0 client: {e}")
             return None
     return _client
 
@@ -38,6 +42,7 @@ async def retrieve_memories(user_id: str, query: str, limit: int = 5) -> list[st
         return []
 
     try:
+        t0 = time.monotonic()
         # Bug #17: Wrap synchronous call in asyncio.to_thread()
         results = await asyncio.to_thread(
             client.search, query=query, user_id=user_id, limit=limit
@@ -49,9 +54,10 @@ async def retrieve_memories(user_id: str, query: str, limit: int = 5) -> list[st
                 mem = r.get("memory", "") if isinstance(r, dict) else ""
                 if mem:
                     memories.append(mem)
+        logger.info(f"[memory] Retrieved {len(memories)} memories in {time.monotonic()-t0:.2f}s")
         return memories
     except Exception as e:
-        print(f"[memory] Retrieve error: {e}")
+        logger.warning(f"[memory] Retrieve error: {e}")
         return []
 
 
@@ -67,7 +73,9 @@ async def store_memory(user_id: str, messages: list[dict]) -> None:
         return
 
     try:
+        t0 = time.monotonic()
         # Bug #17: Wrap synchronous call in asyncio.to_thread()
         await asyncio.to_thread(client.add, messages=messages, user_id=user_id)
+        logger.info(f"[memory] Stored memory in {time.monotonic()-t0:.2f}s")
     except Exception as e:
-        print(f"[memory] Store error: {e}")
+        logger.warning(f"[memory] Store error: {e}")

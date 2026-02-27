@@ -7,6 +7,7 @@ by fetching the JWKS public keys from Supabase.
 """
 
 import asyncio
+import logging
 import time
 import jwt
 import json
@@ -16,6 +17,7 @@ from fastapi.security import HTTPBearer
 
 from app import config
 
+logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 # TTL-based JWKS cache (refresh every hour)
@@ -93,12 +95,9 @@ async def get_current_user(request: Request) -> dict:
     """
     Validate the Authorization header and return the user payload.
     Returns: { "user_id": ..., "email": ..., "role": ..., "token": ... }
-
-    The raw token is included so downstream services can make
-    user-scoped Supabase queries (respecting RLS).
-
-    Skip auth if no JWT secret is configured (development mode).
     """
+    t0 = time.monotonic()
+
     # If no JWT secret configured, return a dev user (ONLY in debug mode)
     if not config.SUPABASE_JWT_SECRET:
         if config.DEBUG:
@@ -134,6 +133,7 @@ async def get_current_user(request: Request) -> dict:
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token: no user ID")
 
+        logger.info(f"[auth] Validated user {user_id[:8]}… in {time.monotonic()-t0:.3f}s")
         return {
             "user_id": user_id,
             "email": payload.get("email", ""),
