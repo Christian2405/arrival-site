@@ -333,10 +333,14 @@ async def retrieve_context(
             print(f"[rag] Retrieve error: {e}")
             return []
 
+    RAG_TIMEOUT = 4.0  # seconds — return empty rather than blocking
     try:
         t0 = time.monotonic()
-        # Always search the user's personal namespace
-        user_results = await asyncio.to_thread(_do_search, user_id)
+        # Always search the user's personal namespace (with timeout)
+        user_results = await asyncio.wait_for(
+            asyncio.to_thread(_do_search, user_id),
+            timeout=RAG_TIMEOUT,
+        )
 
         # Bug #1: If team_id provided, also search the team namespace
         if team_id:
@@ -360,6 +364,9 @@ async def retrieve_context(
         logger.info(f"[rag] Search user-only → {len(user_results)} results in {time.monotonic()-t0:.2f}s")
         return user_results
 
+    except asyncio.TimeoutError:
+        logger.warning(f"[rag] Search TIMED OUT after {time.monotonic()-t0:.2f}s — skipping RAG context")
+        return []
     except Exception as e:
         logger.warning(f"[rag] Retrieve error: {e}")
         return []
