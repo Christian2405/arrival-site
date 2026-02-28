@@ -4,6 +4,7 @@ All endpoints require authentication (JWT).
 Uses the documents table as source of truth (matches website).
 """
 
+import logging
 import re
 import tempfile
 import os
@@ -16,6 +17,8 @@ from app.services.supabase import upload_document, list_documents, delete_docume
 from app.services.rag import index_document, DocumentTooShortError
 from app.services.usage import check_document_limit
 from app import config
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -79,9 +82,8 @@ async def upload(
                 )
 
         # Validate file type by extension
-        import os as _os
         filename = file.filename or "untitled"
-        _, ext = _os.path.splitext(filename.lower())
+        _, ext = os.path.splitext(filename.lower())
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
@@ -265,7 +267,7 @@ async def index_doc(body: IndexRequest, request: Request):
     except DocumentTooShortError as e:
         return IndexResponse(success=False, chunks_indexed=0, message=str(e))
     except Exception as e:
-        print(f"[index-document] Error: {e}")
+        logger.error(f"[index-document] Error: {e}")
         # Return success=False but don't error — indexing is best-effort
         return IndexResponse(success=False, chunks_indexed=0, message=str(e))
 
@@ -302,6 +304,6 @@ async def _lookup_document(document_id: str, user_token: str) -> dict | None:
             if rows:
                 return rows[0]
     except Exception as e:
-        print(f"[documents] Document lookup failed: {e}")
+        logger.warning(f"[documents] Document lookup failed: {e}")
 
     return None

@@ -207,10 +207,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       });
       debouncedSave(get().conversations);
 
-      // Sync to Supabase (non-blocking)
-      syncConversationToSupabase(newConv).then(() =>
-        syncMessageToSupabase(message, newConv.id)
-      );
+      // Sync to Supabase (non-blocking, only sync message if convo succeeds)
+      syncConversationToSupabase(newConv).then((result) => {
+        syncMessageToSupabase(message, newConv.id);
+      }).catch((err) => console.warn('[conversations] Sync failed:', err));
       return;
     }
 
@@ -218,7 +218,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const updatedConversation = {
       ...currentConversation,
       messages: updatedMessages,
-      title: updatedMessages[0]?.content.slice(0, 50) || 'New Conversation',
+      title: (updatedMessages[0]?.content || 'New Conversation').slice(0, 50),
     };
 
     set({ currentConversation: updatedConversation });
@@ -235,10 +235,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     debouncedSave(get().conversations);
 
-    // Sync to Supabase (non-blocking)
-    syncConversationToSupabase(updatedConversation).then(() =>
-      syncMessageToSupabase(message, updatedConversation.id)
-    );
+    // Sync to Supabase (non-blocking, only sync message if convo succeeds)
+    syncConversationToSupabase(updatedConversation).then(() => {
+      syncMessageToSupabase(message, updatedConversation.id);
+    }).catch((err) => console.warn('[conversations] Sync failed:', err));
   },
 
   loadConversations: async () => {

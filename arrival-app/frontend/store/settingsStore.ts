@@ -29,35 +29,35 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   units: 'imperial',
   textSize: 'medium',
 
-  setVoiceOutput: async (value) => {
+  setVoiceOutput: (value) => {
     set({ voiceOutput: value });
-    await AsyncStorage.setItem('voice_output', value.toString());
+    AsyncStorage.setItem('voice_output', value.toString()).catch(console.error);
   },
-  setDemoMode: async (value) => {
+  setDemoMode: (value) => {
     set({ demoMode: value });
-    await AsyncStorage.setItem('demo_mode', value.toString());
+    AsyncStorage.setItem('demo_mode', value.toString()).catch(console.error);
   },
-  setJobMode: async (value) => {
+  setJobMode: (value) => {
     set({ jobMode: value, interactionMode: value ? 'job' : 'default' });
-    await AsyncStorage.setItem('job_mode', value.toString());
-    await AsyncStorage.setItem('interaction_mode', value ? 'job' : 'default');
+    AsyncStorage.setItem('job_mode', value.toString()).catch(console.error);
+    AsyncStorage.setItem('interaction_mode', value ? 'job' : 'default').catch(console.error);
   },
-  setInteractionMode: async (value) => {
+  setInteractionMode: (value) => {
     set({ interactionMode: value, jobMode: value === 'job' });
-    await AsyncStorage.setItem('interaction_mode', value);
-    await AsyncStorage.setItem('job_mode', (value === 'job').toString());
+    AsyncStorage.setItem('interaction_mode', value).catch(console.error);
+    AsyncStorage.setItem('job_mode', (value === 'job').toString()).catch(console.error);
   },
-  setVoiceSpeed: async (value) => {
+  setVoiceSpeed: (value) => {
     set({ voiceSpeed: value });
-    await AsyncStorage.setItem('voice_speed', value);
+    AsyncStorage.setItem('voice_speed', value).catch(console.error);
   },
-  setUnits: async (value) => {
+  setUnits: (value) => {
     set({ units: value });
-    await AsyncStorage.setItem('units', value);
+    AsyncStorage.setItem('units', value).catch(console.error);
   },
-  setTextSize: async (value) => {
+  setTextSize: (value) => {
     set({ textSize: value });
-    await AsyncStorage.setItem('text_size', value);
+    AsyncStorage.setItem('text_size', value).catch(console.error);
   },
   loadSettings: async () => {
     try {

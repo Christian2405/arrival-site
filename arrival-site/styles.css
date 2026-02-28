@@ -1871,12 +1871,12 @@ p {
 
     .pricing-grid {
         grid-template-columns: 1fr;
-        grid-template-rows: none;
+        grid-template-rows: auto;
     }
 
     .pricing-card {
         grid-row: auto;
-        grid-template-rows: none;
+        grid-template-rows: auto;
     }
 
     .pricing-featured {

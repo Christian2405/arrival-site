@@ -23,34 +23,39 @@ const _originalShowPage = window.showPage;
 
 function showFormError(elementId, message) {
     const el = document.getElementById(elementId);
+    if (!el) return;
     el.textContent = message;
     el.style.display = 'block';
 }
 
 function clearFormError(elementId) {
     const el = document.getElementById(elementId);
+    if (!el) return;
     el.textContent = '';
     el.style.display = 'none';
 }
 
 function showFormSuccess(elementId, message) {
     const el = document.getElementById(elementId);
+    if (!el) return;
     el.textContent = message;
     el.style.display = 'block';
 }
 
 function setButtonLoading(buttonId, loading) {
     const btn = document.getElementById(buttonId);
+    if (!btn) return;
     const textEl = btn.querySelector('.btn-text');
     const loadingEl = btn.querySelector('.btn-loading');
     btn.disabled = loading;
-    textEl.style.display = loading ? 'none' : 'inline';
-    loadingEl.style.display = loading ? 'inline-flex' : 'none';
+    if (textEl) textEl.style.display = loading ? 'none' : 'inline';
+    if (loadingEl) loadingEl.style.display = loading ? 'inline-flex' : 'none';
 }
 
 function showToast(message, type) {
     type = type || 'success';
     const container = document.getElementById('toast-container');
+    if (!container) return;
     const toast = document.createElement('div');
     toast.className = 'toast toast-' + type;
     toast.textContent = message;
@@ -69,15 +74,15 @@ function updateNavForAuth(user) {
     var logoutLink = document.getElementById('nav-logout-link');
 
     if (user) {
-        loginLink.style.display = 'none';
-        signupLink.style.display = 'none';
-        dashboardLink.style.display = '';
-        logoutLink.style.display = '';
+        if (loginLink) loginLink.style.display = 'none';
+        if (signupLink) signupLink.style.display = 'none';
+        if (dashboardLink) dashboardLink.style.display = '';
+        if (logoutLink) logoutLink.style.display = '';
     } else {
-        loginLink.style.display = '';
-        signupLink.style.display = '';
-        dashboardLink.style.display = 'none';
-        logoutLink.style.display = 'none';
+        if (loginLink) loginLink.style.display = '';
+        if (signupLink) signupLink.style.display = '';
+        if (dashboardLink) dashboardLink.style.display = 'none';
+        if (logoutLink) logoutLink.style.display = 'none';
     }
 }
 
@@ -577,11 +582,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
-    // Attach form handlers
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
-    document.getElementById('signup-form').addEventListener('submit', handleSignup);
-    document.getElementById('reset-request-form').addEventListener('submit', handlePasswordResetRequest);
-    document.getElementById('reset-update-form').addEventListener('submit', handlePasswordUpdate);
+    // Attach form handlers (with null checks to avoid crashes)
+    var loginForm = document.getElementById('login-form');
+    var signupForm = document.getElementById('signup-form');
+    var resetRequestForm = document.getElementById('reset-request-form');
+    var resetUpdateForm = document.getElementById('reset-update-form');
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (signupForm) signupForm.addEventListener('submit', handleSignup);
+    if (resetRequestForm) resetRequestForm.addEventListener('submit', handlePasswordResetRequest);
+    if (resetUpdateForm) resetUpdateForm.addEventListener('submit', handlePasswordUpdate);
 
     // Google sign-in buttons
     var googleBtns = document.querySelectorAll('.google-signin-btn');
@@ -592,9 +601,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Dev bypass buttons
     if (IS_DEV) {
         var devBtns = document.getElementById('dev-bypass-buttons');
-        devBtns.style.display = 'flex';
-        document.getElementById('dev-skip-pro').addEventListener('click', devSkipAsPro);
-        document.getElementById('dev-skip-business').addEventListener('click', devSkipAsBusinessAdmin);
+        if (devBtns) devBtns.style.display = 'flex';
+        var devSkipProBtn = document.getElementById('dev-skip-pro');
+        var devSkipBizBtn = document.getElementById('dev-skip-business');
+        if (devSkipProBtn) devSkipProBtn.addEventListener('click', devSkipAsPro);
+        if (devSkipBizBtn) devSkipBizBtn.addEventListener('click', devSkipAsBusinessAdmin);
     }
 
     // Check for password reset callback in URL hash

@@ -37,7 +37,7 @@ def _get_pinecone_index():
             pc = Pinecone(api_key=config.PINECONE_API_KEY)
             _pc_index = pc.Index(config.PINECONE_INDEX_NAME)
         except Exception as e:
-            print(f"[rag] Failed to init Pinecone: {e}")
+            logger.warning(f"[rag] Failed to init Pinecone: {e}")
             return None
     return _pc_index
 
@@ -76,11 +76,11 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
         return "\n".join(paragraphs)
     except ImportError:
-        print("[rag] python-docx not installed — cannot extract .docx files. "
-              "Install with: pip install python-docx")
+        logger.warning("[rag] python-docx not installed — cannot extract .docx files. "
+                       "Install with: pip install python-docx")
         return ""
     except Exception as e:
-        print(f"[rag] Failed to extract text from .docx: {e}")
+        logger.warning(f"[rag] Failed to extract text from .docx: {e}")
         return ""
 
 
@@ -165,7 +165,7 @@ async def index_document(
     # Extract text
     text = extract_text_from_file(file_bytes, content_type, filename)
     if not text:
-        print(f"[rag] No text extracted from {filename} ({content_type})")
+        logger.warning(f"[rag] No text extracted from {filename} ({content_type})")
         return 0
 
     # Bug #19: Raise a meaningful error if text is too short
@@ -178,7 +178,7 @@ async def index_document(
     # Chunk
     chunks = chunk_text(text)
     if not chunks:
-        print(f"[rag] No chunks produced from {filename} (text length: {len(text)})")
+        logger.warning(f"[rag] No chunks produced from {filename} (text length: {len(text)})")
         return 0
 
     # Bug #1: Determine the namespace
@@ -214,13 +214,13 @@ async def index_document(
                     _reset_pinecone_index()
                     index = _get_pinecone_index()
                     if index is None:
-                        print(f"[rag] Pinecone re-init failed after connection error: {conn_err}")
+                        logger.warning(f"[rag] Pinecone re-init failed after connection error: {conn_err}")
                         return total_upserted
                     if attempt == 0:
-                        print(f"[rag] Pinecone upsert connection error, retrying in 2s: {conn_err}")
+                        logger.warning(f"[rag] Pinecone upsert connection error, retrying in 2s: {conn_err}")
                         await asyncio.sleep(2)
                     else:
-                        print(f"[rag] Pinecone upsert failed after retry: {conn_err}")
+                        logger.warning(f"[rag] Pinecone upsert failed after retry: {conn_err}")
                 except Exception as e:
                     # Bug #7: Also reset on generic Pinecone errors that may be transient
                     if "connect" in str(e).lower() or "timeout" in str(e).lower():
@@ -229,22 +229,22 @@ async def index_document(
                         if index is None:
                             return total_upserted
                     if attempt == 0:
-                        print(f"[rag] Pinecone upsert error, retrying in 2s: {e}")
+                        logger.warning(f"[rag] Pinecone upsert error, retrying in 2s: {e}")
                         await asyncio.sleep(2)
                     else:
-                        print(f"[rag] Pinecone upsert failed after retry: {e}")
+                        logger.warning(f"[rag] Pinecone upsert failed after retry: {e}")
             if not success:
                 # Bug #20: Return the count of successfully upserted chunks so far
-                print(f"[rag] Partial index: {total_upserted}/{len(records)} chunks for {filename}")
+                logger.warning(f"[rag] Partial index: {total_upserted}/{len(records)} chunks for {filename}")
                 return total_upserted
 
-        print(f"[rag] Indexed {total_upserted} chunks for {filename}")
+        logger.warning(f"[rag] Indexed {total_upserted} chunks for {filename}")
         return total_upserted
     except Exception as e:
         # Bug #7: Reset on unexpected errors
         if "connect" in str(e).lower() or "timeout" in str(e).lower():
             _reset_pinecone_index()
-        print(f"[rag] Pinecone upsert error: {e}")
+        logger.warning(f"[rag] Pinecone upsert error: {e}")
         return total_upserted
 
 
@@ -277,15 +277,15 @@ async def delete_document_vectors(document_id: str, user_id: str, team_id: str |
                 if "not found" not in err_str and "no vectors" not in err_str:
                     logger.warning(f"[rag] Vector batch delete error: {batch_err}")
 
-        print(f"[rag] Deleted vectors for document {document_id}")
+        logger.warning(f"[rag] Deleted vectors for document {document_id}")
     except (ConnectionError, OSError, TimeoutError) as conn_err:
         # Bug #7: Reset cached index on connection errors
         _reset_pinecone_index()
-        print(f"[rag] Vector delete connection error (index reset): {conn_err}")
+        logger.warning(f"[rag] Vector delete connection error (index reset): {conn_err}")
     except Exception as e:
         if "connect" in str(e).lower() or "timeout" in str(e).lower():
             _reset_pinecone_index()
-        print(f"[rag] Vector delete error: {e}")
+        logger.warning(f"[rag] Vector delete error: {e}")
 
 
 async def retrieve_context(
@@ -328,12 +328,12 @@ async def retrieve_context(
         except (ConnectionError, OSError, TimeoutError) as conn_err:
             # Bug #7: Reset cached index on connection errors
             _reset_pinecone_index()
-            print(f"[rag] Retrieve connection error (index reset): {conn_err}")
+            logger.warning(f"[rag] Retrieve connection error (index reset): {conn_err}")
             return []
         except Exception as e:
             if "connect" in str(e).lower() or "timeout" in str(e).lower():
                 _reset_pinecone_index()
-            print(f"[rag] Retrieve error: {e}")
+            logger.warning(f"[rag] Retrieve error: {e}")
             return []
 
     RAG_TIMEOUT = 4.0  # seconds — return empty rather than blocking

@@ -103,9 +103,8 @@ async def upload_document(
         try:
             await client.request(
                 "DELETE",
-                f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_STORAGE_BUCKET}",
-                headers={**_storage_headers(), "Content-Type": "application/json"},
-                json={"prefixes": [storage_path]},
+                f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_STORAGE_BUCKET}/{storage_path}",
+                headers=_storage_headers(),
             )
         except Exception as rollback_err:
             logger.warning(f"[supabase] Storage rollback also failed: {rollback_err}")
@@ -128,7 +127,7 @@ async def upload_document(
             team_id=team_id,
         )
     except Exception as e:
-        print(f"[supabase] RAG indexing failed (non-blocking): {e}")
+        logger.warning(f"[supabase] RAG indexing failed (non-blocking): {e}")
 
     return {
         "id": row.get("id", storage_path),
@@ -231,7 +230,7 @@ async def delete_document(
         from app.services.rag import delete_document_vectors
         await delete_document_vectors(document_id, user_id, team_id=doc.get("team_id"))
     except Exception as e:
-        print(f"[supabase] RAG vector delete failed (non-blocking): {e}")
+        logger.warning(f"[supabase] RAG vector delete failed (non-blocking): {e}")
 
     return True
 

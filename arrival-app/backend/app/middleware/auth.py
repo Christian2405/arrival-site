@@ -59,7 +59,7 @@ async def _get_jwks():
             _jwks_cache["fetched_at"] = time.time()
             return data
         except Exception as e:
-            print(f"[Auth] Failed to fetch JWKS: {e}")
+            logger.error(f"[auth] Failed to fetch JWKS: {e}")
             return _jwks_cache["data"]  # return stale data if available
 
 
@@ -166,4 +166,5 @@ async def get_current_user(request: Request) -> dict:
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+            logger.warning(f"[auth] JWT validation failed after key refresh: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")

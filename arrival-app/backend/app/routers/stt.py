@@ -33,7 +33,9 @@ async def speech_to_text(
     Convert speech audio to text.
     Pass ?demo=true for canned responses without API keys.
     """
-    # Validate audio size before processing
+    # Validate audio before processing
+    if len(request.audio_base64) < 100:
+        raise HTTPException(status_code=400, detail="Audio data too short")
     if len(request.audio_base64) > MAX_AUDIO_SIZE * 1.37:
         raise HTTPException(status_code=400, detail="Audio too large (max 10 MB)")
 
