@@ -207,7 +207,7 @@ exports.handler = async (event) => {
 
         let status = 'active';
         if (subscription.status === 'past_due') status = 'past_due';
-        if (subscription.status === 'canceled') status = 'canceled';
+        if (subscription.status === 'canceled') status = 'cancelled'; // DB uses UK spelling
         if (subscription.status === 'unpaid') status = 'unpaid';
 
         const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
@@ -264,11 +264,11 @@ exports.handler = async (event) => {
           break;
         }
 
-        // Cancel subscription (keep plan info for records, mark as canceled)
+        // Cancel subscription (keep plan info for records, mark as cancelled)
         await supabase
           .from('subscriptions')
           .update({
-            status: 'canceled',
+            status: 'cancelled',
             stripe_subscription_id: null
           })
           .eq('stripe_subscription_id', subId);
@@ -338,7 +338,7 @@ exports.handler = async (event) => {
     }
   } catch (err) {
     console.error('Webhook processing error:', err);
-    // Still return 200 to prevent Stripe from retrying
+    return { statusCode: 500, body: JSON.stringify({ error: 'Webhook processing failed' }) };
   }
 
   return { statusCode: 200, body: JSON.stringify({ received: true }) };

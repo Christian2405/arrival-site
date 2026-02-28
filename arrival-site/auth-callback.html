@@ -87,12 +87,14 @@
                             trial_ends_at: trialEnd.toISOString()
                         });
 
-                        // Send welcome email (fire-and-forget)
-                        fetch('/.netlify/functions/send-email', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ to: user.email, template: 'welcome', args: [firstName] })
-                        }).catch(function(e) { console.error('Welcome email error:', e); });
+                        // Send welcome email (fire-and-forget; function requires JWT and to === user email)
+                        if (session.access_token && user.email) {
+                            fetch('/.netlify/functions/send-email', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+                                body: JSON.stringify({ to: user.email, template: 'welcome', args: [firstName] })
+                            }).catch(function(e) { console.error('Welcome email error:', e); });
+                        }
                     }
 
                     // Check if user has a team → business dashboard

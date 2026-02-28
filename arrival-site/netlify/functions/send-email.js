@@ -1,6 +1,11 @@
 const { Resend } = require('resend');
+const { createClient } = require('@supabase/supabase-js');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 const FROM_EMAIL = 'Arrival <noreply@arrivalcompany.com>';
 
@@ -235,31 +240,52 @@ async function sendEmail(to, templateName, templateArgs) {
 // ============================================
 
 exports.handler = async (event) => {
+  const headers = { 'Content-Type': 'application/json' };
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method not allowed' };
+    return { statusCode: 405, headers, body: 'Method not allowed' };
   }
 
   try {
-    const body = JSON.parse(event.body);
+    const body = JSON.parse(event.body || '{}');
     const { to, template, args } = body;
 
     if (!to || !template) {
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ error: 'Missing to or template' })
       };
+    }
+
+    // Auth: require JWT and restrict recipient to authenticated user's email
+    const authHeader = event.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    if (!token) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'No auth token' }) };
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
+    }
+    if (user.email && to.toLowerCase() !== user.email.toLowerCase()) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Can only send to your own email' }) };
     }
 
     const result = await sendEmail(to, template, args || []);
 
     return {
       statusCode: 200,
+      headers,
       body: JSON.stringify({ success: true, id: result.data?.id })
     };
   } catch (err) {
+    if (err instanceof SyntaxError && err.message.includes('JSON')) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+    }
     console.error('Send email error:', err);
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: err.message })
     };
   }

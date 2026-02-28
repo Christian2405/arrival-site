@@ -151,12 +151,15 @@ async function handleSignup(event) {
         }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
 
-        // 4. Send welcome email (fire-and-forget)
-        fetch('/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
-        }).catch(function(err) { console.error('Welcome email error:', err); });
+        // 4. Send welcome email (fire-and-forget; function requires JWT and to === user email)
+        var accessToken = result.data.session ? result.data.session.access_token : '';
+        if (accessToken) {
+            fetch('/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
+            }).catch(function(err) { console.error('Welcome email error:', err); });
+        }
 
         // 5. Redirect to individual dashboard
         window.location.href = '/dashboard-individual';
