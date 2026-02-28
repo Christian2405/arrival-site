@@ -21,6 +21,7 @@ from app.services.memory import retrieve_memories, store_memory
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
 from app.middleware.auth import get_current_user
+from app.services.usage import check_query_limit
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,9 @@ def _check_demo_rate_limit(ip: str) -> bool:
     Returns True if the request should be allowed, False if rate limited.
     """
     now = time.time()
+    # Bug fix: Prune stale entries to prevent unbounded memory growth
+    if len(_demo_rate_limits) > 10000:
+        _demo_rate_limits.clear()
     if ip in _demo_rate_limits:
         count, window_start = _demo_rate_limits[ip]
         if now - window_start > DEMO_RATE_WINDOW:
@@ -83,6 +87,8 @@ async def _safe_task(coro, task_name: str = "background_task"):
     """Wrap a coroutine so exceptions are logged instead of swallowed."""
     try:
         await coro
+    except asyncio.CancelledError:
+        logger.debug(f"[{task_name}] Task cancelled")
     except Exception as e:
         logger.error(f"[{task_name}] Background task failed: {e}", exc_info=True)
 
@@ -147,6 +153,14 @@ async def chat(
             user = await get_current_user(req)
             user_id = user["user_id"]
 
+            # 2. Check query limit
+            usage = await check_query_limit(user_id)
+            if not usage["allowed"]:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Daily limit reached. Resets at midnight.",
+                )
+
             simple = _is_simple_message(request.message) and not request.image_base64
 
             if simple:
@@ -178,18 +192,32 @@ async def chat(
                 # ── FULL PATH ── Memory + team_id + RAG(user-ns) all in parallel
                 logger.info(f"[chat] Full path for '{request.message[:40]}…' ({user_id[:8]}…)")
 
-                memories, team_id, user_rag = await asyncio.gather(
+                # Bug fix: return_exceptions=True so one failed service
+                # doesn't kill the entire request
+                phase_results = await asyncio.gather(
                     retrieve_memories(user_id, request.message),
                     get_user_team_id(user_id),
                     retrieve_context(user_id, request.message, team_id=None),
+                    return_exceptions=True,
                 )
+                memories = phase_results[0] if not isinstance(phase_results[0], Exception) else []
+                team_id = phase_results[1] if not isinstance(phase_results[1], Exception) else None
+                user_rag = phase_results[2] if not isinstance(phase_results[2], Exception) else []
+                if isinstance(phase_results[0], Exception):
+                    logger.warning(f"[chat] Memory retrieval failed: {phase_results[0]}")
+                if isinstance(phase_results[1], Exception):
+                    logger.warning(f"[chat] Team ID retrieval failed: {phase_results[1]}")
+                if isinstance(phase_results[2], Exception):
+                    logger.warning(f"[chat] RAG retrieval failed: {phase_results[2]}")
 
                 # If user belongs to a team, quick async team-namespace search
                 rag_context = user_rag
                 if team_id:
                     try:
-                        team_rag = await retrieve_context(
-                            user_id, request.message, team_id=team_id,
+                        # Bug fix: Add timeout to team namespace RAG search
+                        team_rag = await asyncio.wait_for(
+                            retrieve_context(user_id, request.message, team_id=team_id),
+                            timeout=4.0,
                         )
                         # Merge team results that aren't duplicates
                         seen = {r["text"][:200] for r in rag_context}
@@ -222,7 +250,7 @@ async def chat(
                     task_name="store_memory",
                 ))
                 asyncio.create_task(_safe_task(
-                    _log_query(user_id, request, result),
+                    _log_query(user_id, request, result, team_id=team_id),
                     task_name="log_query",
                 ))
 
@@ -238,15 +266,22 @@ async def chat(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = str(e)
+        # Bug fix: Don't leak config/key info to clients
+        if "not set" in error_msg.lower() or "api_key" in error_msg.lower():
+            logger.error(f"Server config error: {error_msg}")
+            raise HTTPException(status_code=500, detail="Service temporarily unavailable")
+        raise HTTPException(status_code=400, detail="Invalid request parameters")
     except Exception as e:
         logger.error(f"Chat failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
 
 
-async def _log_query(user_id: str, request: ChatRequest, result: dict):
-    """Background helper to log the query to Supabase."""
-    team_id = await get_user_team_id(user_id)
+async def _log_query(user_id: str, request: ChatRequest, result: dict, team_id: str | None = None):
+    """Background helper to log the query to Supabase.
+    Bug fix: Accept team_id as param to avoid redundant Supabase call."""
+    if team_id is None:
+        team_id = await get_user_team_id(user_id)
     await log_query(
         user_id=user_id,
         question=request.message,

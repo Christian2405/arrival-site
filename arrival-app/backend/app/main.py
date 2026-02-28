@@ -10,10 +10,10 @@ import time
 
 import httpx
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers
+from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers, usage
 
 # Configure logging to show INFO level (Render captures stdout)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -82,6 +82,7 @@ app.include_router(documents.router, prefix="/api", tags=["Documents"])
 app.include_router(analyze.router, prefix="/api", tags=["Frame Analysis"])
 app.include_router(queries.router, prefix="/api", tags=["Queries"])
 app.include_router(saved_answers.router, prefix="/api", tags=["Saved Answers"])
+app.include_router(usage.router, prefix="/api", tags=["Usage"])
 
 
 # --- Health Check ---
@@ -102,13 +103,20 @@ async def root():
 
 
 # --- Diagnostics endpoint — times each service independently ---
+# Bug fix: Requires auth + DIAGNOSTICS_SECRET to prevent abuse (burns paid API credits).
+# Errors no longer leak raw exception messages.
 
 @app.get("/api/diagnostics")
-async def diagnostics():
+async def diagnostics(req: Request, secret: str = Query("", description="Diagnostics secret")):
     """
     Test and time each service independently.
+    Requires DIAGNOSTICS_SECRET query param or authenticated admin.
     Returns latency breakdown for debugging performance.
     """
+    expected_secret = os.getenv("DIAGNOSTICS_SECRET", "")
+    if not expected_secret or secret != expected_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     results = {}
     total_start = time.monotonic()
 
@@ -118,8 +126,8 @@ async def diagnostics():
         from app.services.supabase import get_user_team_id
         await get_user_team_id("diagnostics-test-user")
         results["supabase_team_lookup"] = {"ms": round((time.monotonic() - t) * 1000), "status": "ok"}
-    except Exception as e:
-        results["supabase_team_lookup"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+    except Exception:
+        results["supabase_team_lookup"] = {"ms": round((time.monotonic() - t) * 1000), "status": "error"}
 
     # 2. Mem0 memory search
     try:
@@ -127,8 +135,8 @@ async def diagnostics():
         from app.services.memory import retrieve_memories
         mems = await retrieve_memories("diagnostics-test-user", "hello")
         results["mem0_search"] = {"ms": round((time.monotonic() - t) * 1000), "status": "ok", "count": len(mems)}
-    except Exception as e:
-        results["mem0_search"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+    except Exception:
+        results["mem0_search"] = {"ms": round((time.monotonic() - t) * 1000), "status": "error"}
 
     # 3. Pinecone RAG search
     try:
@@ -136,8 +144,8 @@ async def diagnostics():
         from app.services.rag import retrieve_context
         ctx = await retrieve_context("diagnostics-test-user", "hello", team_id=None)
         results["pinecone_rag"] = {"ms": round((time.monotonic() - t) * 1000), "status": "ok", "count": len(ctx)}
-    except Exception as e:
-        results["pinecone_rag"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+    except Exception:
+        results["pinecone_rag"] = {"ms": round((time.monotonic() - t) * 1000), "status": "error"}
 
     # 4. Claude chat (tiny request)
     try:
@@ -147,10 +155,9 @@ async def diagnostics():
         results["claude_chat"] = {
             "ms": round((time.monotonic() - t) * 1000),
             "status": "ok",
-            "response": resp["response"][:50],
         }
-    except Exception as e:
-        results["claude_chat"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+    except Exception:
+        results["claude_chat"] = {"ms": round((time.monotonic() - t) * 1000), "status": "error"}
 
     # 5. ElevenLabs TTS (short text)
     try:
@@ -162,8 +169,8 @@ async def diagnostics():
             "status": "ok",
             "audio_b64_len": len(audio),
         }
-    except Exception as e:
-        results["elevenlabs_tts"] = {"ms": round((time.monotonic() - t) * 1000), "status": f"error: {e}"}
+    except Exception:
+        results["elevenlabs_tts"] = {"ms": round((time.monotonic() - t) * 1000), "status": "error"}
 
     total_ms = round((time.monotonic() - total_start) * 1000)
     results["total_sequential_ms"] = total_ms

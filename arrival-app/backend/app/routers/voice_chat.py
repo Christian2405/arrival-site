@@ -22,6 +22,7 @@ from app.services.memory import retrieve_memories, store_memory
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
 from app.middleware.auth import get_current_user
+from app.services.usage import check_query_limit
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,14 @@ async def voice_chat(
         )
         user_id = user_result["user_id"]
 
+        # Check query limit before proceeding
+        usage = await check_query_limit(user_id)
+        if not usage["allowed"]:
+            raise HTTPException(
+                status_code=429,
+                detail="Daily limit reached. Resets at midnight.",
+            )
+
         if not transcript:
             raise HTTPException(status_code=400, detail="Could not transcribe audio — no speech detected")
 
@@ -208,7 +217,11 @@ async def voice_chat(
         # Quick team namespace search if team_id available
         if team_id and not isinstance(phase_results[2], Exception):
             try:
-                team_rag = await retrieve_context(user_id, transcript, team_id=team_id)
+                # Bug fix: Add timeout to team namespace RAG search
+                team_rag = await asyncio.wait_for(
+                    retrieve_context(user_id, transcript, team_id=team_id),
+                    timeout=4.0,
+                )
                 seen = {r["text"][:200] for r in rag_context}
                 for r in team_rag:
                     if r["text"][:200] not in seen:

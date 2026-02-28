@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.middleware.auth import get_current_user
 from app.services.supabase import upload_document, list_documents, delete_document
 from app.services.rag import index_document, DocumentTooShortError
+from app.services.usage import check_document_limit
 from app import config
 
 router = APIRouter()
@@ -67,6 +68,15 @@ async def upload(
         user = await get_current_user(request)
         user_id = user["user_id"]
         user_token = user["token"]
+
+        # Check document limit (only for personal uploads, not team)
+        if not team_id:
+            doc_usage = await check_document_limit(user_id)
+            if not doc_usage["allowed"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Document limit reached. Upgrade for more.",
+                )
 
         # Validate file type by extension
         import os as _os
