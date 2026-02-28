@@ -1285,6 +1285,16 @@ p {
    BENEFITS GRID
    ============================================ */
 
+.biz-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+.biz-three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
 .benefits-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1912,6 +1922,14 @@ p {
     .steps-layout {
         grid-template-columns: 1fr;
         gap: 48px;
+    }
+
+    .biz-two-col {
+        grid-template-columns: 1fr;
+    }
+
+    .biz-three-col {
+        grid-template-columns: 1fr;
     }
 
     .benefits-grid {
