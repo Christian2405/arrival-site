@@ -193,7 +193,11 @@ async def index_doc(body: IndexRequest, request: Request):
 
         # Use the DB-sourced storage_path, not the client-provided one (Bug #4)
         trusted_storage_path = doc_resp["storage_path"]
+        # Use DB team_id as source of truth — don't let client override
         doc_team_id = doc_resp.get("team_id") or body.team_id
+        # If DB already has a team_id, always prefer it over client value
+        if doc_resp.get("team_id"):
+            doc_team_id = doc_resp["team_id"]
 
         # Bug #4: Additional validation — storage_path must not contain path traversal
         if ".." in trusted_storage_path:

@@ -51,7 +51,7 @@
                         <div class="hero-stat-divider"></div>
                         <div class="hero-stat">
                             <span class="hero-stat-num">50+</span>
-                            <span class="hero-stat-label">Trade specialities</span>
+                            <span class="hero-stat-label">Trade specialties</span>
                         </div>
                         <div class="hero-stat-divider"></div>
                         <div class="hero-stat">
@@ -85,7 +85,7 @@
                             </div>
                             <div class="feature-card-item">
                                 <div class="check">✓</div>
-                                <div>Saved in your memory</div>
+                                <div>Saved to your history</div>
                             </div>
                         </div>
                     </div>
@@ -216,7 +216,7 @@
         <section class="section cta-section">
             <div class="container">
                 <div style="text-align: center; max-width: 600px; margin: 0 auto;">
-                    <h2 class="section-header reveal">Start asking better questions today.</h2>
+                    <h2 class="section-header reveal">Get expert answers on every job.</h2>
                     <p style="font-size: 18px; color: #7c736a; margin: 24px 0 48px;">Get instant answers from an AI that knows your trade inside and out.</p>
                     <div class="hero-ctas reveal reveal-delay-1">
                         <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
@@ -503,7 +503,7 @@
                         <div class="pricing-inherits">Everything in Pro, plus:</div>
                         <div class="pricing-features">
                             <div class="pricing-feature">Unlimited documents</div>
-                            <div class="pricing-feature">Categorised document library</div>
+                            <div class="pricing-feature">Categorized document library</div>
                             <div class="pricing-feature">Proactive Mode</div>
                             <div class="pricing-feature">Manager dashboard</div>
                             <div class="pricing-feature">Team analytics</div>
@@ -519,11 +519,11 @@
                         <div class="pricing-header">
                             <h3>Enterprise</h3>
                         </div>
-                        <div class="pricing-subtitle">For large organisations operating at scale.</div>
+                        <div class="pricing-subtitle">For large organizations operating at scale.</div>
                         <div class="pricing-price" style="visibility: hidden;">$0 <span>/month</span></div>
                         <div class="pricing-desc" style="visibility: hidden;">‎</div>
                         <div class="pricing-cta">
-                            <a href="mailto:sales@arrival.ai" class="btn btn-primary" style="background: var(--text-light);">Contact Sales</a>
+                            <a href="mailto:sales@arrival.ai" class="btn btn-primary" style="background: #2a2622;">Contact Sales</a>
                         </div>
                         <hr class="pricing-divider">
                         <div class="pricing-inherits">Everything in Business, plus:</div>
@@ -757,7 +757,7 @@
                     </div>
                     <div class="benefit-card reveal reveal-delay-6">
                         <div class="benefit-num">6</div>
-                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Standardise Quality</h3>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Standardize Quality</h3>
                         <p>Every tech follows the same best practices and procedures. Consistent work quality across your entire team, every job, every time.</p>
                     </div>
                 </div>
@@ -911,7 +911,6 @@
             <div class="container">
                 <div class="about-block">
                     <h2 class="section-header">The story</h2>
-                    <p>Our founders spent a decade in the trades—HVAC, electrical, plumbing. They watched new techs ask the same questions over and over. They saw senior techs waste time on basic troubleshooting. They watched callbacks pile up because someone didn't know one detail.</p>
                     <p>Smartphones put the world's information in our pockets. But the trades still relied on memory, old notebooks, and guessing. We thought: why not an AI that actually understands trade work?</p>
                     <p>We're building Arrival for people who work with their hands—voice-first, camera-enabled, designed for loud job sites and dirty fingers. We're testing with real techs, iterating every week, and getting closer to launch.</p>
                     <p>We haven't launched yet. We're not pretending to be bigger than we are. We're a small team building something we believe the trades desperately need, and we're doing it right.</p>
@@ -981,36 +980,36 @@
                     <p style="font-size: 15px; color: var(--text-muted); margin: 0; max-width: 480px;">Have a question, need a demo, or want to partner with us? We'd love to hear from you.</p>
                 </div>
                 <div style="max-width: 560px;">
-                    <form class="auth-form">
+                    <form id="contact-form" class="auth-form" onsubmit="handleContactSubmit(event)">
                         <div class="form-row">
                             <div class="form-group">
-                                <label>First Name</label>
-                                <input type="text" placeholder="Your name" required>
+                                <label for="contact-first-name">First Name</label>
+                                <input type="text" id="contact-first-name" name="first_name" placeholder="Your name" required>
                             </div>
                             <div class="form-group">
-                                <label>Last Name</label>
-                                <input type="text" placeholder="Your last name" required>
+                                <label for="contact-last-name">Last Name</label>
+                                <input type="text" id="contact-last-name" name="last_name" placeholder="Your last name" required>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Email</label>
-                            <input type="email" placeholder="you@company.com" required>
+                            <label for="contact-email">Email</label>
+                            <input type="email" id="contact-email" name="email" placeholder="you@company.com" required>
                         </div>
                         <div class="form-group">
-                            <label>Subject</label>
-                            <select required>
+                            <label for="contact-subject">Subject</label>
+                            <select id="contact-subject" name="subject" required>
                                 <option value="">Select...</option>
-                                <option>General Enquiry</option>
-                                <option>Product Support</option>
-                                <option>Sales / Demo Request</option>
-                                <option>Partnership Opportunity</option>
-                                <option>Press / Media</option>
-                                <option>Other</option>
+                                <option value="general">General Inquiry</option>
+                                <option value="support">Product Support</option>
+                                <option value="sales">Sales / Demo Request</option>
+                                <option value="partnership">Partnership Opportunity</option>
+                                <option value="press">Press / Media</option>
+                                <option value="other">Other</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Message</label>
-                            <textarea placeholder="Tell us how we can help..." rows="6" style="padding: 12px 16px; border: 1px solid var(--bg-border); border-radius: 6px; font-family: var(--font-body); font-size: 14px; color: var(--text-dark); resize: vertical; width: 100%; box-sizing: border-box;" required></textarea>
+                            <label for="contact-message">Message</label>
+                            <textarea id="contact-message" name="message" placeholder="Tell us how we can help..." rows="6" style="padding: 12px 16px; border: 1px solid var(--bg-border); border-radius: 6px; font-family: var(--font-body); font-size: 14px; color: var(--text-dark); resize: vertical; width: 100%; box-sizing: border-box;" required></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary" style="width: 100%;">Send Message</button>
                     </form>
@@ -1050,7 +1049,7 @@
     <div class="page" id="page-help">
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
-                <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Help Centre</h1>
+                <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Help Center</h1>
                 <span style="font-size: 13px; color: var(--text-light);">Find answers and guides</span>
             </div>
         </section>
@@ -1080,7 +1079,7 @@
                     </a>
                     <a href="#" onclick="showPage('help-troubleshooting'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
                         <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Troubleshooting</h3>
-                        <p style="color: var(--text-muted); margin: 0;">Common issues and fixes. Camera not working, voice not recognised, slow responses, and other known issues.</p>
+                        <p style="color: var(--text-muted); margin: 0;">Common issues and fixes. Camera not working, voice not recognized, slow responses, and other known issues.</p>
                     </a>
                 </div>
 
@@ -1098,7 +1097,7 @@
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
                 <div style="display: flex; align-items: baseline; gap: 12px;">
-                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Centre</a>
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
                     <span style="color: var(--bg-border);">/</span>
                     <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Getting Started</h1>
                 </div>
@@ -1119,7 +1118,7 @@
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Conversation history</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Every conversation is saved automatically. Swipe right or tap the menu icon to see past conversations. Pro and Business users can search their full history, bookmark important answers, and share conversations with teammates.</p>
 
-                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Customising your experience</h3>
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Customizing your experience</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Head to Settings to adjust voice speed, toggle between listen and read modes, set your preferred units (metric or imperial), and configure notification preferences. You can also add your company's specific equipment inventory for more targeted answers.</p>
                 </div>
             </div>
@@ -1131,7 +1130,7 @@
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
                 <div style="display: flex; align-items: baseline; gap: 12px;">
-                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Centre</a>
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
                     <span style="color: var(--bg-border);">/</span>
                     <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Voice & Camera</h1>
                 </div>
@@ -1164,7 +1163,7 @@
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
                 <div style="display: flex; align-items: baseline; gap: 12px;">
-                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Centre</a>
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
                     <span style="color: var(--bg-border);">/</span>
                     <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Account & Billing</h1>
                 </div>
@@ -1197,7 +1196,7 @@
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
                 <div style="display: flex; align-items: baseline; gap: 12px;">
-                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Centre</a>
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
                     <span style="color: var(--bg-border);">/</span>
                     <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Team Management</h1>
                 </div>
@@ -1207,7 +1206,7 @@
             <div class="container">
                 <div style="max-width: 720px; margin: 0 auto;">
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Setting up your team</h3>
-                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Business account administrators can invite team members by email from the Admin Dashboard. Each invited member receives a link to create their account under your organisation. You can set roles (Admin, Manager, or Technician) to control access levels.</p>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Business account administrators can invite team members by email from the Admin Dashboard. Each invited member receives a link to create their account under your organization. You can set roles (Admin, Manager, or Technician) to control access levels.</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Roles and permissions</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Admins can manage billing, invite/remove members, access analytics, and configure team settings. Managers can view team analytics and manage the shared knowledge base. Technicians use Arrival normally and can contribute to the team library. All roles have full access to the AI assistant.</p>
@@ -1230,7 +1229,7 @@
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
                 <div style="display: flex; align-items: baseline; gap: 12px;">
-                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Centre</a>
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
                     <span style="color: var(--bg-border);">/</span>
                     <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Proactive Mode</h1>
                 </div>
@@ -1263,7 +1262,7 @@
         <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
             <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
                 <div style="display: flex; align-items: baseline; gap: 12px;">
-                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Centre</a>
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
                     <span style="color: var(--bg-border);">/</span>
                     <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Troubleshooting</h1>
                 </div>
@@ -1272,7 +1271,7 @@
         <section class="section" style="padding-top: 60px;">
             <div class="container">
                 <div style="max-width: 720px; margin: 0 auto;">
-                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Voice not being recognised</h3>
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Voice not being recognized</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Make sure Arrival has microphone permissions enabled in your phone settings. If you're on a noisy site, hold the phone closer to your mouth or use a Bluetooth earpiece. Try restarting the app if voice stops working mid-session. Check that you're pressing and holding the mic button (not just tapping).</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Camera not identifying equipment</h3>
@@ -1307,7 +1306,7 @@
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">When you use Arrival, we collect information you provide directly, including your name, email address, trade type, and the questions you ask through voice and text. When you use the camera feature, images are processed in real time and are not stored unless you explicitly save them to your conversation history.</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">2. How We Use Your Information</h3>
-                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">We use your information to provide, maintain, and improve the Arrival service. This includes processing your queries, personalising responses based on your conversation history, improving our AI models, and communicating with you about your account. We do not sell your personal information to third parties.</p>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">We use your information to provide, maintain, and improve the Arrival service. This includes processing your queries, personalizing responses based on your conversation history, improving our AI models, and communicating with you about your account. We do not sell your personal information to third parties.</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">3. Data Storage & Security</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Your data is encrypted in transit and at rest. Conversation histories are stored securely on our servers. History is retained indefinitely unless you choose to delete it. We implement industry-standard security measures to protect your information.</p>
@@ -1350,7 +1349,7 @@
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Arrival provides information for reference purposes only. While we strive for accuracy, we cannot guarantee that all information is complete, current, or error-free. You acknowledge that reliance on information provided by Arrival is at your own risk. Always verify critical information with official sources, manufacturer documentation, and local codes. Arrival is not liable for any damages, losses, or injuries resulting from the use of information provided by the Service.</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">4. User Responsibilities</h3>
-                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">You are responsible for maintaining the confidentiality of your account credentials. You agree not to misuse the Service, including attempting to reverse-engineer the AI, use the Service for unlawful purposes, or share your account with unauthorised users. Business account administrators are responsible for managing team member access.</p>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">You are responsible for maintaining the confidentiality of your account credentials. You agree not to misuse the Service, including attempting to reverse-engineer the AI, use the Service for unlawful purposes, or share your account with unauthorized users. Business account administrators are responsible for managing team member access.</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">5. Subscriptions & Billing</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Paid subscriptions are billed monthly or annually as selected. You may cancel at any time and will retain access through the end of your billing period. Refunds are available within the first 30 days of a new subscription. Arrival reserves the right to change pricing with 30 days' notice to existing subscribers.</p>
@@ -1690,7 +1689,7 @@
                     <div class="footer-col">
                         <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 16px;">Resources</h4>
                         <ul style="list-style: none; padding: 0; margin: 0;">
-                            <li><a href="#" onclick="showPage('help'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Help Centre</a></li>
+                            <li><a href="#" onclick="showPage('help'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Help Center</a></li>
                             <li><a href="#" onclick="showPage('privacy'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Privacy Policy</a></li>
                             <li><a href="#" onclick="showPage('terms'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Terms of Service</a></li>
                         </ul>
@@ -1722,10 +1721,13 @@
         function showPage(pageId) {
             const pages = document.querySelectorAll('.page');
             pages.forEach(page => page.classList.remove('active'));
-            document.getElementById('page-' + pageId).classList.add('active');
+            const target = document.getElementById('page-' + pageId);
+            if (!target) { console.warn('Page not found:', pageId); return; }
+            target.classList.add('active');
 
             // Close mobile nav
-            document.getElementById('navLinks').classList.remove('open');
+            const navLinks = document.getElementById('navLinks');
+            if (navLinks) navLinks.classList.remove('open');
 
             // Scroll to top
             window.scrollTo(0, 0);
@@ -1742,7 +1744,8 @@
 
         // Toggle mobile nav
         function toggleNav() {
-            document.getElementById('navLinks').classList.toggle('open');
+            var navLinks = document.getElementById('navLinks');
+            if (navLinks) navLinks.classList.toggle('open');
         }
 
         // Toggle FAQ accordion
@@ -1768,6 +1771,7 @@
         // Scroll listener for nav.scrolled
         window.addEventListener('scroll', () => {
             const nav = document.querySelector('.nav');
+            if (!nav) return;
             if (window.scrollY > 50) {
                 nav.classList.add('scrolled');
             } else {
@@ -1803,6 +1807,47 @@
         }
 
         var revealObserver = initRevealAnimations();
+
+        // Contact form handler
+        function handleContactSubmit(event) {
+            event.preventDefault();
+            var form = document.getElementById('contact-form');
+            var btn = form.querySelector('button[type="submit"]');
+            var origText = btn.textContent;
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+
+            // Collect form data
+            var data = {
+                first_name: document.getElementById('contact-first-name').value,
+                last_name: document.getElementById('contact-last-name').value,
+                email: document.getElementById('contact-email').value,
+                subject: document.getElementById('contact-subject').value,
+                message: document.getElementById('contact-message').value,
+            };
+
+            // Send via mailto as fallback (works without backend endpoint)
+            var mailSubject = encodeURIComponent('Contact: ' + data.subject);
+            var mailBody = encodeURIComponent(
+                'From: ' + data.first_name + ' ' + data.last_name + '\n' +
+                'Email: ' + data.email + '\n' +
+                'Subject: ' + data.subject + '\n\n' +
+                data.message
+            );
+            window.location.href = 'mailto:support@arrivalcompany.com?subject=' + mailSubject + '&body=' + mailBody;
+
+            // Show success state
+            setTimeout(function() {
+                btn.textContent = 'Message Sent ✓';
+                btn.style.background = '#22c55e';
+                form.reset();
+                setTimeout(function() {
+                    btn.textContent = origText;
+                    btn.style.background = '';
+                    btn.disabled = false;
+                }, 3000);
+            }, 500);
+        }
 
         // Wrap showPage to re-observe elements on newly visible pages
         var _origShowPage = showPage;

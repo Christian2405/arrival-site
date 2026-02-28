@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.middleware.auth import get_current_user
 from app import config
-import httpx
+from app.services.supabase import _get_client
 
 router = APIRouter()
 
@@ -65,14 +65,14 @@ async def save_answer(body: SaveAnswerRequest, request: Request):
             "trade": body.trade,
         }
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"{config.SUPABASE_URL}/rest/v1/saved_answers",
-                headers=_db_headers(user_token),
-                json=row,
-            )
-            resp.raise_for_status()
-            inserted = resp.json()
+        client = _get_client()
+        resp = await client.post(
+            f"{config.SUPABASE_URL}/rest/v1/saved_answers",
+            headers=_db_headers(user_token),
+            json=row,
+        )
+        resp.raise_for_status()
+        inserted = resp.json()
 
         record = inserted[0] if isinstance(inserted, list) else inserted
         return SavedAnswerResponse(
@@ -98,18 +98,18 @@ async def list_saved_answers(request: Request):
         user = await get_current_user(request)
         user_token = user["token"]
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"{config.SUPABASE_URL}/rest/v1/saved_answers",
-                headers=_db_headers(user_token),
-                params={
-                    "select": "*",
-                    "order": "saved_at.desc",
-                    "limit": "200",
-                },
-            )
-            resp.raise_for_status()
-            rows = resp.json()
+        client = _get_client()
+        resp = await client.get(
+            f"{config.SUPABASE_URL}/rest/v1/saved_answers",
+            headers=_db_headers(user_token),
+            params={
+                "select": "*",
+                "order": "saved_at.desc",
+                "limit": "200",
+            },
+        )
+        resp.raise_for_status()
+        rows = resp.json()
 
         return SavedAnswersListResponse(answers=rows)
 
@@ -126,13 +126,13 @@ async def delete_saved_answer(answer_id: str, request: Request):
         user = await get_current_user(request)
         user_token = user["token"]
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/saved_answers",
-                headers=_db_headers(user_token),
-                params={"id": f"eq.{answer_id}"},
-            )
-            resp.raise_for_status()
+        client = _get_client()
+        resp = await client.delete(
+            f"{config.SUPABASE_URL}/rest/v1/saved_answers",
+            headers=_db_headers(user_token),
+            params={"id": f"eq.{answer_id}"},
+        )
+        resp.raise_for_status()
 
         return DeleteResponse(success=True)
 

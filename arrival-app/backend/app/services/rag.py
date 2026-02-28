@@ -271,8 +271,11 @@ async def delete_document_vectors(document_id: str, user_id: str, team_id: str |
             batch = ids_to_delete[batch_start : batch_start + 100]
             try:
                 await asyncio.to_thread(index.delete, ids=batch, namespace=namespace)
-            except Exception:
-                pass  # Some IDs won't exist, that's fine
+            except Exception as batch_err:
+                # IDs that don't exist are fine, but log real errors
+                err_str = str(batch_err).lower()
+                if "not found" not in err_str and "no vectors" not in err_str:
+                    logger.warning(f"[rag] Vector batch delete error: {batch_err}")
 
         print(f"[rag] Deleted vectors for document {document_id}")
     except (ConnectionError, OSError, TimeoutError) as conn_err:
@@ -345,7 +348,10 @@ async def retrieve_context(
         # Bug #1: If team_id provided, also search the team namespace
         if team_id:
             team_namespace = f"team_{team_id}"
-            team_results = await asyncio.to_thread(_do_search, team_namespace)
+            team_results = await asyncio.wait_for(
+                asyncio.to_thread(_do_search, team_namespace),
+                timeout=RAG_TIMEOUT,
+            )
 
             # Merge and deduplicate by text content
             seen_texts = set()

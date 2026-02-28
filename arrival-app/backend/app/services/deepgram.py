@@ -27,6 +27,9 @@ def _get_client() -> httpx.AsyncClient:
 
 def _detect_audio_content_type(audio_bytes: bytes) -> str:
     """Detect audio content type from magic bytes. Defaults to audio/mp4."""
+    if len(audio_bytes) < 12:
+        logger.warning(f"[stt] Audio too short for format detection ({len(audio_bytes)} bytes)")
+        return "audio/mp4"
     if audio_bytes[:4] == b"\x1aE\xdf\xa3":
         return "audio/webm"
     if audio_bytes[:3] == b"ID3" or audio_bytes[:2] == b"\xff\xfb" or audio_bytes[:2] == b"\xff\xf3":
@@ -38,8 +41,9 @@ def _detect_audio_content_type(audio_bytes: bytes) -> str:
     if audio_bytes[:4] == b"OggS":
         return "audio/ogg"
     # m4a/mp4 — check for 'ftyp' box at offset 4
-    if len(audio_bytes) >= 8 and audio_bytes[4:8] == b"ftyp":
+    if audio_bytes[4:8] == b"ftyp":
         return "audio/mp4"
+    logger.info(f"[stt] Unknown audio format (magic: {audio_bytes[:8].hex()}), defaulting to audio/mp4")
     return "audio/mp4"  # default fallback
 
 

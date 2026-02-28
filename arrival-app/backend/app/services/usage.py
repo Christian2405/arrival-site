@@ -6,8 +6,10 @@ Tier definitions are the single source of truth for the backend.
 Uses the existing `queries` and `documents` tables — no new tables needed.
 """
 
+import asyncio
 import logging
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 
 from app import config
@@ -24,12 +26,17 @@ TIER_LIMITS = {
 }
 
 # In-memory plan cache: user_id -> (plan, timestamp)
-_plan_cache: dict[str, tuple[str, float]] = {}
+# Using OrderedDict for LRU eviction instead of clearing all entries
+_plan_cache: OrderedDict[str, tuple[str, float]] = OrderedDict()
+_plan_cache_lock = asyncio.Lock()
 _PLAN_CACHE_TTL = 60.0  # seconds
+_PLAN_CACHE_MAX = 5000   # max entries before LRU eviction
 
 
 def get_tier_limits(plan: str) -> dict:
     """Return the limits dict for a given plan."""
+    if plan not in TIER_LIMITS:
+        logger.warning(f"[usage] Unknown plan '{plan}' — defaulting to free tier")
     return TIER_LIMITS.get(plan, TIER_LIMITS["free"])
 
 
@@ -41,15 +48,14 @@ async def get_user_plan(user_id: str) -> str:
     """
     now = time.monotonic()
 
-    # Check cache
-    if user_id in _plan_cache:
-        cached_plan, cached_at = _plan_cache[user_id]
-        if now - cached_at < _PLAN_CACHE_TTL:
-            return cached_plan
-
-    # Prune cache if it gets too large
-    if len(_plan_cache) > 10000:
-        _plan_cache.clear()
+    # Check cache (with lock to prevent race conditions on shared dict)
+    async with _plan_cache_lock:
+        if user_id in _plan_cache:
+            cached_plan, cached_at = _plan_cache[user_id]
+            if now - cached_at < _PLAN_CACHE_TTL:
+                # Move to end for LRU tracking
+                _plan_cache.move_to_end(user_id)
+                return cached_plan
 
     plan = "free"  # default
 
@@ -73,7 +79,11 @@ async def get_user_plan(user_id: str) -> str:
     except Exception as e:
         logger.warning(f"[usage] Plan lookup failed for {user_id[:8]}...: {e}")
 
-    _plan_cache[user_id] = (plan, now)
+    # Update cache with LRU eviction (evict oldest entries, not nuke entire cache)
+    async with _plan_cache_lock:
+        _plan_cache[user_id] = (plan, now)
+        while len(_plan_cache) > _PLAN_CACHE_MAX:
+            _plan_cache.popitem(last=False)  # Remove oldest entry
     return plan
 
 
@@ -105,7 +115,11 @@ async def get_daily_query_count(user_id: str) -> int:
         if "/" in content_range:
             count_str = content_range.split("/")[-1]
             if count_str != "*":
-                return int(count_str)
+                try:
+                    return int(count_str)
+                except ValueError:
+                    logger.warning(f"[usage] Malformed content-range count: '{count_str}'")
+                    return 0
         return 0
     except Exception as e:
         logger.warning(f"[usage] Query count failed for {user_id[:8]}...: {e}")
@@ -137,7 +151,11 @@ async def get_document_count(user_id: str) -> int:
         if "/" in content_range:
             count_str = content_range.split("/")[-1]
             if count_str != "*":
-                return int(count_str)
+                try:
+                    return int(count_str)
+                except ValueError:
+                    logger.warning(f"[usage] Malformed content-range count: '{count_str}'")
+                    return 0
         return 0
     except Exception as e:
         logger.warning(f"[usage] Document count failed for {user_id[:8]}...: {e}")

@@ -63,9 +63,18 @@ def _check_demo_rate_limit(ip: str) -> bool:
     Returns True if the request should be allowed, False if rate limited.
     """
     now = time.time()
-    # Bug fix: Prune stale entries to prevent unbounded memory growth
-    if len(_demo_rate_limits) > 10000:
-        _demo_rate_limits.clear()
+    # Prune stale entries to prevent unbounded memory growth.
+    # Evict expired entries instead of clearing all (avoids thundering herd).
+    if len(_demo_rate_limits) > 5000:
+        expired = [k for k, (_, ws) in _demo_rate_limits.items()
+                   if now - ws > DEMO_RATE_WINDOW * 2]
+        for k in expired:
+            del _demo_rate_limits[k]
+        # If still too large after pruning, clear oldest half
+        if len(_demo_rate_limits) > 5000:
+            to_remove = sorted(_demo_rate_limits, key=lambda k: _demo_rate_limits[k][1])[:2500]
+            for k in to_remove:
+                del _demo_rate_limits[k]
     if ip in _demo_rate_limits:
         count, window_start = _demo_rate_limits[ip]
         if now - window_start > DEMO_RATE_WINDOW:

@@ -205,13 +205,18 @@ async def delete_document(
 
     # 2. Delete from Storage (service role)
     if doc.get("storage_path"):
-        await client.request(
-            "DELETE",
-            f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_STORAGE_BUCKET}",
-            headers={**_storage_headers(), "Content-Type": "application/json"},
-            json={"prefixes": [doc["storage_path"]]},
-        )
-        # Don't fail if storage delete errors (file may already be gone)
+        try:
+            storage_del_resp = await client.request(
+                "DELETE",
+                f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_STORAGE_BUCKET}",
+                headers={**_storage_headers(), "Content-Type": "application/json"},
+                json={"prefixes": [doc["storage_path"]]},
+            )
+            storage_del_resp.raise_for_status()
+        except Exception as storage_err:
+            # Don't fail the whole delete if storage file is already gone,
+            # but log it so we can debug orphaned files
+            logger.warning(f"[supabase] Storage delete failed (continuing): {storage_err}")
 
     # 3. Delete from documents table (user token for RLS)
     del_resp = await client.delete(

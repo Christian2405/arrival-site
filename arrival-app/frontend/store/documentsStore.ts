@@ -113,6 +113,10 @@ export const useDocumentsStore = create<DocumentsState>((set) => ({
         console.error('Signed URL error:', error);
         return null;
       }
+      if (!data?.signedUrl) {
+        console.error('Signed URL missing from response for:', storagePath);
+        return null;
+      }
       return data.signedUrl;
     } catch (error) {
       console.error('Signed URL error:', error);
