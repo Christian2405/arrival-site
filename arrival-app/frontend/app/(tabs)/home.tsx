@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
   Animated, Keyboard, Platform, Alert, KeyboardAvoidingView, Dimensions,
-  TouchableWithoutFeedback,
+  TouchableWithoutFeedback, AppState, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,6 +18,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useSavedAnswersStore } from '../../store/savedAnswersStore';
 import { useAuthStore } from '../../store/authStore';
 import { aiAPI } from '../../services/api';
+import { useUsageStore, isQueryLimitReached } from '../../store/usageStore';
 import ChatBubble from '../../components/ChatBubble';
 import ArrivalLogo from '../../components/ArrivalLogo';
 import ModeSelector from '../../components/ModeSelector';
@@ -92,6 +93,18 @@ export default function HomeScreen() {
   const plan = subscription?.plan || 'free';
   const tierLimits = getTierLimits(plan);
 
+  // Usage store — fetch on mount + foreground
+  const { fetchUsage, incrementQueryCount } = useUsageStore();
+  useEffect(() => {
+    if (!demoMode) fetchUsage();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && !useSettingsStore.getState().demoMode) {
+        fetchUsage();
+      }
+    });
+    return () => sub.remove();
+  }, [fetchUsage, demoMode]);
+
   // --- Camera capture (silent, no shutter) ---
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
     if (!cameraRef.current) return undefined;
@@ -148,7 +161,9 @@ export default function HomeScreen() {
       };
 
       sound.setOnPlaybackStatusUpdate(async (status: any) => {
-        // Bug 3: Reject if sound becomes unloaded mid-playback
+        // Bug fix: When sound becomes unloaded (e.g. user tapped stop),
+        // resolve gracefully instead of rejecting — this is expected behavior,
+        // not an error. Rejecting here caused spurious error messages.
         if (!status.isLoaded) {
           cleanup();
           currentSoundRef.current = null;
@@ -157,7 +172,7 @@ export default function HomeScreen() {
             await deleteAsync(currentAudioFileRef.current, { idempotent: true }).catch(() => {});
             currentAudioFileRef.current = null;
           }
-          reject(new Error('Audio playback failed: sound unloaded'));
+          resolve(); // Not an error — user stopped playback intentionally
           return;
         }
         if (status.didJustFinish) {
@@ -324,6 +339,9 @@ export default function HomeScreen() {
           displayMode: 'voice', timestamp: new Date(),
         });
 
+        // Optimistic usage increment
+        if (!currentDemoMode) incrementQueryCount();
+
         if (result.audio_base64) {
           setVoiceState('speaking');
           await playAudio(result.audio_base64);
@@ -332,11 +350,13 @@ export default function HomeScreen() {
       } catch (error: any) {
         console.error('Voice chat error:', error);
         const isNet = !error?.response && (error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK' || error?.message?.includes('Network'));
+        const is429 = error?.response?.status === 429;
+        let voiceErrorMsg = 'Voice processing failed. Please try again.';
+        if (isNet) voiceErrorMsg = 'Server is starting up — please try again in a moment.';
+        else if (is429) voiceErrorMsg = 'Daily query limit reached. Resets at midnight UTC.';
         addMessage({
           id: generateId(), role: 'assistant',
-          content: isNet
-            ? 'Server is starting up — please try again in a moment.'
-            : 'Voice processing failed. Please try again.',
+          content: voiceErrorMsg,
           displayMode: 'voice', timestamp: new Date(),
         });
         setVoiceState('idle');
@@ -348,6 +368,18 @@ export default function HomeScreen() {
     }
 
     // Tap during idle → start recording
+    // Check query limit before starting (skip in demo mode)
+    if (!useSettingsStore.getState().demoMode && isQueryLimitReached()) {
+      Alert.alert(
+        'Daily Limit Reached',
+        'You\'ve used all your queries for today. Upgrade your plan for more.',
+        [
+          { text: 'OK', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/pricing').catch(() => {}) },
+        ],
+      );
+      return;
+    }
     if (pttStartingRef.current) return;
     pttStartingRef.current = true;
     try {
@@ -369,6 +401,19 @@ export default function HomeScreen() {
   const handleTextSubmit = useCallback(async () => {
     const text = inputText.trim();
     if (!text || isProcessing) return;
+
+    // Check query limit before sending (skip in demo mode)
+    if (!useSettingsStore.getState().demoMode && isQueryLimitReached()) {
+      Alert.alert(
+        'Daily Limit Reached',
+        'You\'ve used all your queries for today. Upgrade your plan for more.',
+        [
+          { text: 'OK', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/pricing').catch(() => {}) },
+        ],
+      );
+      return;
+    }
 
     Keyboard.dismiss();
     setInputText('');
@@ -395,6 +440,9 @@ export default function HomeScreen() {
         displayMode: 'text', timestamp: new Date(),
       });
 
+      // Optimistic usage increment
+      if (!currentDemoMode) incrementQueryCount();
+
       // NO TTS in Text Mode -- text in = text out
     } catch (error: any) {
       const isNetwork = !error?.response && (
@@ -408,7 +456,7 @@ export default function HomeScreen() {
       if (isNetwork || isServerDown) {
         errorMsg = 'Server is starting up — this can take a moment on the first request. Please try again.';
       } else if (error?.response?.status === 429) {
-        errorMsg = 'Too many requests. Please wait a moment and try again.';
+        errorMsg = 'Daily query limit reached. Resets at midnight UTC.';
       }
       addMessage({
         id: generateId(), role: 'assistant',
@@ -450,6 +498,10 @@ export default function HomeScreen() {
       jobControllerRef.current.stop();
       jobControllerRef.current = null;
     }
+
+    // Bug fix: Reset jobPaused so re-entering job mode doesn't have stale pause state
+    setJobPaused(false);
+    setJobAIState('monitoring');
 
     setInteractionMode(newMode);
   }, [interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
@@ -736,13 +788,17 @@ export default function HomeScreen() {
                     {/* Photo picker */}
                     <TouchableOpacity
                       onPress={async () => {
-                        const result = await ImagePicker.launchImageLibraryAsync({
-                          mediaTypes: ['images'],
-                          base64: true,
-                          quality: 0.5,
-                        });
-                        if (!result.canceled && result.assets[0]?.base64) {
-                          setPendingImage(result.assets[0].base64);
+                        try {
+                          const result = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ['images'],
+                            base64: true,
+                            quality: 0.5,
+                          });
+                          if (!result.canceled && result.assets[0]?.base64) {
+                            setPendingImage(result.assets[0].base64);
+                          }
+                        } catch (e) {
+                          console.log('[ImagePicker] Error:', e);
                         }
                       }}
                       style={styles.inputIconBtn}

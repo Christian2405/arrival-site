@@ -64,6 +64,14 @@ api.interceptors.response.use(
     }
 
     // Only retry on network errors (cold start timeout) or server-starting codes
+    // Bug fix: Only retry safe (idempotent) methods — never retry POST/PUT/DELETE
+    // because they can cause duplicate API calls, inserts, or side effects.
+    const method = (config.method || 'get').toUpperCase();
+    const isSafeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+    if (!isSafeMethod) {
+      return Promise.reject(error);
+    }
+
     const isNetworkError = !error.response && (
       error.code === 'ECONNABORTED' ||
       error.code === 'ERR_NETWORK' ||
@@ -195,6 +203,24 @@ export const savedAnswersAPI = {
 
   delete: async (answerId: string) => {
     const response = await api.delete(`/saved-answers/${encodeURIComponent(answerId)}`);
+    return response.data;
+  },
+};
+
+// --- Usage API ---
+
+export interface UsageData {
+  plan: string;
+  queries_today: number;
+  query_limit: number;   // -1 = unlimited
+  documents_count: number;
+  document_limit: number; // -1 = unlimited
+  job_mode: boolean;
+}
+
+export const usageAPI = {
+  getUsage: async (): Promise<UsageData> => {
+    const response = await api.get('/usage');
     return response.data;
   },
 };

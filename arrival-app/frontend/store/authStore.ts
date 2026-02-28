@@ -30,7 +30,7 @@ export interface UserProfile {
 export interface Subscription {
   id: string;
   user_id: string;
-  plan: 'pro' | 'business' | 'enterprise';
+  plan: 'free' | 'pro' | 'business' | 'enterprise';
   status: string;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
@@ -351,6 +351,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       subscription: null,
       teamMembership: null,
     });
+
+    // Clear usage store on sign out
+    try {
+      const { useUsageStore } = await import('./usageStore');
+      useUsageStore.getState().clear();
+    } catch (e) {
+      console.error('Failed to clear usage store:', e);
+    }
 
     // Bug #28: Clear actual settings keys used by settingsStore (not the old 'settings_v2')
     try {

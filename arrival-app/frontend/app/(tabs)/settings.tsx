@@ -19,6 +19,7 @@ import { Audio } from 'expo-av';
 import { Colors } from '../../constants/Colors';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
+import { useUsageStore, queryDisplayText, documentDisplayText } from '../../store/usageStore';
 
 const WEBSITE_URL = 'https://arrivalcompany.com';
 
@@ -40,6 +41,12 @@ export default function SettingsScreen() {
   } = useSettingsStore();
 
   const { profile, subscription, signOut } = useAuthStore();
+  const { fetchUsage, isLoaded: usageLoaded } = useUsageStore();
+
+  // Fetch usage on mount
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
 
   const displayName = profile
     ? `${profile.first_name} ${profile.last_name}`
@@ -158,6 +165,32 @@ export default function SettingsScreen() {
             <Text style={styles.planBadgeText}>{planLabel}</Text>
           </View>
         </View>
+
+        {/* Usage — only show when signed in */}
+        {profile && (
+          <>
+            <Text style={styles.sectionLabel}>Usage</Text>
+            <View style={styles.card}>
+              <View style={styles.row}>
+                <View style={styles.rowLeft}>
+                  <Ionicons name="chatbubble-outline" size={18} color="#2A2622" />
+                  <Text style={styles.rowLabel}>Queries</Text>
+                </View>
+                <Text style={styles.usageValue}>{usageLoaded ? queryDisplayText() : '...'}</Text>
+              </View>
+
+              <View style={styles.divider} />
+
+              <View style={styles.row}>
+                <View style={styles.rowLeft}>
+                  <Ionicons name="document-outline" size={18} color="#2A2622" />
+                  <Text style={styles.rowLabel}>Documents</Text>
+                </View>
+                <Text style={styles.usageValue}>{usageLoaded ? documentDisplayText() : '...'}</Text>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* Voice & Input */}
         <Text style={styles.sectionLabel}>Voice & Input</Text>
@@ -522,6 +555,14 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#EBE7E2',
     marginLeft: 48,
+  },
+
+  // Usage value
+  usageValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#A09A93',
+    letterSpacing: -0.2,
   },
 
   // Segmented Control

@@ -4,7 +4,8 @@
  */
 
 export interface TierLimits {
-  maxDocs: number;
+  maxQueries: number; // -1 = unlimited
+  maxDocs: number;    // -1 = unlimited
   jobMode: boolean;
   proactiveAlerts: boolean;
   teamDocs: boolean;
@@ -13,6 +14,7 @@ export interface TierLimits {
 
 export const TIER_LIMITS: Record<string, TierLimits> = {
   free: {
+    maxQueries: 10,
     maxDocs: 0,
     jobMode: false,
     proactiveAlerts: false,
@@ -20,21 +22,24 @@ export const TIER_LIMITS: Record<string, TierLimits> = {
     voiceOutput: false,
   },
   pro: {
-    maxDocs: 50,
+    maxQueries: 50,
+    maxDocs: 20,
     jobMode: false,
     proactiveAlerts: false,
     teamDocs: false,
     voiceOutput: true,
   },
   business: {
-    maxDocs: 999,
+    maxQueries: -1,
+    maxDocs: -1,
     jobMode: true,
     proactiveAlerts: true,
     teamDocs: true,
     voiceOutput: true,
   },
   enterprise: {
-    maxDocs: 999,
+    maxQueries: -1,
+    maxDocs: -1,
     jobMode: true,
     proactiveAlerts: true,
     teamDocs: true,
