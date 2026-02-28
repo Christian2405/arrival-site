@@ -3,12 +3,16 @@ Speech-to-Text router — POST /api/stt
 Accepts base64-encoded audio, returns transcribed text.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.services.demo import get_demo_transcription
 from app.services.deepgram import transcribe_audio
 from app.middleware.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,4 +58,5 @@ async def speech_to_text(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+        logger.error(f"[stt] Transcription failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Transcription failed")

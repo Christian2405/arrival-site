@@ -3,12 +3,16 @@ TTS router — POST /api/tts
 Converts text to speech audio using ElevenLabs.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.services.demo import generate_silent_audio_base64
 from app.services.elevenlabs import text_to_speech
 from app.middleware.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -52,4 +56,5 @@ async def tts(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+        logger.error(f"[tts] TTS failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="TTS failed")

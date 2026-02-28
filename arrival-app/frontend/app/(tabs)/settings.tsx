@@ -311,7 +311,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.row}
             activeOpacity={0.6}
-            onPress={() => Linking.openSettings()}
+            onPress={() => Linking.openSettings().catch(() => {})}
           >
             <View style={styles.rowLeft}>
               <Ionicons name="notifications-outline" size={18} color="#2A2622" />

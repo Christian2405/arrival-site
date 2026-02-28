@@ -3,11 +3,15 @@ Queries router — GET /api/queries
 Returns query history for team activity dashboards.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, Query
 from pydantic import BaseModel
 
 from app.middleware.auth import get_current_user
 from app.services.supabase import get_team_queries
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -39,4 +43,5 @@ async def list_queries(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query list failed: {str(e)}")
+        logger.error(f"[queries] Query list failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Query list failed")

@@ -4,11 +4,15 @@ Job Mode: analyzes camera frames and returns alerts only when notable.
 Business tier only (enforced on frontend).
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.middleware.auth import get_current_user
 from app.services.anthropic import analyze_frame
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -46,4 +50,5 @@ async def analyze(request: FrameRequest, req: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Frame analysis failed: {str(e)}")
+        logger.error(f"[analyze] Frame analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Frame analysis failed")
