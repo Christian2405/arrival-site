@@ -15,10 +15,10 @@
         <div class="nav-inner">
             <a href="#" class="nav-logo" onclick="showPage('home'); return false;"><img src="logo.svg" alt="Arrival" class="nav-logo-img"></a>
             <div class="nav-links" id="navLinks">
-                <a href="#" onclick="scrollToHomeSection('page-home'); return false;">Home</a>
-                <a href="#" onclick="scrollToHomeSection('home-docs'); return false;">Product</a>
-                <a href="#" onclick="scrollToHomeSection('home-pricing'); return false;">Pricing</a>
-                <a href="#" onclick="scrollToHomeSection('home-businesses'); return false;">For Businesses</a>
+                <a href="#" onclick="showPage('home'); return false;">Home</a>
+                <a href="#" onclick="showPage('product'); return false;">Product</a>
+                <a href="#" onclick="showPage('pricing'); return false;">Pricing</a>
+                <a href="#" onclick="showPage('business'); return false;">For Businesses</a>
                 <a href="#" onclick="showPage('about'); return false;">About</a>
                 <a href="#" onclick="showPage('login'); return false;" class="nav-login" id="nav-login-link">Login</a>
                 <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-sm" id="nav-signup-link">Start Free Trial</a>
@@ -38,11 +38,11 @@
             <div class="container">
                 <div class="hero-centered">
                     <h1 class="hero-headline">Your AI expert in the field.</h1>
-                    <p class="hero-sub">The senior tech in your ear on every job. Point your camera, ask your question, get the answer — hands-free.</p>
+                    <p class="hero-sub">Voice and camera AI assistant that answers your toughest questions in real time. Point. Ask. Know.</p>
                     <div class="hero-ctas">
                         <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
                     </div>
-                    <p class="hero-note">Try free with 10 questions/day. No credit card required.</p>
+                    <p class="hero-note">7-day free trial. No credit card required.</p>
                     <div class="hero-stats">
                         <div class="hero-stat">
                             <span class="hero-stat-num">&lt;3s</span>
@@ -50,8 +50,8 @@
                         </div>
                         <div class="hero-stat-divider"></div>
                         <div class="hero-stat">
-                            <span class="hero-stat-num">HVAC, Plumbing, Electrical</span>
-                            <span class="hero-stat-label">&amp; more</span>
+                            <span class="hero-stat-num">50+</span>
+                            <span class="hero-stat-label">Trade specialities</span>
                         </div>
                         <div class="hero-stat-divider"></div>
                         <div class="hero-stat">
@@ -76,16 +76,16 @@
                     <div class="feature-visual reveal reveal-right">
                         <div class="feature-card">
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
+                                <div class="check">🎤</div>
                                 <div>Press to record question</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></div>
+                                <div class="check">🔊</div>
                                 <div>Hear answer out loud</div>
                             </div>
                             <div class="feature-card-item">
                                 <div class="check">✓</div>
-                                <div>Saved in your chat history</div>
+                                <div>Saved in your memory</div>
                             </div>
                         </div>
                     </div>
@@ -105,15 +105,15 @@
                     <div class="feature-visual reveal reveal-left">
                         <div class="feature-card">
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+                                <div class="check">📷</div>
                                 <div>Snap equipment photo</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+                                <div class="check">🔍</div>
                                 <div>AI reads model, specs, codes</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>
+                                <div class="check">💡</div>
                                 <div>Get instant insights</div>
                             </div>
                         </div>
@@ -212,227 +212,15 @@
             </div>
         </section>
 
-        <!-- Differentiator: Powered by YOUR Documentation -->
-        <section class="section section-light" id="home-docs">
-            <div class="container">
-                <div style="text-align: center; max-width: 700px; margin: 0 auto;">
-                    <span class="section-label reveal">WHAT MAKES US DIFFERENT</span>
-                    <h2 class="section-header reveal">Your manuals. Your SOPs. Your answers.</h2>
-                    <p style="font-size: 18px; color: #7c736a; margin: 24px auto 0; max-width: 620px; line-height: 1.7;" class="reveal">Companies upload their own manuals, procedures, and specs. The AI answers using YOUR documentation, not generic internet knowledge. That's why ChatGPT can't do what Arrival does.</p>
-                </div>
-                <div class="feature-card reveal" style="max-width: 500px; margin: 48px auto 0;">
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>Upload your manuals and SOPs</div>
-                    </div>
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>AI answers from YOUR documents</div>
-                    </div>
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>Not generic internet results</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Job Mode -->
-        <section class="section" id="home-jobmode">
-            <div class="container">
-                <div style="text-align: center; max-width: 700px; margin: 0 auto;">
-                    <span class="section-label reveal">BUSINESS TIER</span>
-                    <h2 class="section-header reveal">Job Mode — Your AI co-pilot, always watching</h2>
-                    <p style="font-size: 18px; color: #7c736a; margin: 24px auto 0; max-width: 620px; line-height: 1.7;" class="reveal">Turn it on and AI watches your camera continuously. It speaks up when it sees something — corrosion, wrong parts, safety issues. Like having a senior tech looking over your shoulder all day. Business tier only.</p>
-                </div>
-                <div class="feature-card reveal" style="max-width: 500px; margin: 48px auto 0;">
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>Continuous camera monitoring</div>
-                    </div>
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>Proactive safety and quality alerts</div>
-                    </div>
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>Flags corrosion, wrong parts, code issues</div>
-                    </div>
-                    <div class="feature-card-item">
-                        <div class="check">✓</div>
-                        <div>Speaks up before you even ask</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- For Service Companies -->
-        <section class="section section-dark" id="home-businesses">
-            <div class="container">
-                <div style="text-align: center; margin-bottom: 60px;">
-                    <span class="section-label reveal" style="color: #D4842A;">FOR SERVICE COMPANIES</span>
-                    <h2 class="section-header reveal" style="color: white;">Give every tech a master technician in their pocket.</h2>
-                </div>
-                <div class="card-grid reveal" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); max-width: 900px; margin: 0 auto;">
-                    <div class="card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);">
-                        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: white;">Upload once</h3>
-                        <p style="color: #a09a93;">Upload your company docs, manuals, and SOPs once. Every tech gets access instantly.</p>
-                    </div>
-                    <div class="card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);">
-                        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: white;">See what they ask</h3>
-                        <p style="color: #a09a93;">Manager dashboard shows what your team is asking. Identify training gaps and knowledge holes.</p>
-                    </div>
-                    <div class="card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);">
-                        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: white;">Reduce callbacks</h3>
-                        <p style="color: #a09a93;">Techs solve problems right the first time. Fewer repeat visits, faster new hire ramp-up.</p>
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 48px;" class="reveal">
-                    <a href="#" onclick="showPage('business'); return false;" class="btn btn-primary btn-lg">Learn More</a>
-                </div>
-            </div>
-        </section>
-
-        <!-- Pricing -->
-        <section class="section" id="home-pricing">
-            <div class="container">
-                <div style="text-align: center; margin-bottom: 16px;">
-                    <h2 class="section-header reveal">Pricing</h2>
-                    <p style="font-size: 18px; color: #7c736a; margin: 16px auto 48px; max-width: 500px;" class="reveal">Try free with 10 questions/day. Upgrade anytime.</p>
-                </div>
-                <div class="pricing-grid reveal" style="grid-template-columns: repeat(4, 1fr); max-width: 1100px; margin: 0 auto;">
-                    <!-- Free -->
-                    <div class="pricing-card">
-                        <div class="pricing-badge" style="visibility: hidden;">&#8205;</div>
-                        <div class="pricing-header"><h3>Free</h3></div>
-                        <div class="pricing-subtitle">Get started, no card needed.</div>
-                        <div class="pricing-price">$0</div>
-                        <div class="pricing-desc">Free forever</div>
-                        <div class="pricing-cta">
-                            <a href="#" onclick="showPage('signup'); return false;" class="btn btn-outline">Sign Up Free</a>
-                        </div>
-                        <hr class="pricing-divider">
-                        <div class="pricing-features">
-                            <div class="pricing-feature">10 queries/day</div>
-                            <div class="pricing-feature">Voice + Camera AI</div>
-                            <div class="pricing-feature">No document uploads</div>
-                        </div>
-                    </div>
-                    <!-- Pro -->
-                    <div class="pricing-card pricing-featured">
-                        <div class="pricing-badge">Most Popular</div>
-                        <div class="pricing-header"><h3>Pro</h3></div>
-                        <div class="pricing-subtitle">For independent techs.</div>
-                        <div class="pricing-price">$25 <span>/mo</span></div>
-                        <div class="pricing-desc">Per person, billed monthly</div>
-                        <div class="pricing-cta">
-                            <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary">Start Free Trial</a>
-                        </div>
-                        <hr class="pricing-divider">
-                        <div class="pricing-features">
-                            <div class="pricing-feature">50 queries/day</div>
-                            <div class="pricing-feature">20 document uploads</div>
-                            <div class="pricing-feature">Chat history</div>
-                            <div class="pricing-feature">Quick tools &amp; calculators</div>
-                        </div>
-                    </div>
-                    <!-- Business -->
-                    <div class="pricing-card">
-                        <div class="pricing-badge" style="visibility: hidden;">&#8205;</div>
-                        <div class="pricing-header"><h3>Business</h3></div>
-                        <div class="pricing-subtitle">For teams and contractors.</div>
-                        <div class="pricing-price">$200 <span>/seat/mo</span></div>
-                        <div class="pricing-desc">Per seat, billed monthly</div>
-                        <div class="pricing-cta">
-                            <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary">Start Free Trial</a>
-                        </div>
-                        <hr class="pricing-divider">
-                        <div class="pricing-features">
-                            <div class="pricing-feature">250 queries/day</div>
-                            <div class="pricing-feature">Unlimited documents</div>
-                            <div class="pricing-feature">Job Mode</div>
-                            <div class="pricing-feature">Team features &amp; analytics</div>
-                        </div>
-                    </div>
-                    <!-- Enterprise -->
-                    <div class="pricing-card">
-                        <div class="pricing-badge" style="visibility: hidden;">&#8205;</div>
-                        <div class="pricing-header"><h3>Enterprise</h3></div>
-                        <div class="pricing-subtitle">For large organisations.</div>
-                        <div class="pricing-price" style="font-size: 24px;">Contact Sales</div>
-                        <div class="pricing-desc">Custom pricing</div>
-                        <div class="pricing-cta">
-                            <a href="mailto:sales@arrival.ai" class="btn btn-primary" style="background: var(--text-light);">Contact Sales</a>
-                        </div>
-                        <hr class="pricing-divider">
-                        <div class="pricing-features">
-                            <div class="pricing-feature">Unlimited everything</div>
-                            <div class="pricing-feature">SSO / SAML</div>
-                            <div class="pricing-feature">API access</div>
-                            <div class="pricing-feature">Dedicated support</div>
-                        </div>
-                    </div>
-                </div>
-                <p style="text-align: center; font-size: 13px; color: #9a9590; margin-top: 2rem;">Prices shown don't include applicable tax.</p>
-            </div>
-        </section>
-
-        <!-- FAQ -->
-        <section class="section section-light" id="home-faq">
-            <div class="container">
-                <div style="text-align: center; margin-bottom: 60px;">
-                    <h2 class="section-header reveal">Frequently asked questions</h2>
-                </div>
-                <div class="faq-layout" style="max-width: 700px; margin: 0 auto;">
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            How is this different from ChatGPT?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>ChatGPT gives generic answers from the internet. Arrival answers from your company's actual documentation — your manuals, your SOPs, your specs. It's also built hands-free for field work with push-to-talk voice and live camera. And Job Mode watches proactively, something no general AI does.</p>
-                        </div>
-                    </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            What trades does it support?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>HVAC, plumbing, electrical, general construction, and more. Arrival is trained on manufacturer specs, building codes, and industry best practices across all major trades.</p>
-                        </div>
-                    </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            Is my data private?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Yes. Your documents stay yours. We don't share your data with other companies or use it to train models for other customers. Your company's documentation is private and only accessible to your team.</p>
-                        </div>
-                    </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            Can I try it free?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Yes. The free tier gives you 10 queries per day, forever. No credit card required. Voice and camera AI included. Upgrade to Pro or Business anytime if you need more.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <!-- Final CTA -->
         <section class="section cta-section">
             <div class="container">
                 <div style="text-align: center; max-width: 600px; margin: 0 auto;">
-                    <h2 class="section-header reveal">Try it free — no card required</h2>
-                    <p style="font-size: 18px; color: #7c736a; margin: 24px 0 48px;">10 questions a day, free forever. Voice, camera, and AI that knows your trade.</p>
+                    <h2 class="section-header reveal">Start asking better questions today.</h2>
+                    <p style="font-size: 18px; color: #7c736a; margin: 24px 0 48px;">Get instant answers from an AI that knows your trade inside and out.</p>
                     <div class="hero-ctas reveal reveal-delay-1">
-                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free</a>
-                        <a href="#home-pricing" onclick="document.getElementById('home-pricing').scrollIntoView({behavior:'smooth'}); return false;" class="btn btn-outline btn-lg">See Pricing</a>
+                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                        <a href="#" onclick="showPage('pricing'); return false;" class="btn btn-outline btn-lg">See Pricing</a>
                     </div>
                 </div>
             </div>
@@ -475,15 +263,15 @@
                     <div class="feature-visual reveal reveal-right">
                         <div class="feature-card">
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
+                                <div class="check">🎤</div>
                                 <div>Push-to-talk voice interface</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
+                                <div class="check">📝</div>
                                 <div>Or type if you prefer</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></div>
+                                <div class="check">🔊</div>
                                 <div>Hear responses out loud</div>
                             </div>
                         </div>
@@ -509,15 +297,15 @@
                     <div class="feature-visual reveal reveal-left">
                         <div class="feature-card">
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+                                <div class="check">📷</div>
                                 <div>Snap a photo</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+                                <div class="check">🔍</div>
                                 <div>AI reads equipment</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>
+                                <div class="check">💡</div>
                                 <div>Ask questions about it</div>
                             </div>
                         </div>
@@ -577,15 +365,15 @@
                     <div class="feature-visual reveal reveal-left">
                         <div class="feature-card">
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
-                                <div>Your docs + trade knowledge</div>
+                                <div class="check">📚</div>
+                                <div>1000s of documents</div>
                             </div>
                             <div class="feature-card-item">
                                 <div class="check">✓</div>
                                 <div>Sources always cited</div>
                             </div>
                             <div class="feature-card-item">
-                                <div class="check"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
+                                <div class="check">🔄</div>
                                 <div>Updated regularly</div>
                             </div>
                         </div>
@@ -665,53 +453,33 @@
         <section class="section">
             <div class="container" style="text-align: center; padding: 120px 0 60px;">
                 <h1 class="hero-headline hero-short">Pricing</h1>
-                <p class="hero-sub" style="max-width: 600px; margin: 20px auto;">Try free with 10 questions/day. Upgrade anytime.</p>
+                <p class="hero-sub" style="max-width: 600px; margin: 20px auto;">Simple plans for individuals and teams. 7-day free trial on all paid plans.</p>
             </div>
         </section>
 
         <section class="section section-light" style="padding-top: 80px;">
             <div class="container">
-                <div class="pricing-grid" style="grid-template-columns: repeat(4, 1fr); max-width: 1100px; margin: 0 auto;">
-                    <!-- Free Plan -->
-                    <div class="pricing-card">
-                        <div class="pricing-badge" style="visibility: hidden;">&#8205;</div>
-                        <div class="pricing-header">
-                            <h3>Free</h3>
-                        </div>
-                        <div class="pricing-subtitle">Get started, no card needed.</div>
-                        <div class="pricing-price">$0</div>
-                        <div class="pricing-desc">Free forever</div>
-                        <div class="pricing-cta">
-                            <a href="#" onclick="showPage('signup'); return false;" class="btn btn-outline">Sign Up Free</a>
-                        </div>
-                        <hr class="pricing-divider">
-                        <div class="pricing-inherits" style="visibility: hidden;">&#8205;</div>
-                        <div class="pricing-features">
-                            <div class="pricing-feature">10 queries/day</div>
-                            <div class="pricing-feature">Voice + Camera AI</div>
-                            <div class="pricing-feature">No document uploads</div>
-                        </div>
-                    </div>
-
+                <div class="pricing-grid" style="grid-template-columns: repeat(3, 1fr); max-width: 1100px; margin: 0 auto;">
                     <!-- Pro Plan -->
                     <div class="pricing-card pricing-featured">
                         <div class="pricing-badge">Most Popular</div>
                         <div class="pricing-header">
                             <h3>Pro</h3>
                         </div>
-                        <div class="pricing-subtitle">For independent techs.</div>
-                        <div class="pricing-price">$25 <span>/mo</span></div>
+                        <div class="pricing-subtitle">For independent techs and small crews.</div>
+                        <div class="pricing-price">$25 <span>/month</span></div>
                         <div class="pricing-desc">Per person, billed monthly</div>
                         <div class="pricing-cta">
                             <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary">Start Free Trial</a>
                         </div>
                         <hr class="pricing-divider">
-                        <div class="pricing-inherits" style="visibility: hidden;">&#8205;</div>
+                        <div class="pricing-inherits" style="visibility: hidden;">‎</div>
                         <div class="pricing-features">
-                            <div class="pricing-feature">50 queries/day</div>
+                            <div class="pricing-feature">7-day free trial</div>
                             <div class="pricing-feature">Voice + Text + Camera</div>
-                            <div class="pricing-feature">Up to 20 documents</div>
+                            <div class="pricing-feature">Up to 50 documents</div>
                             <div class="pricing-feature">Chat history</div>
+                            <div class="pricing-feature">Saved answers</div>
                             <div class="pricing-feature">Quick tools &amp; calculators</div>
                             <div class="pricing-feature">Email support</div>
                         </div>
@@ -724,19 +492,21 @@
                             <h3>Business</h3>
                         </div>
                         <div class="pricing-subtitle">For teams and contractors.</div>
-                        <div class="pricing-price">$200 <span>/seat/mo</span></div>
-                        <div class="pricing-desc">Per seat, billed monthly</div>
+                        <div class="pricing-price">$250 <span>/month</span></div>
+                        <div class="pricing-desc">10 seats included. +$25/seat after.</div>
                         <div class="pricing-cta">
                             <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary">Start Free Trial</a>
                         </div>
                         <hr class="pricing-divider">
                         <div class="pricing-inherits">Everything in Pro, plus:</div>
                         <div class="pricing-features">
-                            <div class="pricing-feature">250 queries/day</div>
                             <div class="pricing-feature">Unlimited documents</div>
-                            <div class="pricing-feature">Job Mode</div>
+                            <div class="pricing-feature">Categorised document library</div>
+                            <div class="pricing-feature">Proactive Mode</div>
                             <div class="pricing-feature">Manager dashboard</div>
                             <div class="pricing-feature">Team analytics</div>
+                            <div class="pricing-feature">Training gap reports</div>
+                            <div class="pricing-feature">Role-based access</div>
                             <div class="pricing-feature">Priority support</div>
                         </div>
                     </div>
@@ -756,10 +526,12 @@
                         <hr class="pricing-divider">
                         <div class="pricing-inherits">Everything in Business, plus:</div>
                         <div class="pricing-features">
-                            <div class="pricing-feature">Unlimited everything</div>
+                            <div class="pricing-feature">Custom seat count</div>
+                            <div class="pricing-feature">Multi-location support</div>
                             <div class="pricing-feature">SSO / SAML authentication</div>
                             <div class="pricing-feature">API access</div>
-                            <div class="pricing-feature">Dedicated support</div>
+                            <div class="pricing-feature">Dedicated CSM</div>
+                            <div class="pricing-feature">SLA + 24/7 support</div>
                         </div>
                     </div>
                 </div>
@@ -798,7 +570,7 @@
                             <span class="faq-icon">+</span>
                         </button>
                         <div class="faq-answer">
-                            <p>The Business plan is $200/seat/month. Add as many seats as you need directly from your dashboard.</p>
+                            <p>The Business plan is $250/month and includes 10 seats. Additional seats are $25/month each, added directly from your dashboard.</p>
                         </div>
                     </div>
                     <div class="faq-item">
@@ -885,17 +657,17 @@
                 <div style="text-align: center; margin-bottom: 60px;">
                     <span class="section-label reveal">THE CHALLENGE</span>
                     <h2 class="section-header reveal">You're losing money to callbacks.</h2>
-                    <p style="max-width: 600px; margin: 24px auto 0;">Too many service calls end in callbacks because your techs didn't have the right info the first time. Callbacks are expensive, damage your reputation, and eat into capacity. Meanwhile, new hires slow down seasoned techs, and you can't scale fast enough to meet demand.</p>
+                    <p style="max-width: 600px; margin: 24px auto 0;">30% of service calls are repeat visits for problems your techs should have caught the first time. Every callback costs $500–2,500+ depending on severity, and damages your reputation. Meanwhile, new hires slow down seasoned techs, and you can't scale fast enough to meet demand.</p>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;">
                     <div class="reveal reveal-left" style="padding: 24px; background: #fff; border-radius: 8px; border: 1px solid #ddd9d5;">
-                        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #c45a3c; margin-bottom: 8px;">The real cost of callbacks</p>
-                        <p style="margin: 0; font-size: 18px; font-weight: 600; color: #2a2622; line-height: 1.6;">Truck rolls, wasted labour, unhappy customers, and lost reputation — every single time.</p>
+                        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #c45a3c; margin-bottom: 8px;">Average cost per callback</p>
+                        <p style="margin: 0; font-size: 32px; font-weight: 700;">$500–2,500+</p>
                     </div>
                     <div class="feature-card reveal reveal-right">
                         <div class="feature-card-item">
                             <div class="check" style="background: #c45a3c; color: white;">!</div>
-                            <div>Repeat visits drain your margin</div>
+                            <div>30% of calls are callbacks</div>
                         </div>
                         <div class="feature-card-item">
                             <div class="check" style="background: #c45a3c; color: white;">!</div>
@@ -903,7 +675,7 @@
                         </div>
                         <div class="feature-card-item">
                             <div class="check" style="background: #c45a3c; color: white;">!</div>
-                            <div>Senior techs tied up answering basics</div>
+                            <div>Senior techs tied up training</div>
                         </div>
                     </div>
                 </div>
@@ -920,16 +692,16 @@
                 </div>
                 <div class="reveal" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-bottom: 40px; max-width: 900px; margin-left: auto; margin-right: auto;">
                     <div style="text-align: center;">
-                        <p style="font-size: 28px; font-weight: 700; color: #D4842A; margin: 0 0 8px;">Fewer callbacks</p>
-                        <p style="margin: 0; font-size: 14px; color: #7c736a;"><strong>Techs solve it the first time</strong></p>
+                        <p style="font-size: 32px; font-weight: 700; color: #D4842A; margin: 0 0 8px;">25-40%</p>
+                        <p style="margin: 0; font-size: 14px; color: #7c736a;"><strong>Reduce callbacks</strong></p>
                     </div>
                     <div style="text-align: center;">
-                        <p style="font-size: 28px; font-weight: 700; color: #D4842A; margin: 0 0 8px;">Faster ramp-up</p>
-                        <p style="margin: 0; font-size: 14px; color: #7c736a;"><strong>New hires get answers instantly</strong></p>
+                        <p style="font-size: 32px; font-weight: 700; color: #D4842A; margin: 0 0 8px;">3x faster</p>
+                        <p style="margin: 0; font-size: 14px; color: #7c736a;"><strong>Onboard new hires</strong></p>
                     </div>
                     <div style="text-align: center;">
-                        <p style="font-size: 28px; font-weight: 700; color: #D4842A; margin: 0 0 8px;">Free up seniors</p>
-                        <p style="margin: 0; font-size: 14px; color: #7c736a;"><strong>Stop answering basic questions</strong></p>
+                        <p style="font-size: 32px; font-weight: 700; color: #D4842A; margin: 0 0 8px;">Free up</p>
+                        <p style="margin: 0; font-size: 14px; color: #7c736a;"><strong>Senior techs</strong></p>
                     </div>
                 </div>
                 <div class="feature-card reveal" style="max-width: 500px; margin: 0 auto;">
@@ -1027,32 +799,32 @@
         <section class="section section-light">
             <div class="container">
                 <div style="text-align: center; margin-bottom: 60px;">
-                    <h2 class="section-header reveal">The math is simple.</h2>
-                    <p style="max-width: 600px; margin: 24px auto 0;">If Arrival prevents even one callback per month, it pays for itself. Everything after that is pure upside.</p>
+                    <h2 class="section-header reveal">The ROI is simple.</h2>
+                    <p style="max-width: 600px; margin: 24px auto 0;">Business plan costs $250/month (10 seats included). That's less than the cost of a single callback.</p>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;">
                     <div class="reveal reveal-left" style="padding: 32px; background: #fff; border-radius: 12px; border: 2px solid #D4842A;">
                         <div style="margin-bottom: 24px;">
-                            <p style="margin: 0; font-size: 14px; color: #7c736a; font-weight: 500;">Cost of Arrival per tech</p>
-                            <p style="margin: 8px 0 0; font-size: 28px; font-weight: 700; color: #D4842A;">$200/month</p>
+                            <p style="margin: 0; font-size: 14px; color: #7c736a; font-weight: 500;">If Arrival prevents just one callback per month...</p>
+                            <p style="margin: 8px 0 0; font-size: 32px; font-weight: 700; color: #D4842A;">ROI: 140%</p>
                         </div>
                         <div>
-                            <p style="margin: 0; font-size: 14px; color: #7c736a; font-weight: 500;">Cost of a single callback</p>
-                            <p style="margin: 8px 0 0; font-size: 18px; font-weight: 700; color: #2a2622;">You know what yours costs.</p>
+                            <p style="margin: 0; font-size: 14px; color: #7c736a; font-weight: 500;">If Arrival prevents 3 callbacks per month...</p>
+                            <p style="margin: 8px 0 0; font-size: 32px; font-weight: 700; color: #D4842A;">ROI: 420%</p>
                         </div>
                     </div>
                     <div class="feature-card reveal reveal-right">
                         <div class="feature-card-item">
-                            <div class="check">✓</div>
-                            <div>Fewer callbacks, more first-time fixes</div>
+                            <div class="check">$</div>
+                            <div>$250/month for 10 techs</div>
                         </div>
                         <div class="feature-card-item">
-                            <div class="check">✓</div>
-                            <div>New hires productive faster</div>
+                            <div class="check">$</div>
+                            <div>That's $25 per tech</div>
                         </div>
                         <div class="feature-card-item">
-                            <div class="check">✓</div>
-                            <div>Senior techs focused on complex work</div>
+                            <div class="check">$</div>
+                            <div>1 fewer callback = paid for</div>
                         </div>
                     </div>
                 </div>
@@ -1400,7 +1172,7 @@
             <div class="container">
                 <div style="max-width: 720px; margin: 0 auto;">
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Plans overview</h3>
-                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Arrival offers four plans: Free (10 queries/day, voice + camera, no docs), Pro ($25/month — 50 queries/day, 20 documents, chat history, quick tools), Business ($200/seat/month — 250 queries/day, unlimited documents, Job Mode, team features), and Enterprise (custom pricing — unlimited everything, SSO/SAML, API, dedicated support). Free tier requires no card. Paid plans include a 7-day free trial.</p>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Arrival offers three plans: Pro ($25/month — voice, text, camera, up to 50 documents, chat history, saved answers, quick tools, email support), Business ($250/month — 10 seats included, unlimited documents, Proactive Mode, team analytics, priority support), and Enterprise (custom pricing — SSO/SAML, API, dedicated CSM, SLA). All plans include a 7-day free trial and a 30-day money-back guarantee.</p>
 
                     <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Upgrading or downgrading</h3>
                     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Go to Settings, then Subscription to change your plan. Upgrades take effect immediately — you'll be charged the prorated difference for the remaining billing period. Downgrades take effect at the end of your current billing cycle, so you keep your current features until then.</p>
@@ -1934,7 +1706,7 @@
             </div>
             <div class="footer-bottom" style="padding-top: 48px; border-top: 1px solid #ddd9d5; margin-top: 48px; text-align: center;">
                 <p style="margin: 0; font-size: 12px; color: #9a9590;">
-                    &copy; 2026 Arrival. All rights reserved. |
+                    &copy; 2025 Arrival. All rights reserved. |
                     <a href="#" onclick="showPage('privacy'); return false;" style="color: #9a9590; text-decoration: none;">Privacy Policy</a> |
                     <a href="#" onclick="showPage('terms'); return false;" style="color: #9a9590; text-decoration: none;">Terms of Service</a>
                 </p>
@@ -1964,24 +1736,6 @@
                 const el = document.getElementById(sectionId);
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
             }, 100);
-        }
-
-        // Ensure home page is active, then scroll to a section within it
-        function scrollToHomeSection(sectionId) {
-            var homePage = document.getElementById('page-home');
-            if (!homePage.classList.contains('active')) {
-                showPage('home');
-            }
-            // Close mobile nav
-            document.getElementById('navLinks').classList.remove('open');
-            if (sectionId === 'page-home') {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
-                setTimeout(function() {
-                    var el = document.getElementById(sectionId);
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }, 50);
-            }
         }
 
         // Toggle mobile nav

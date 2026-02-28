@@ -37,13 +37,7 @@ exports.handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
     }
 
-    let body;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch (e) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-    }
-    const { action, count } = body;
+    const { action, count } = JSON.parse(event.body);
     if (!action || !['add', 'remove'].includes(action)) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'action must be add or remove' }) };
     }
@@ -68,25 +62,6 @@ exports.handler = async (event) => {
 
     if (!sub.stripe_subscription_id) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'No Stripe subscription found' }) };
-    }
-
-    // Only team admin (or owner) can change seats
-    const { data: adminMembership } = await supabase
-      .from('team_members')
-      .select('team_id, role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .eq('status', 'active')
-      .limit(1)
-      .single();
-    const { data: ownerTeam } = await supabase
-      .from('teams')
-      .select('id')
-      .eq('owner_id', user.id)
-      .limit(1)
-      .single();
-    if (!adminMembership && !ownerTeam) {
-      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Only team admins can change seat count' }) };
     }
 
     // Get the current subscription from Stripe

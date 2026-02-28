@@ -43,13 +43,7 @@ exports.handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
     }
 
-    let body;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch (e) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-    }
-    const { plan } = body;
+    const { plan } = JSON.parse(event.body);
     if (!plan || !['pro', 'business'].includes(plan)) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid plan. Must be pro or business.' }) };
     }
