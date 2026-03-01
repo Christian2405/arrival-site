@@ -604,12 +604,42 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // Check for password reset callback in URL hash
+    // Bug fix: Only trigger for type=recovery, NOT for access_token alone
+    // (Google OAuth also returns access_token in hash — that's not a recovery)
     var hash = window.location.hash;
-    if (hash.includes('type=recovery') || hash.includes('access_token')) {
+    if (hash.includes('type=recovery')) {
         var _showReset = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
         _showReset('reset-password');
         document.getElementById('reset-request-form').style.display = 'none';
         document.getElementById('reset-update-form').style.display = 'flex';
+    }
+
+    // Handle OAuth callback (Google sign-in redirecting back to website)
+    if (hash.includes('access_token') && !hash.includes('type=recovery')) {
+        // Let the onAuthStateChange SIGNED_IN handler take care of profile creation,
+        // then redirect to dashboard
+        sb.auth.getSession().then(function(sessionResult) {
+            if (sessionResult.data.session) {
+                var user = sessionResult.data.session.user;
+                ensureProfileExists(user).then(function() {
+                    // Redirect to appropriate dashboard
+                    sb.from('team_members')
+                        .select('team_id')
+                        .eq('user_id', user.id)
+                        .eq('status', 'active')
+                        .limit(1)
+                        .then(function(tmResult) {
+                            if (tmResult.data && tmResult.data.length > 0) {
+                                localStorage.setItem('arrival_dashboard', 'business');
+                                window.location.href = '/dashboard-business';
+                            } else {
+                                localStorage.setItem('arrival_dashboard', 'individual');
+                                window.location.href = '/dashboard-individual';
+                            }
+                        });
+                });
+            }
+        });
     }
 
     // Auth state listener

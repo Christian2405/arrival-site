@@ -12,7 +12,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // --- DEV MODE ---
-const IS_DEV = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
+const IS_DEV = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 // Store reference to original showPage
 const _originalShowPage = window.showPage;
@@ -23,39 +23,34 @@ const _originalShowPage = window.showPage;
 
 function showFormError(elementId, message) {
     const el = document.getElementById(elementId);
-    if (!el) return;
     el.textContent = message;
     el.style.display = 'block';
 }
 
 function clearFormError(elementId) {
     const el = document.getElementById(elementId);
-    if (!el) return;
     el.textContent = '';
     el.style.display = 'none';
 }
 
 function showFormSuccess(elementId, message) {
     const el = document.getElementById(elementId);
-    if (!el) return;
     el.textContent = message;
     el.style.display = 'block';
 }
 
 function setButtonLoading(buttonId, loading) {
     const btn = document.getElementById(buttonId);
-    if (!btn) return;
     const textEl = btn.querySelector('.btn-text');
     const loadingEl = btn.querySelector('.btn-loading');
     btn.disabled = loading;
-    if (textEl) textEl.style.display = loading ? 'none' : 'inline';
-    if (loadingEl) loadingEl.style.display = loading ? 'inline-flex' : 'none';
+    textEl.style.display = loading ? 'none' : 'inline';
+    loadingEl.style.display = loading ? 'inline-flex' : 'none';
 }
 
 function showToast(message, type) {
     type = type || 'success';
     const container = document.getElementById('toast-container');
-    if (!container) return;
     const toast = document.createElement('div');
     toast.className = 'toast toast-' + type;
     toast.textContent = message;
@@ -74,15 +69,15 @@ function updateNavForAuth(user) {
     var logoutLink = document.getElementById('nav-logout-link');
 
     if (user) {
-        if (loginLink) loginLink.style.display = 'none';
-        if (signupLink) signupLink.style.display = 'none';
-        if (dashboardLink) dashboardLink.style.display = '';
-        if (logoutLink) logoutLink.style.display = '';
+        loginLink.style.display = 'none';
+        signupLink.style.display = 'none';
+        dashboardLink.style.display = '';
+        logoutLink.style.display = '';
     } else {
-        if (loginLink) loginLink.style.display = '';
-        if (signupLink) signupLink.style.display = '';
-        if (dashboardLink) dashboardLink.style.display = 'none';
-        if (logoutLink) logoutLink.style.display = 'none';
+        loginLink.style.display = '';
+        signupLink.style.display = '';
+        dashboardLink.style.display = 'none';
+        logoutLink.style.display = 'none';
     }
 }
 
@@ -156,12 +151,15 @@ async function handleSignup(event) {
         }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
 
-        // 4. Send welcome email (fire-and-forget)
-        fetch('/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
-        }).catch(function(err) { console.error('Welcome email error:', err); });
+        // 4. Send welcome email (fire-and-forget; function requires JWT and to === user email)
+        var accessToken = result.data.session ? result.data.session.access_token : '';
+        if (accessToken) {
+            fetch('/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
+            }).catch(function(err) { console.error('Welcome email error:', err); });
+        }
 
         // 5. Redirect to individual dashboard
         window.location.href = '/dashboard-individual';
@@ -358,10 +356,13 @@ async function ensureProfileExists(user) {
             account_type: 'pro'
         });
 
+        var trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 7);
         await sb.from('subscriptions').insert({
             user_id: user.id,
             plan: 'pro',
-            status: 'active'
+            status: 'active',
+            trial_ends_at: trialEnd.toISOString()
         });
     } catch (err) {
         console.error('ensureProfileExists error:', err);
@@ -582,15 +583,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
-    // Attach form handlers (with null checks to avoid crashes)
-    var loginForm = document.getElementById('login-form');
-    var signupForm = document.getElementById('signup-form');
-    var resetRequestForm = document.getElementById('reset-request-form');
-    var resetUpdateForm = document.getElementById('reset-update-form');
-    if (loginForm) loginForm.addEventListener('submit', handleLogin);
-    if (signupForm) signupForm.addEventListener('submit', handleSignup);
-    if (resetRequestForm) resetRequestForm.addEventListener('submit', handlePasswordResetRequest);
-    if (resetUpdateForm) resetUpdateForm.addEventListener('submit', handlePasswordUpdate);
+    // Attach form handlers
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+    document.getElementById('signup-form').addEventListener('submit', handleSignup);
+    document.getElementById('reset-request-form').addEventListener('submit', handlePasswordResetRequest);
+    document.getElementById('reset-update-form').addEventListener('submit', handlePasswordUpdate);
 
     // Google sign-in buttons
     var googleBtns = document.querySelectorAll('.google-signin-btn');
@@ -601,20 +598,48 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Dev bypass buttons
     if (IS_DEV) {
         var devBtns = document.getElementById('dev-bypass-buttons');
-        if (devBtns) devBtns.style.display = 'flex';
-        var devSkipProBtn = document.getElementById('dev-skip-pro');
-        var devSkipBizBtn = document.getElementById('dev-skip-business');
-        if (devSkipProBtn) devSkipProBtn.addEventListener('click', devSkipAsPro);
-        if (devSkipBizBtn) devSkipBizBtn.addEventListener('click', devSkipAsBusinessAdmin);
+        devBtns.style.display = 'flex';
+        document.getElementById('dev-skip-pro').addEventListener('click', devSkipAsPro);
+        document.getElementById('dev-skip-business').addEventListener('click', devSkipAsBusinessAdmin);
     }
 
     // Check for password reset callback in URL hash
+    // Bug fix: Only trigger for type=recovery, NOT for access_token alone
+    // (Google OAuth also returns access_token in hash — that's not a recovery)
     var hash = window.location.hash;
-    if (hash.includes('type=recovery') || hash.includes('access_token')) {
+    if (hash.includes('type=recovery')) {
         var _showReset = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
         _showReset('reset-password');
         document.getElementById('reset-request-form').style.display = 'none';
         document.getElementById('reset-update-form').style.display = 'flex';
+    }
+
+    // Handle OAuth callback (Google sign-in redirecting back to website)
+    if (hash.includes('access_token') && !hash.includes('type=recovery')) {
+        // Let the onAuthStateChange SIGNED_IN handler take care of profile creation,
+        // then redirect to dashboard
+        sb.auth.getSession().then(function(sessionResult) {
+            if (sessionResult.data.session) {
+                var user = sessionResult.data.session.user;
+                ensureProfileExists(user).then(function() {
+                    // Redirect to appropriate dashboard
+                    sb.from('team_members')
+                        .select('team_id')
+                        .eq('user_id', user.id)
+                        .eq('status', 'active')
+                        .limit(1)
+                        .then(function(tmResult) {
+                            if (tmResult.data && tmResult.data.length > 0) {
+                                localStorage.setItem('arrival_dashboard', 'business');
+                                window.location.href = '/dashboard-business';
+                            } else {
+                                localStorage.setItem('arrival_dashboard', 'individual');
+                                window.location.href = '/dashboard-individual';
+                            }
+                        });
+                });
+            }
+        });
     }
 
     // Auth state listener
