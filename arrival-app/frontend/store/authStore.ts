@@ -176,19 +176,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      // Build the redirect URI using Expo's scheme
-      const redirectUri = AuthSession.makeRedirectUri({
+      // The app's deep link scheme — iOS/Android intercepts this to reopen the app
+      const appRedirectUri = AuthSession.makeRedirectUri({
         scheme: 'arrival',
         path: 'auth/callback',
       });
 
-      console.log('[Auth] Google OAuth redirect URI:', redirectUri);
+      // Tell Supabase to redirect to the website's auth-callback page,
+      // which then forwards tokens to the app via deep link (arrival://)
+      const siteUrl = process.env.EXPO_PUBLIC_SITE_URL || 'https://arrivalcompany.com';
+      const webRedirect = `${siteUrl}/auth-callback`;
+
+      console.log('[Auth] Google OAuth — app scheme:', appRedirectUri, '| web redirect:', webRedirect);
 
       // Use Supabase's signInWithOAuth to get the authorization URL
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUri,
+          redirectTo: webRedirect,
           skipBrowserRedirect: true,
           queryParams: {
             prompt: 'select_account',
@@ -202,7 +207,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       // Open the browser for Google OAuth
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+      // Listen for the app deep link (arrival://auth/callback) which the
+      // website's auth-callback.html redirects to after receiving tokens
+      const result = await WebBrowser.openAuthSessionAsync(data.url, appRedirectUri);
 
       if (result.type !== 'success') {
         console.log('[Auth] Google OAuth cancelled or failed:', result.type);

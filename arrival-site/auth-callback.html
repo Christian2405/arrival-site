@@ -1,124 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arrival — Signing in...</title>
+    <title>Signing in...</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #f3f0eb;
-            color: #2a2622;
-        }
-        .loader {
-            text-align: center;
-        }
-        .spinner {
-            width: 36px;
-            height: 36px;
-            border: 3px solid #ddd9d5;
-            border-top-color: #2a2622;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 16px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        p { font-size: 15px; color: #7c736a; margin: 0; }
+        body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #FFFFF5; color: #2a2622; }
+        .msg { text-align: center; }
+        p { font-size: 16px; margin: 8px 0; }
+        .sub { font-size: 14px; color: #7c736a; }
     </style>
 </head>
 <body>
-    <div class="loader">
-        <div class="spinner"></div>
+    <div class="msg">
         <p>Signing you in...</p>
+        <p class="sub">Returning to the app.</p>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
-        (async function() {
-            var SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
-            var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
+        // Catches OAuth redirect from Supabase and forwards tokens to the app
+        var hash = window.location.hash;
+        var search = window.location.search;
 
-            var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-                auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
-            });
+        if (hash && hash.length > 1) {
+            window.location.replace('arrival://auth/callback' + hash);
+        } else if (search && search.includes('code=')) {
+            window.location.replace('arrival://auth/callback' + search);
+        } else {
+            document.querySelector('.msg').innerHTML = '<p>Something went wrong.</p><p class="sub">Close this page and try again in the app.</p>';
+        }
 
-            // Supabase automatically picks up the tokens from the URL hash
-            // Wait a moment for the auth state to update
-            var maxAttempts = 20;
-            var attempts = 0;
-
-            async function checkSession() {
-                attempts++;
-                var result = await sb.auth.getSession();
-                var session = result.data.session;
-
-                if (session) {
-                    var user = session.user;
-
-                    // Ensure profile exists for new Google users
-                    var existing = await sb.from('users').select('id').eq('id', user.id).single();
-                    if (!existing.data) {
-                        var meta = user.user_metadata || {};
-                        var fullName = meta.full_name || meta.name || '';
-                        var firstName = meta.first_name || fullName.split(' ')[0] || '';
-                        var lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
-
-                        await sb.from('users').insert({
-                            id: user.id,
-                            email: user.email || '',
-                            first_name: firstName,
-                            last_name: lastName,
-                            primary_trade: 'other',
-                            experience_level: '1_3_years',
-                            account_type: 'pro'
-                        });
-
-                        var trialEnd = new Date();
-                        trialEnd.setDate(trialEnd.getDate() + 7);
-                        await sb.from('subscriptions').insert({
-                            user_id: user.id,
-                            plan: 'pro',
-                            status: 'active',
-                            trial_ends_at: trialEnd.toISOString()
-                        });
-
-                        // Send welcome email (fire-and-forget)
-                        fetch('/.netlify/functions/send-email', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ to: user.email, template: 'welcome', args: [firstName] })
-                        }).catch(function(e) { console.error('Welcome email error:', e); });
-                    }
-
-                    // Check if user has a team → business dashboard
-                    var tmResult = await sb
-                        .from('team_members')
-                        .select('team_id')
-                        .eq('user_id', user.id)
-                        .eq('status', 'active')
-                        .limit(1);
-
-                    if (tmResult.data && tmResult.data.length > 0) {
-                        window.location.href = '/dashboard-business';
-                    } else {
-                        window.location.href = '/dashboard-individual';
-                    }
-                } else if (attempts < maxAttempts) {
-                    setTimeout(checkSession, 250);
-                } else {
-                    // Fallback — redirect to login
-                    window.location.href = '/#login';
-                }
-            }
-
-            // Small delay to let Supabase process the hash tokens
-            setTimeout(checkSession, 500);
-        })();
+        setTimeout(function() {
+            document.querySelector('.sub').textContent = "If the app didn't open, close this tab and return to Arrival.";
+        }, 3000);
     </script>
 </body>
 </html>
