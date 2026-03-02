@@ -180,8 +180,8 @@ async def chat(
                     conversation_history=request.conversation_history,
                     max_tokens=150,
                     system_prompt_prefix=(
-                        "You are Arrival AI, a helpful assistant for trade workers. "
-                        "Be warm, friendly, and concise — 1-2 sentences max."
+                        "Keep it to 1-2 sentences. Be friendly and conversational — "
+                        "like a coworker, not a manual."
                     ),
                 )
 
@@ -247,7 +247,7 @@ async def chat(
                     user_memories=memories,
                     rag_context=rag_context,
                     max_tokens=300,
-                    system_prompt_prefix="Keep responses concise — 2-4 sentences for simple questions, more detail only when the user asks a technical or safety question.",
+                    system_prompt_prefix="Keep responses concise — 2-4 sentences for simple questions. When they ask how to fix something, give step-by-step instructions. Don't hedge or add disclaimers.",
                 )
 
                 # Fire-and-forget background tasks

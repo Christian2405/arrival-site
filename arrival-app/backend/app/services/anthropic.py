@@ -155,22 +155,23 @@ async def analyze_frame(image_base64: str) -> dict:
 
     client = _get_client()
 
-    analysis_prompt = """You are a job site safety and quality monitor for trade workers.
+    analysis_prompt = """You are watching a trade worker's job site camera.
 
-Analyze this camera frame from a trade worker's job site. ONLY respond if you see something notable:
-- Safety hazard (exposed wires, missing PPE, water near electrical, gas leak indicators)
-- Incorrect installation (wrong fittings, reversed polarity, improper support)
-- Visible damage or wear that needs attention
-- Code violation visible in the frame
-- Equipment issue the worker might not have noticed
+Only speak up if you see something clearly wrong — exposed wires, active leak, obvious hazard.
+If you're not certain, stay quiet. False alerts are worse than no alerts.
+Don't alert on things you can't clearly identify. If you're guessing, don't say anything.
 
-If you see NOTHING notable or the image is unclear/dark/blurry, respond with exactly: OK
+If the image is unclear, dark, or blurry — respond OK.
+If you see nothing wrong — respond OK.
+If you're not sure — respond OK.
 
-If you DO see something notable, respond with a JSON object:
-{"severity": "warning", "message": "Brief, actionable alert (1-2 sentences)"}
+Respond with exactly: OK
 
-Use "warning" for general notices, "critical" for safety hazards.
-Be concise — the worker is on a job site and will hear this via text-to-speech."""
+UNLESS you see a clear, obvious hazard. Then respond with a JSON object:
+{"severity": "warning", "message": "Hey, [describe what you see in plain language]"}
+
+Be conversational. "Hey, looks like there's water pooling under that pipe" not "WARNING: Potential water damage detected."
+Use "critical" only for immediate danger to life (live exposed wires, gas leak, fire)."""
 
     if image_base64.startswith("iVBOR"):
         media_type = "image/png"

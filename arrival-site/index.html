@@ -384,7 +384,16 @@
 
         <section class="section section-light" style="padding-top: 80px;">
             <div class="container">
-                <div class="pricing-grid" style="grid-template-columns: repeat(4, 1fr); max-width: 1200px; margin: 0 auto;">
+                <!-- Individual / Business toggle -->
+                <div style="display: flex; justify-content: center; margin-bottom: 48px;">
+                    <div class="pricing-toggle">
+                        <button class="pricing-toggle-btn pricing-toggle-active" id="pricing-toggle-individual" onclick="showPricingView('individual')">Individual</button>
+                        <button class="pricing-toggle-btn" id="pricing-toggle-business" onclick="showPricingView('business')">Business</button>
+                    </div>
+                </div>
+
+                <!-- Individual Plans: Free + Pro -->
+                <div id="pricing-individual" class="pricing-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 700px; margin: 0 auto;">
                     <!-- Free Plan -->
                     <div class="pricing-card">
                         <div class="pricing-badge" style="visibility: hidden;">‎</div>
@@ -430,10 +439,13 @@
                             <div class="pricing-feature">Email support</div>
                         </div>
                     </div>
+                </div>
 
+                <!-- Business Plans: Business + Enterprise -->
+                <div id="pricing-business" class="pricing-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 700px; margin: 0 auto; display: none;">
                     <!-- Business Plan -->
-                    <div class="pricing-card">
-                        <div class="pricing-badge" style="visibility: hidden;">‎</div>
+                    <div class="pricing-card pricing-featured">
+                        <div class="pricing-badge">Most Popular</div>
                         <div class="pricing-header">
                             <h3>Business</h3>
                         </div>
@@ -481,6 +493,7 @@
                         </div>
                     </div>
                 </div>
+
                 <p style="text-align: center; font-size: 13px; color: #9a9590; margin-top: 2rem;">Prices don't include applicable tax.</p>
             </div>
         </section>
@@ -488,80 +501,178 @@
         <!-- FAQ -->
         <section class="section" id="faq-section">
             <div class="container">
-                <div style="text-align: center; margin-bottom: 80px;">
+                <div style="text-align: center; margin-bottom: 60px;">
                     <h2 class="section-header">Frequently asked questions</h2>
+                    <!-- FAQ Category Tabs -->
+                    <div style="display: flex; justify-content: center; gap: 8px; margin-top: 32px; flex-wrap: wrap;">
+                        <button class="faq-tab faq-tab-active" onclick="showFaqCategory('product', this)">Product</button>
+                        <button class="faq-tab" onclick="showFaqCategory('docs', this)">Documentation</button>
+                        <button class="faq-tab" onclick="showFaqCategory('jobmode', this)">Job Mode</button>
+                        <button class="faq-tab" onclick="showFaqCategory('billing', this)">Pricing & Billing</button>
+                        <button class="faq-tab" onclick="showFaqCategory('teams', this)">Teams & Business</button>
+                        <button class="faq-tab" onclick="showFaqCategory('privacy', this)">Privacy & Security</button>
+                        <button class="faq-tab" onclick="showFaqCategory('support', this)">Support</button>
+                    </div>
                 </div>
-                <div class="faq-layout">
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            How is this different from ChatGPT?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Arrival answers from your company's documentation. ChatGPT doesn't know your docs.</p>
+
+                <!-- Product -->
+                <div class="faq-category" id="faq-product">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What is Arrival?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>AI assistant for trade workers. Voice and camera. Answers from your company's documentation.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How does it work?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Open the app, point at what you're working on, ask your question. AI answers.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What trades is it for?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>HVAC, plumbing, electrical, appliance repair, general construction. If you work with equipment and need answers on the job, it's for you.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Does it work offline?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No. You need an internet connection.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What devices does it support?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>iPhone and Android.</p></div>
                         </div>
                     </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            What counts as a question?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Any question you ask — voice or text. Job Mode alerts don't count.</p>
+                </div>
+
+                <!-- Documentation -->
+                <div class="faq-category" id="faq-docs" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What can I upload?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>PDFs, manuals, SOPs, procedures, spec sheets, parts lists. Anything your team needs to reference.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How does the AI use my documents?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>When you ask a question, the AI searches your uploaded docs first. If the answer is there, it uses it. If not, it uses general knowledge.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Are my documents private?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Your documents are only accessible to you or your team. We don't share them or use them to train AI models.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What if I don't upload any documents?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>It still works. You just get general answers instead of answers specific to your company.</p></div>
                         </div>
                     </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            Is there a free trial?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Yes. 7 days on paid plans, no card required. Or use Free tier forever with 10 questions/day.</p>
+                </div>
+
+                <!-- Job Mode -->
+                <div class="faq-category" id="faq-jobmode" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What is Job Mode?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>AI watches what you're looking at while you work. If it sees something wrong, it tells you. You don't have to ask.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What does Job Mode catch?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Corrosion, wrong parts, safety issues, obvious problems. It only speaks up when it's certain.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Does Job Mode drain my battery?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>More than regular use, yes. But it's designed to be efficient.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can I turn Job Mode off?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Toggle it anytime.</p></div>
                         </div>
                     </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            Can I cancel anytime?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Yes. Cancel anytime, keep access until the end of your billing period.</p>
+                </div>
+
+                <!-- Pricing & Billing -->
+                <div class="faq-category" id="faq-billing" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Is there a free version?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. 10 questions a day, forever. No card required.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How much does Pro cost?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>$25/month. 50 questions a day, 20 documents.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How much does Business cost?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>$200 per seat per month. 250 questions a day, unlimited documents, Job Mode.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can I cancel anytime?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. You keep access until the end of your billing period.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you offer annual billing?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Save 15% with annual on Pro and Business.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What payment methods do you accept?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>All major credit cards. Business and Enterprise can pay by invoice.</p></div>
                         </div>
                     </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            How do I add team members?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Business plan. Invite them from your dashboard.</p>
+                </div>
+
+                <!-- Teams & Business -->
+                <div class="faq-category" id="faq-teams" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How do I add team members?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Invite them from your dashboard. They get a link to create their account.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can my team share documents?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Upload to the team library and everyone has access.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can I see what my team is asking?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. The dashboard shows team activity — questions asked, topics, usage.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What's the difference between Pro and Business?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Pro is for individuals. Business is for teams — you get Job Mode, unlimited documents, team document library, and team activity.</p></div>
                         </div>
                     </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            Do you offer annual billing?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Yes. Save 15% with annual billing on Pro and Business.</p>
+                </div>
+
+                <!-- Privacy & Security -->
+                <div class="faq-category" id="faq-privacy" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Is my data secure?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Encrypted in transit and at rest.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you store my camera images?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No. Images are processed in real time and discarded. We don't keep them unless you save them.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you store my voice recordings?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No. Voice is transcribed, then the audio is discarded.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you use my data to train AI?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No.</p></div>
                         </div>
                     </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            What payment methods do you accept?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>All major credit cards. Business and Enterprise can pay by invoice.</p>
+                </div>
+
+                <!-- Support -->
+                <div class="faq-category" id="faq-support" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How do I get help?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Email support@arrivalcompany.com. We typically respond within 2 hours.</p></div>
                         </div>
-                    </div>
-                    <div class="faq-item">
-                        <button class="faq-question" onclick="toggleFaq(this)">
-                            Is my data private?
-                            <span class="faq-icon">+</span>
-                        </button>
-                        <div class="faq-answer">
-                            <p>Yes. Your documents are private to you or your team. We don't use your data to train models.</p>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Is there phone support?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Not currently. Email only.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you offer onboarding for teams?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Business and Enterprise customers get onboarding support.</p></div>
                         </div>
                     </div>
                 </div>
@@ -1522,8 +1633,8 @@
             const item = button.parentElement;
             const isOpen = item.classList.contains('open');
 
-            // Close all other items
-            document.querySelectorAll('.faq-item').forEach(faqItem => {
+            // Close all other items in this category
+            item.closest('.faq-layout').querySelectorAll('.faq-item').forEach(faqItem => {
                 if (faqItem !== item && faqItem.classList.contains('open')) {
                     faqItem.classList.remove('open');
                 }
@@ -1535,6 +1646,27 @@
             } else {
                 item.classList.add('open');
             }
+        }
+
+        // Pricing toggle
+        function showPricingView(view) {
+            document.getElementById('pricing-individual').style.display = view === 'individual' ? '' : 'none';
+            document.getElementById('pricing-business').style.display = view === 'business' ? '' : 'none';
+            document.getElementById('pricing-toggle-individual').classList.toggle('pricing-toggle-active', view === 'individual');
+            document.getElementById('pricing-toggle-business').classList.toggle('pricing-toggle-active', view === 'business');
+        }
+
+        // FAQ category tabs
+        function showFaqCategory(category, btn) {
+            // Hide all categories
+            document.querySelectorAll('.faq-category').forEach(c => c.style.display = 'none');
+            // Show selected
+            document.getElementById('faq-' + category).style.display = 'block';
+            // Update active tab
+            document.querySelectorAll('.faq-tab').forEach(t => t.classList.remove('faq-tab-active'));
+            btn.classList.add('faq-tab-active');
+            // Close any open FAQ items
+            document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
         }
 
         // Scroll listener for nav.scrolled

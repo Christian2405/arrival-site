@@ -63,15 +63,9 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Only retry on network errors (cold start timeout) or server-starting codes
-    // Bug fix: Only retry safe (idempotent) methods — never retry POST/PUT/DELETE
-    // because they can cause duplicate API calls, inserts, or side effects.
-    const method = (config.method || 'get').toUpperCase();
-    const isSafeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
-    if (!isSafeMethod) {
-      return Promise.reject(error);
-    }
-
+    // Retry on network errors (cold start) or 502/503 (Render proxy can't reach server).
+    // Safe for ALL methods here because 502/503 and network errors mean the server
+    // never received/processed the request — no risk of duplicate side effects.
     const isNetworkError = !error.response && (
       error.code === 'ECONNABORTED' ||
       error.code === 'ERR_NETWORK' ||
@@ -82,7 +76,7 @@ api.interceptors.response.use(
 
     if (isNetworkError || isServerStarting) {
       config._retryCount = (config._retryCount ?? 0) + 1;
-      const delay = config._retryCount * 4000; // 4s first retry, 8s second
+      const delay = config._retryCount * 3000; // 3s first retry, 6s second
       console.log(`[API] Retry ${config._retryCount}/2 after ${delay}ms (server may be waking up)...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
       return api(config);
@@ -95,6 +89,11 @@ api.interceptors.response.use(
 // --- AI API ---
 
 export const aiAPI = {
+  /** Fire-and-forget ping to wake up Render free tier server */
+  warmup: async () => {
+    try { await api.get('/health'); } catch { /* silent — just waking the server */ }
+  },
+
   transcribe: async (audioBase64: string, demoMode: boolean = false) => {
     const response = await api.post(`/stt${demoMode ? '?demo=true' : ''}`, {
       audio_base64: audioBase64,

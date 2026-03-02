@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
-  Animated, Keyboard, Platform, Alert, KeyboardAvoidingView, Dimensions,
+  Animated, Keyboard, Platform, Alert, Dimensions,
   TouchableWithoutFeedback, AppState, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,6 +68,9 @@ export default function HomeScreen() {
   const chatSlide = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
+  // Keyboard height — tracked manually for instant (no-animation) positioning
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   // PTT frame capture ref
   const pttFrameRef = useRef<string | undefined>(undefined);
 
@@ -104,6 +107,18 @@ export default function HomeScreen() {
     });
     return () => sub.remove();
   }, [fetchUsage, demoMode]);
+
+  // Keyboard height listener — instant repositioning instead of slow KAV animation
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
+  // Warmup ping — wake up Render server on app open so first query is fast
+  useEffect(() => { aiAPI.warmup(); }, []);
 
   // --- Camera capture (silent, no shutter) ---
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
@@ -561,7 +576,7 @@ export default function HomeScreen() {
         },
         onStateChange: setJobAIState,
       },
-      { minInterval: 3000, maxInterval: 15000, changeThreshold: 0.05, captureInterval: 2000 },
+      { minInterval: 4000, maxInterval: 15000, changeThreshold: 0.15, captureInterval: 4000 },
       { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1500, meteringInterval: 100 },
     );
 
@@ -653,7 +668,7 @@ export default function HomeScreen() {
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
 
       {/* Main content */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardHeight : 0 }}>
         <View style={[styles.content, { paddingTop: insets.top }]}>
 
           {/* TOP BAR: Hamburger + Mode Selector + New Chat */}
@@ -782,8 +797,8 @@ export default function HomeScreen() {
                   </View>
                 )}
 
-                {/* Input bar container — safe area padding goes OUTSIDE the bar */}
-                <View style={{ paddingBottom: Math.max(insets.bottom, 6), paddingHorizontal: 8 }}>
+                {/* Input bar container — no safe area padding when keyboard is up */}
+                <View style={{ paddingBottom: keyboardHeight > 0 ? 2 : Math.max(insets.bottom, 6), paddingHorizontal: 8 }}>
                   <View style={styles.inputBar}>
                     {/* Photo picker */}
                     <TouchableOpacity
@@ -855,7 +870,7 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* DRAWER OVERLAY */}
       {drawerOpen && (

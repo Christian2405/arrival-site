@@ -245,7 +245,14 @@ async def voice_chat(
         # Per-mode response tuning
         if request.mode == "job":
             voice_max_tokens = 200
-            voice_prompt_prefix = "You are having a natural, calm conversation with a tradesperson on a job site. Be conversational, warm, and helpful. Keep responses to 2-4 sentences."
+            voice_prompt_prefix = (
+                "Keep responses to 2-4 sentences. You're talking to a tradesperson on a job site. "
+                "Be conversational — like a coworker, not a safety manual. "
+                "If an image is attached but unclear or blurry, ignore it and answer the spoken question. "
+                "Never comment on image quality. "
+                "Describe what you actually see, not what you think it might be. "
+                "If you're not sure what something is, describe it rather than guessing."
+            )
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
                 "stability": 0.6,
@@ -256,7 +263,14 @@ async def voice_chat(
             }
         else:
             voice_max_tokens = 150
-            voice_prompt_prefix = "IMPORTANT: Keep your response to 1-3 sentences maximum. Be direct and concise — the user is hearing this spoken aloud on a job site."
+            voice_prompt_prefix = (
+                "Keep your response to 1-3 sentences max. The user is hearing this spoken aloud. "
+                "A camera image may be attached. ONLY reference the image if the user's question is about something they're looking at "
+                "(e.g. 'what is this?', 'what's wrong here?'). "
+                "If they ask a general question, ignore the image and just answer it. "
+                "If the image is unclear or blurry, ignore it. Never comment on image quality. "
+                "Describe what you actually see — don't guess. Ask what they want to do."
+            )
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default
 
