@@ -159,7 +159,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $25/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button></div>
+            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $250/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button></div>
         </div>
 
         <div class="dash-section">
@@ -317,6 +317,36 @@
         <div class="form-group"><label>Project / Site (optional)</label><input type="text" id="upload-project" placeholder="e.g. 445 Oak St, Johnson Residence"></div>
         <div class="form-group"><label>Notes (optional)</label><input type="text" id="upload-notes" placeholder="e.g. 2024 revision, supersedes previous version"></div>
         <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('upload-modal')">Cancel</button><button class="btn btn-primary" id="upload-submit-btn">Upload</button></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="edit-doc-modal" onclick="if(event.target===this)closeModal('edit-doc-modal')">
+    <div class="modal modal-wide">
+        <h2>Edit Document</h2>
+        <input type="hidden" id="edit-doc-id">
+        <input type="hidden" id="edit-doc-storage-path">
+        <div class="form-group"><label>File Name</label><input type="text" id="edit-doc-name" placeholder="document.pdf"></div>
+        <div class="form-group">
+            <label>Category</label>
+            <select id="edit-doc-category">
+                <option value="manufacturer_manuals">Manufacturer Manuals</option>
+                <option value="equipment_spec_sheets">Equipment Spec Sheets</option>
+                <option value="company_sops">Company SOPs</option>
+                <option value="safety_protocols">Safety Protocols</option>
+                <option value="diagnostic_workflows">Diagnostic Workflows</option>
+                <option value="training_materials">Training Materials</option>
+                <option value="building_plans">Building Plans</option>
+                <option value="parts_lists">Parts Lists</option>
+            </select>
+        </div>
+        <div class="form-group"><label>Project / Site</label><input type="text" id="edit-doc-project" placeholder="e.g. 445 Oak St, Johnson Residence"></div>
+        <div class="form-group"><label>Notes</label><input type="text" id="edit-doc-notes" placeholder="e.g. 2024 revision"></div>
+        <div class="form-group">
+            <label>Replace File (optional)</label>
+            <input type="file" id="edit-doc-file" accept=".pdf,.jpg,.jpeg,.png,.docx,.dwg,.dxf">
+            <p style="font-size:12px;color:var(--text-muted,#7c736a);margin-top:4px;">Leave empty to keep current file. Replacing will re-index for AI search.</p>
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('edit-doc-modal')">Cancel</button><button class="btn btn-primary" id="edit-doc-save-btn">Save Changes</button></div>
     </div>
 </div>
 

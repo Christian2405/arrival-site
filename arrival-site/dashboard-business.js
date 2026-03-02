@@ -114,8 +114,22 @@ async function initAuth() {
     if (profileResult.data) currentProfile = profileResult.data;
 
     // Load subscription
-    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).eq('status', 'active').limit(1).single();
+    var subResult = await sb.from('subscriptions').select('*').eq('user_id', currentUser.id).in('status', ['active', 'trial_expired']).limit(1).single();
     if (subResult.data) currentSubscription = subResult.data;
+
+    // Check if trial has expired
+    var subStatus = currentSubscription ? currentSubscription.status : 'active';
+    if (subStatus === 'trial_expired') {
+        showTrialExpiredOverlay();
+        return;
+    }
+    if (currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id) {
+        var trialEnd = new Date(currentSubscription.trial_ends_at);
+        if (trialEnd < new Date()) {
+            showTrialExpiredOverlay();
+            return;
+        }
+    }
 
     // Pro plan users without a team always go to individual dashboard
     var subPlan = currentSubscription ? currentSubscription.plan : 'pro';
@@ -170,6 +184,11 @@ async function initAuth() {
         showToast('Subscription activated! Welcome to Business.');
         window.history.replaceState({}, '', window.location.pathname);
     }
+}
+
+function showTrialExpiredOverlay() {
+    var overlay = document.getElementById('trial-expired-overlay');
+    if (overlay) overlay.style.display = 'flex';
 }
 
 // ============================================
@@ -370,6 +389,7 @@ function renderDocTable(docs) {
             '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
             '<td>' + date + '</td>' +
             '<td><a href="#" class="table-action' + viewDisabled + '" onclick="viewDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
+            '<a href="#" class="table-action" onclick="openEditDocument(\'' + d.id + '\'); return false;">Edit</a> ' +
             '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
             '</tr>';
     }).join('');
@@ -447,7 +467,7 @@ async function handleDocUpload() {
             project_tag: projectInput.value.trim() || null,
             notes: notesInput.value.trim() || null,
             status: 'ready'
-        });
+        }).select();
         if (insertResult.error) throw insertResult.error;
 
         hideUploadOverlay();
@@ -466,11 +486,11 @@ async function handleDocUpload() {
         // Trigger RAG indexing in background (non-blocking, best-effort)
         try {
             var session = (await sb.auth.getSession()).data.session;
-            if (session) {
+            if (session && insertResult.data && insertResult.data.length > 0) {
                 fetch(BACKEND_URL + '/index-document', {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ document_id: insertResult.data ? insertResult.data[0].id : null, storage_path: storagePath })
+                    body: JSON.stringify({ document_id: insertResult.data[0].id, storage_path: storagePath })
                 }).catch(function() { /* RAG indexing is best-effort */ });
             }
         } catch (_) { /* ignore RAG errors */ }
@@ -496,29 +516,116 @@ async function deleteDocument(docId, storagePath) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
     try {
-        // Delete from storage
-        await sb.storage.from('documents').remove([storagePath]);
-        // Delete DB record
-        var dbResult = await sb.from('documents').delete().eq('id', docId);
-        if (dbResult.error) throw dbResult.error;
+        // Delete through backend API so RAG vectors get cleaned up too
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
+
+        var resp = await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
+            method: 'DELETE',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        });
+
+        if (!resp.ok) {
+            var errBody = await resp.text();
+            throw new Error(errBody || 'Delete failed');
+        }
 
         showToast('Document deleted.');
         await loadDocuments();
         loadHome();
-
-        // Best-effort RAG cleanup via backend
-        try {
-            var session = (await sb.auth.getSession()).data.session;
-            if (session) {
-                fetch(BACKEND_URL + '/documents/' + encodeURIComponent(docId), {
-                    method: 'DELETE',
-                    headers: { 'Authorization': 'Bearer ' + session.access_token }
-                }).catch(function() {});
-            }
-        } catch (_) {}
     } catch (err) {
         console.error('Delete error:', err);
-        showToast('Failed to delete document.', 'error');
+        showToast('Failed to delete document. Please try again later.', 'error');
+    }
+}
+
+function openEditDocument(docId) {
+    var doc = teamDocs.find(function(d) { return d.id === docId; });
+    if (!doc) { showToast('Document not found.', 'error'); return; }
+
+    document.getElementById('edit-doc-id').value = doc.id;
+    document.getElementById('edit-doc-storage-path').value = doc.storage_path;
+    document.getElementById('edit-doc-name').value = doc.file_name;
+    document.getElementById('edit-doc-category').value = doc.category;
+    document.getElementById('edit-doc-project').value = doc.project_tag || '';
+    document.getElementById('edit-doc-notes').value = doc.notes || '';
+    document.getElementById('edit-doc-file').value = '';
+
+    openModal('edit-doc-modal');
+}
+
+async function handleEditDocSave() {
+    var docId = document.getElementById('edit-doc-id').value;
+    var oldStoragePath = document.getElementById('edit-doc-storage-path').value;
+    var newName = document.getElementById('edit-doc-name').value.trim();
+    var newCategory = document.getElementById('edit-doc-category').value;
+    var newProject = document.getElementById('edit-doc-project').value.trim() || null;
+    var newNotes = document.getElementById('edit-doc-notes').value.trim() || null;
+    var fileInput = document.getElementById('edit-doc-file');
+    var replaceFile = fileInput.files && fileInput.files.length > 0;
+
+    if (!newName) { showToast('File name cannot be empty.', 'error'); return; }
+
+    closeModal('edit-doc-modal');
+    showUploadOverlay(replaceFile ? 'Replacing file...' : 'Saving changes...');
+
+    try {
+        var updates = {
+            file_name: newName,
+            category: newCategory,
+            project_tag: newProject,
+            notes: newNotes
+        };
+
+        if (replaceFile) {
+            var file = fileInput.files[0];
+            if (file.size > 100 * 1024 * 1024) {
+                hideUploadOverlay();
+                showToast('File exceeds 100MB limit.', 'error');
+                return;
+            }
+
+            // Upload new file to storage
+            var newStoragePath = 'teams/' + currentTeam.id + '/docs/' + Date.now() + '_' + file.name;
+            var uploadResult = await sb.storage.from('documents').upload(newStoragePath, file);
+            if (uploadResult.error) throw uploadResult.error;
+
+            // Delete old file from storage (best-effort)
+            sb.storage.from('documents').remove([oldStoragePath]).catch(function() {});
+
+            updates.storage_path = newStoragePath;
+            updates.file_type = file.type || 'application/' + file.name.split('.').pop().toLowerCase();
+            updates.file_size = file.size;
+        }
+
+        // Update document record in DB
+        var updateResult = await sb.from('documents').update(updates).eq('id', docId);
+        if (updateResult.error) throw updateResult.error;
+
+        hideUploadOverlay();
+        showToast('Document updated.');
+
+        // Reload documents list
+        await loadDocuments();
+        loadHome();
+
+        // Re-index for AI search if file was replaced
+        if (replaceFile) {
+            try {
+                var session = (await sb.auth.getSession()).data.session;
+                if (session) {
+                    fetch(BACKEND_URL + '/index-document', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document_id: docId, storage_path: updates.storage_path })
+                    }).catch(function() {});
+                }
+            } catch (_) {}
+        }
+    } catch (err) {
+        console.error('Edit error:', err);
+        hideUploadOverlay();
+        showToast('Failed to update document: ' + (err.message || 'Unknown error'), 'error');
     }
 }
 
@@ -636,6 +743,15 @@ async function handleInvite() {
             return;
         }
 
+        // Send invite email (fire-and-forget)
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+        fetch('/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ to: email, template: 'invite', args: [email] })
+        }).catch(function(err) { console.error('Invite email error:', err); });
+
         showToast('Invite sent to ' + email + '.');
         closeModal('invite-modal');
         emailInput.value = '';
@@ -697,7 +813,19 @@ async function handleRemoveMember() {
 }
 
 async function resendInvite(memberId, email) {
-    showToast('Invite resent to ' + email + '.');
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+        await fetch('/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ to: email, template: 'invite', args: [email] })
+        });
+        showToast('Invite resent to ' + email + '.');
+    } catch (err) {
+        console.error('Resend invite error:', err);
+        showToast('Failed to resend invite.', 'error');
+    }
 }
 
 // ============================================
@@ -1078,25 +1206,47 @@ async function handleDeleteAccount() {
     }
 
     try {
-        // 1. Delete all team files from storage
+        // 1. Clean up Pinecone vectors by deleting each document through the backend API
+        var session = (await sb.auth.getSession()).data.session;
+        var token = session ? session.access_token : null;
+        var teamDocsResult = await sb.from('documents')
+            .select('id')
+            .eq('team_id', currentTeam.id);
+        var personalDocsResult = await sb.from('documents')
+            .select('id')
+            .eq('uploaded_by', currentUser.id)
+            .is('team_id', null);
+        var allDocs = [].concat(teamDocsResult.data || [], personalDocsResult.data || []);
+        if (allDocs.length > 0 && token) {
+            for (var i = 0; i < allDocs.length; i++) {
+                try {
+                    await fetch(BACKEND_URL + '/documents/' + encodeURIComponent(allDocs[i].id), {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                } catch (_) { /* best-effort vector cleanup */ }
+            }
+        }
+
+        // 2. Delete all team files from storage
         var listResult = await sb.storage.from('documents').list('teams/' + currentTeam.id);
         if (listResult.data && listResult.data.length > 0) {
             var paths = listResult.data.map(function(f) { return 'teams/' + currentTeam.id + '/' + f.name; });
             await sb.storage.from('documents').remove(paths);
         }
 
-        // 2. Delete personal files
+        // 3. Delete personal files
         var personalResult = await sb.storage.from('documents').list(currentUser.id);
         if (personalResult.data && personalResult.data.length > 0) {
             var personalPaths = personalResult.data.map(function(f) { return currentUser.id + '/' + f.name; });
             await sb.storage.from('documents').remove(personalPaths);
         }
 
-        // 3. Delete auth user via RPC (cascades to all DB rows)
+        // 4. Delete auth user via RPC (cascades to all DB rows)
         var rpcResult = await sb.rpc('delete_own_account');
         if (rpcResult.error) throw rpcResult.error;
 
-        // 4. Sign out and redirect
+        // 5. Sign out and redirect
         await sb.auth.signOut();
         window.location.href = '/';
     } catch (err) {
@@ -1118,7 +1268,7 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
     if (!str) return '';
-    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function capitalize(str) {
@@ -1149,6 +1299,9 @@ function timeAgo(date) {
 document.addEventListener('DOMContentLoaded', function() {
     // Upload document button
     document.getElementById('upload-submit-btn').addEventListener('click', handleDocUpload);
+
+    // Edit document save button
+    document.getElementById('edit-doc-save-btn').addEventListener('click', handleEditDocSave);
 
     // Invite team member
     document.getElementById('invite-send-btn').addEventListener('click', handleInvite);
