@@ -19,7 +19,7 @@ from app.services.deepgram import transcribe_audio
 from app.services.anthropic import chat_with_claude
 from app.services.elevenlabs import text_to_speech
 from app.services.rag import retrieve_context
-from app.services.supabase import log_query
+from app.services.supabase import log_query, get_user_team_id
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
 
@@ -84,6 +84,17 @@ async def _safe_task(coro, task_name: str = "background_task"):
         logger.debug(f"[{task_name}] Task cancelled")
     except Exception as e:
         logger.error(f"[{task_name}] Background task failed: {e}", exc_info=True)
+
+
+async def _safe_get_team_id(req: Request) -> str | None:
+    """Get the user's team_id without blocking the pipeline if it fails."""
+    try:
+        user = await get_current_user(req)
+        team_id = await get_user_team_id(user["user_id"])
+        return team_id
+    except Exception as e:
+        logger.debug(f"[voice-chat] Team lookup failed (non-fatal): {e}")
+        return None
 
 
 class VoiceChatRequest(BaseModel):
@@ -181,28 +192,28 @@ async def voice_chat(
             )
 
         # --- Authenticated flow (optimized for speed) ---
-        # Voice pipeline: STT → RAG → Claude Haiku → TTS
-        # Memory and team lookups REMOVED — too slow for voice (~2-3s).
-        # Conversation history provides enough context.
+        # Voice pipeline: STT + Auth + Team → RAG → Claude Haiku → TTS
         t0 = time.monotonic()
 
-        # 1. Auth + STT in parallel
-        user_result, transcript = await asyncio.gather(
+        # 1. Auth + STT + Team lookup all in parallel
+        user_result, transcript, team_id_result = await asyncio.gather(
             get_current_user(req),
             transcribe_audio(request.audio_base64),
+            asyncio.create_task(_safe_get_team_id(req)),
         )
         user_id = user_result["user_id"]
+        team_id = team_id_result if not isinstance(team_id_result, Exception) else None
 
         if not transcript:
             raise HTTPException(status_code=400, detail="Could not transcribe audio — no speech detected")
 
-        logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…'")
+        logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…' (team={team_id})")
 
-        # 2. Usage check + RAG doc search in parallel (saves ~0.5s vs sequential)
+        # 2. Usage check + RAG doc search in parallel (searches both user + team namespaces)
         t1 = time.monotonic()
         usage_result, rag_result = await asyncio.gather(
             check_query_limit(user_id),
-            retrieve_context(user_id, transcript, team_id=None),
+            retrieve_context(user_id, transcript, team_id=team_id),
             return_exceptions=True,
         )
 
@@ -230,8 +241,11 @@ async def voice_chat(
                 "The user is talking to you — answer whatever they ask. "
                 "They might ask about a job, specs from a document, how to do something, "
                 "or just a general question they didn't want to type out. "
-                "A camera image may be attached as extra context — use it if relevant to their question, "
-                "ignore it if not. Keep responses to 2-4 sentences. "
+                "A camera image may be attached but ONLY use it if the user explicitly asks about something visual "
+                "(e.g. 'what is this?', 'what do you see?', 'what's wrong here?'). "
+                "For any other question, completely ignore the image and answer based on the spoken question only. "
+                "Never describe the camera view, never say you can see their workspace, never comment on image quality. "
+                "Keep responses to 2-4 sentences. "
                 "Continue the conversation naturally. Don't repeat yourself."
             )
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
@@ -247,7 +261,8 @@ async def voice_chat(
             voice_prompt_prefix = (
                 "Keep your response to 1-3 sentences max. Spoken aloud. "
                 "The user is talking instead of typing — answer whatever they ask. "
-                "A camera image may be attached as extra context — use it if relevant, ignore it if not. "
+                "A camera image may be attached but ONLY reference it if the user explicitly asks about something visual. "
+                "For any other question, ignore the image completely. Never describe what the camera shows. "
                 "Continue the conversation naturally. Don't repeat yourself."
             )
             tts_voice_id = None  # use default
