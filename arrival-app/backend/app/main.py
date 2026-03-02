@@ -11,6 +11,8 @@ import time
 import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers, usage
@@ -83,6 +85,13 @@ app.include_router(analyze.router, prefix="/api", tags=["Frame Analysis"])
 app.include_router(queries.router, prefix="/api", tags=["Queries"])
 app.include_router(saved_answers.router, prefix="/api", tags=["Saved Answers"])
 app.include_router(usage.router, prefix="/api", tags=["Usage"])
+
+
+# --- Validation error logging (debug 422s) ---
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"[422] {request.method} {request.url.path} — {exc.errors()}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 # --- Health Check ---
