@@ -203,41 +203,25 @@ async def chat(
 
                 # Bug fix: return_exceptions=True so one failed service
                 # doesn't kill the entire request
-                phase_results = await asyncio.gather(
+                # Phase 1: Get memories and team_id in parallel
+                phase1_results = await asyncio.gather(
                     retrieve_memories(user_id, request.message),
                     get_user_team_id(user_id),
-                    retrieve_context(user_id, request.message, team_id=None),
                     return_exceptions=True,
                 )
-                memories = phase_results[0] if not isinstance(phase_results[0], Exception) else []
-                team_id = phase_results[1] if not isinstance(phase_results[1], Exception) else None
-                user_rag = phase_results[2] if not isinstance(phase_results[2], Exception) else []
-                if isinstance(phase_results[0], Exception):
-                    logger.warning(f"[chat] Memory retrieval failed: {phase_results[0]}")
-                if isinstance(phase_results[1], Exception):
-                    logger.warning(f"[chat] Team ID retrieval failed: {phase_results[1]}")
-                if isinstance(phase_results[2], Exception):
-                    logger.warning(f"[chat] RAG retrieval failed: {phase_results[2]}")
+                memories = phase1_results[0] if not isinstance(phase1_results[0], Exception) else []
+                team_id = phase1_results[1] if not isinstance(phase1_results[1], Exception) else None
+                if isinstance(phase1_results[0], Exception):
+                    logger.warning(f"[chat] Memory retrieval failed: {phase1_results[0]}")
+                if isinstance(phase1_results[1], Exception):
+                    logger.warning(f"[chat] Team ID retrieval failed: {phase1_results[1]}")
 
-                # If user belongs to a team, quick async team-namespace search
-                rag_context = user_rag
-                if team_id:
-                    try:
-                        # Bug fix: Add timeout to team namespace RAG search
-                        team_rag = await asyncio.wait_for(
-                            retrieve_context(user_id, request.message, team_id=team_id),
-                            timeout=4.0,
-                        )
-                        # Merge team results that aren't duplicates
-                        seen = {r["text"][:200] for r in rag_context}
-                        for r in team_rag:
-                            if r["text"][:200] not in seen:
-                                rag_context.append(r)
-                                seen.add(r["text"][:200])
-                        rag_context.sort(key=lambda x: x["score"], reverse=True)
-                        rag_context = rag_context[:5]
-                    except Exception as e:
-                        logger.warning(f"[chat] Team RAG search failed (continuing): {e}")
+                # Phase 2: RAG search (now searches user + global + team namespaces in parallel internally)
+                try:
+                    rag_context = await retrieve_context(user_id, request.message, team_id=team_id)
+                except Exception as e:
+                    logger.warning(f"[chat] RAG retrieval failed: {e}")
+                    rag_context = []
 
                 # Call Claude with all context
                 result = await chat_with_claude(
@@ -246,8 +230,7 @@ async def chat(
                     conversation_history=request.conversation_history,
                     user_memories=memories,
                     rag_context=rag_context,
-                    max_tokens=300,
-                    system_prompt_prefix="Keep responses concise — 2-4 sentences for simple questions. When they ask how to fix something, give step-by-step instructions. Don't hedge or add disclaimers.",
+                    max_tokens=1024,
                 )
 
                 # Fire-and-forget background tasks

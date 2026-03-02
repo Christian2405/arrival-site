@@ -339,39 +339,46 @@ async def retrieve_context(
     RAG_TIMEOUT = 4.0  # seconds — return empty rather than blocking
     try:
         t0 = time.monotonic()
-        # Always search the user's personal namespace (with timeout)
-        user_results = await asyncio.wait_for(
-            asyncio.to_thread(_do_search, user_id),
+
+        # Build list of namespaces to search in parallel
+        search_tasks = [
+            asyncio.to_thread(_do_search, user_id),          # User's personal docs
+            asyncio.to_thread(_do_search, "global_knowledge"),  # Shared knowledge base
+        ]
+        task_labels = ["user", "global"]
+
+        if team_id:
+            search_tasks.append(asyncio.to_thread(_do_search, f"team_{team_id}"))
+            task_labels.append("team")
+
+        # Run all namespace searches in parallel with timeout
+        search_results = await asyncio.wait_for(
+            asyncio.gather(*search_tasks, return_exceptions=True),
             timeout=RAG_TIMEOUT,
         )
 
-        # Bug #1: If team_id provided, also search the team namespace
-        if team_id:
-            team_namespace = f"team_{team_id}"
-            team_results = await asyncio.wait_for(
-                asyncio.to_thread(_do_search, team_namespace),
-                timeout=RAG_TIMEOUT,
-            )
-
-            # Merge and deduplicate by text content
-            seen_texts = set()
-            merged = []
-            for item in user_results + team_results:
+        # Merge and deduplicate results from all namespaces
+        seen_texts = set()
+        merged = []
+        for i, result in enumerate(search_results):
+            if isinstance(result, Exception):
+                logger.warning(f"[rag] {task_labels[i]} namespace search failed: {result}")
+                continue
+            for item in result:
                 text_key = item["text"][:200]  # Use first 200 chars as dedup key
                 if text_key not in seen_texts:
                     seen_texts.add(text_key)
                     merged.append(item)
 
-            # Sort by relevance score descending
-            merged.sort(key=lambda x: x["score"], reverse=True)
-            logger.info(f"[rag] Search user+team → {len(merged[:top_k])} results in {time.monotonic()-t0:.2f}s")
-            return merged[:top_k]
-
-        logger.info(f"[rag] Search user-only → {len(user_results)} results in {time.monotonic()-t0:.2f}s")
-        return user_results
+        # Sort by relevance score descending
+        merged.sort(key=lambda x: x["score"], reverse=True)
+        final = merged[:top_k]
+        ns_label = "+".join(task_labels)
+        logger.info(f"[rag] Search {ns_label} → {len(final)} results in {time.monotonic()-t0:.2f}s")
+        return final
 
     except asyncio.TimeoutError:
-        logger.warning(f"[rag] Search TIMED OUT after {time.monotonic()-t0:.2f}s — skipping RAG context")
+        logger.warning(f"[rag] Search TIMED OUT after {RAG_TIMEOUT}s — skipping RAG context")
         return []
     except Exception as e:
         logger.warning(f"[rag] Retrieve error: {e}")

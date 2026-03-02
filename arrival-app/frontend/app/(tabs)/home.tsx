@@ -17,7 +17,7 @@ import { useConversationStore, Message } from '../../store/conversationStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useSavedAnswersStore } from '../../store/savedAnswersStore';
 import { useAuthStore } from '../../store/authStore';
-import { aiAPI } from '../../services/api';
+import { aiAPI, feedbackAPI } from '../../services/api';
 import { useUsageStore, isQueryLimitReached } from '../../store/usageStore';
 import ChatBubble from '../../components/ChatBubble';
 import ArrivalLogo from '../../components/ArrivalLogo';
@@ -756,18 +756,35 @@ export default function HomeScreen() {
                       data={textMessages}
                       keyboardDismissMode="on-drag"
                       keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => (
-                        <ChatBubble
-                          message={item}
-                          onSave={item.role === 'assistant' ? () => {
-                            saveAnswer({
-                              id: item.id, question: '', answer: item.content,
-                              source: item.source, trade: currentConversation?.trade || 'General',
-                              savedAt: new Date(),
-                            });
-                          } : undefined}
-                        />
-                      )}
+                      renderItem={({ item, index }) => {
+                        // Find preceding user message for feedback logging
+                        const prevUserMsg = item.role === 'assistant'
+                          ? textMessages.slice(0, index).reverse().find(m => m.role === 'user')
+                          : undefined;
+
+                        return (
+                          <ChatBubble
+                            message={item}
+                            onSave={item.role === 'assistant' ? () => {
+                              saveAnswer({
+                                id: item.id, question: '', answer: item.content,
+                                source: item.source, trade: currentConversation?.trade || 'General',
+                                savedAt: new Date(),
+                              });
+                            } : undefined}
+                            onFeedback={item.role === 'assistant' ? (rating, feedbackText) => {
+                              feedbackAPI.submit({
+                                question: prevUserMsg?.content || '',
+                                answer: item.content,
+                                rating,
+                                feedback_text: feedbackText,
+                                source: item.source,
+                                conversation_id: currentConversation?.id,
+                              }).catch(() => {}); // Fire-and-forget
+                            } : undefined}
+                          />
+                        );
+                      }}
                       contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8, paddingTop: 4 }}
                       showsVerticalScrollIndicator={false}
                       inverted={false}

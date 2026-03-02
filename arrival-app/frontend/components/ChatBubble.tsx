@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { Message } from '../store/conversationStore';
@@ -7,6 +7,9 @@ import { Message } from '../store/conversationStore';
 interface ChatBubbleProps {
   message: Message;
   onSave?: () => void;
+  onFeedback?: (rating: 'positive' | 'negative', feedbackText?: string) => void;
+  /** The user's question that preceded this answer (for feedback logging) */
+  userQuestion?: string;
 }
 
 const ALERT_COLORS = {
@@ -26,11 +29,14 @@ const ALERT_COLORS = {
   },
 };
 
-export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
+export default function ChatBubble({ message, onSave, onFeedback, userQuestion }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const isAlert = !!message.alertType;
   const alertConfig = message.alertType ? ALERT_COLORS[message.alertType] : null;
   const [saved, setSaved] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<'positive' | 'negative' | null>(null);
+  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
 
   const handleLongPress = () => {
     if (isUser || !onSave) return;
@@ -48,6 +54,28 @@ export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
         },
       ]
     );
+  };
+
+  const handleThumbsUp = () => {
+    if (feedbackGiven) return;
+    setFeedbackGiven('positive');
+    onFeedback?.('positive');
+  };
+
+  const handleThumbsDown = () => {
+    if (feedbackGiven) return;
+    setFeedbackGiven('negative');
+    setShowFeedbackInput(true);
+  };
+
+  const handleSubmitFeedback = () => {
+    onFeedback?.('negative', feedbackText || undefined);
+    setShowFeedbackInput(false);
+  };
+
+  const handleSkipFeedback = () => {
+    onFeedback?.('negative');
+    setShowFeedbackInput(false);
   };
 
   const bubble = (
@@ -108,6 +136,57 @@ export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
           <Text style={styles.confidenceLabel}>
             {message.confidence} confidence
           </Text>
+        </View>
+      )}
+
+      {/* Feedback thumbs — only on assistant messages */}
+      {!isUser && onFeedback && (
+        <View style={styles.feedbackRow}>
+          {feedbackGiven ? (
+            <View style={styles.feedbackDone}>
+              <Ionicons
+                name={feedbackGiven === 'positive' ? 'thumbs-up' : 'thumbs-down'}
+                size={12}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.feedbackDoneText}>
+                {feedbackGiven === 'positive' ? 'Thanks!' : 'Noted'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity onPress={handleThumbsUp} style={styles.feedbackBtn} hitSlop={8}>
+                <Ionicons name="thumbs-up-outline" size={14} color={Colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleThumbsDown} style={styles.feedbackBtn} hitSlop={8}>
+                <Ionicons name="thumbs-down-outline" size={14} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Thumbs-down feedback text input */}
+      {showFeedbackInput && (
+        <View style={styles.feedbackInputContainer}>
+          <TextInput
+            style={styles.feedbackInput}
+            placeholder="What was wrong?"
+            placeholderTextColor={Colors.textSecondary}
+            value={feedbackText}
+            onChangeText={setFeedbackText}
+            multiline
+            maxLength={500}
+            autoFocus
+          />
+          <View style={styles.feedbackInputActions}>
+            <TouchableOpacity onPress={handleSkipFeedback} style={styles.feedbackSkipBtn}>
+              <Text style={styles.feedbackSkipText}>Skip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSubmitFeedback} style={styles.feedbackSendBtn}>
+              <Text style={styles.feedbackSendText}>Send</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -238,6 +317,64 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     textTransform: 'capitalize',
+  },
+  // Feedback styles
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 12,
+  },
+  feedbackBtn: {
+    padding: 4,
+    opacity: 0.7,
+  },
+  feedbackDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  feedbackDoneText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  feedbackInputContainer: {
+    marginTop: 8,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: 10,
+    padding: 8,
+  },
+  feedbackInput: {
+    fontSize: 13,
+    color: Colors.text,
+    minHeight: 36,
+    maxHeight: 80,
+    paddingVertical: 4,
+  },
+  feedbackInputActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 4,
+  },
+  feedbackSkipBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  feedbackSkipText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  feedbackSendBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: Colors.accent,
+    borderRadius: 6,
+  },
+  feedbackSendText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFF',
   },
   savedBadge: {
     flexDirection: 'row',

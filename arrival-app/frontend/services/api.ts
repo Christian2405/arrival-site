@@ -206,6 +206,22 @@ export const savedAnswersAPI = {
   },
 };
 
+// --- Feedback API ---
+
+export const feedbackAPI = {
+  submit: async (data: {
+    question: string;
+    answer: string;
+    rating: 'positive' | 'negative';
+    feedback_text?: string;
+    source?: string;
+    conversation_id?: string;
+  }) => {
+    const response = await api.post('/feedback', data);
+    return response.data;
+  },
+};
+
 // --- Usage API ---
 
 export interface UsageData {
