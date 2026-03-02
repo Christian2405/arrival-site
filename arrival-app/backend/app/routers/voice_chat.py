@@ -184,9 +184,10 @@ async def voice_chat(
         # --- Authenticated flow ---
         t0 = time.monotonic()
 
-        # Detect follow-up: if conversation already has ≥2 messages, skip
-        # slow memory/RAG lookups — context is in the conversation history.
-        is_followup = len(request.conversation_history) >= 2
+        # Detect follow-up: if conversation already has ≥4 messages, skip
+        # memory lookup (slow, ~2s) — but ALWAYS run RAG so uploaded docs
+        # are available regardless of conversation length.
+        is_followup = len(request.conversation_history) >= 4
 
         # 1. Auth + STT in parallel (always needed)
         user_result, transcript = await asyncio.gather(
@@ -208,15 +209,23 @@ async def voice_chat(
 
         logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…'")
 
-        # 2. Context fetch — skip on follow-ups for speed (~2-4s saved)
+        # 2. Context fetch — always run RAG (documents), skip memory on follow-ups
         team_id = None
         memories: list = []
         rag_context: list = []
 
+        t1 = time.monotonic()
         if is_followup:
-            logger.info("[voice-chat] Follow-up detected — skipping memory/RAG")
+            # Follow-up: skip memory but still search documents
+            logger.info("[voice-chat] Follow-up — skipping memory, keeping RAG")
+            phase_results = await asyncio.gather(
+                retrieve_context(user_id, transcript, team_id=None),
+                return_exceptions=True,
+            )
+            rag_context = phase_results[0] if not isinstance(phase_results[0], Exception) else []
+            if isinstance(phase_results[0], Exception):
+                logger.warning(f"RAG retrieval failed: {phase_results[0]}")
         else:
-            t1 = time.monotonic()
             phase_results = await asyncio.gather(
                 get_user_team_id(user_id),
                 retrieve_memories(user_id, transcript),
@@ -232,22 +241,22 @@ async def voice_chat(
                 logger.warning(f"Memory retrieval failed: {phase_results[1]}")
             if isinstance(phase_results[2], Exception):
                 logger.warning(f"RAG retrieval failed: {phase_results[2]}")
-            logger.info(f"[voice-chat] Context fetched in {time.monotonic()-t1:.2f}s")
+        logger.info(f"[voice-chat] Context fetched in {time.monotonic()-t1:.2f}s (rag_results={len(rag_context)})")
 
         # Per-mode response tuning
         if request.mode == "job":
             voice_max_tokens = 200
             voice_prompt_prefix = (
                 "You're a coworker standing next to a tradesperson on a job site. "
-                "You can see what they see through their camera and you're listening to them. "
+                "A camera image may be attached — it shows what they're looking at right now. "
+                "IMPORTANT: Answer the user's spoken question first. Their question is the priority. "
+                "Only reference the camera image if they specifically ask about what they're looking at "
+                "(e.g. 'what is this?', 'what's wrong here?', 'check this out'). "
+                "If they ask a general question or about a specific job/document, ignore the image and answer the question. "
                 "Keep responses to 2-4 sentences. "
-                "If the user responds to something you just said (like an alert or suggestion), "
-                "continue the conversation naturally — pick up where you left off. "
+                "If the user responds to something you just said, continue naturally. "
                 "Don't repeat yourself. Don't re-explain things you already said. "
-                "If an image is attached but unclear or blurry, ignore it and answer the spoken question. "
-                "Never comment on image quality. "
-                "Describe what you actually see, not what you think it might be. "
-                "If you're not sure what something is, describe it rather than guessing."
+                "Never comment on image quality or describe the image unless asked."
             )
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
@@ -263,9 +272,9 @@ async def voice_chat(
                 "Keep your response to 1-3 sentences max. The user is hearing this spoken aloud. "
                 "A camera image may be attached. ONLY reference the image if the user's question is about something they're looking at "
                 "(e.g. 'what is this?', 'what's wrong here?'). "
-                "If they ask a general question, ignore the image and just answer it. "
+                "If they ask a general question or about a specific job/document, ignore the image and answer it. "
+                "Never say you can't help because the image doesn't match the question. "
                 "If the image is unclear or blurry, ignore it. Never comment on image quality. "
-                "Describe what you actually see — don't guess. "
                 "If the user is responding to something you said, continue the conversation naturally. "
                 "Don't repeat yourself or re-ask questions they already answered."
             )
