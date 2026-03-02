@@ -19,7 +19,7 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 # --- Anthropic (Claude) ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-3-5-haiku-20241022")  # Faster model for voice
+ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-4-5-20251001")  # Faster model for voice
 
 # --- Deepgram (Speech-to-Text) ---
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
