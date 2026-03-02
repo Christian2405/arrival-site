@@ -46,6 +46,7 @@ interface ConversationState {
   setCurrentConversation: (conversation: Conversation | null) => void;
   addMessage: (message: Message) => void;
   createNewConversation: (trade?: string) => void;
+  deleteConversation: (id: string) => void;
   setIsRecording: (isRecording: boolean) => void;
   setIsProcessing: (isProcessing: boolean) => void;
   loadConversations: () => Promise<void>;
@@ -187,6 +188,25 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       createdAt: new Date(),
     };
     set({ currentConversation: newConversation });
+  },
+
+  deleteConversation: (id: string) => {
+    const { conversations, currentConversation } = get();
+    const updated = conversations.filter(c => c.id !== id);
+    set({
+      conversations: updated,
+      currentConversation: currentConversation?.id === id ? null : currentConversation,
+    });
+    debouncedSave(updated);
+    // Delete from Supabase (non-blocking)
+    (async () => {
+      try {
+        await supabase.from('messages').delete().eq('conversation_id', id);
+        await supabase.from('conversations').delete().eq('id', id);
+      } catch (e) {
+        console.warn('[conversations] Delete sync error:', e);
+      }
+    })();
   },
 
   addMessage: (message) => {

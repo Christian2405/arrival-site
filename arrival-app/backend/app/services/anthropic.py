@@ -34,6 +34,7 @@ async def chat_with_claude(
     rag_context: list[dict] | None = None,
     max_tokens: int = 1024,
     system_prompt_prefix: str = "",
+    model: str | None = None,
 ) -> dict:
     """
     Send a message (optionally with an image) to Claude and get a response.
@@ -110,9 +111,10 @@ The following excerpts are from the user's uploaded documents. Reference them wh
 When you use information from these documents, cite the filename as your source."""
 
     # Bug #16: Use await with the async client
+    use_model = model or config.ANTHROPIC_MODEL
     t0 = time.monotonic()
     response = await client.messages.create(
-        model=config.ANTHROPIC_MODEL,
+        model=use_model,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
@@ -124,7 +126,7 @@ When you use information from these documents, cite the filename as your source.
 
     resp_text = response.content[0].text
     logger.info(
-        f"[claude] {config.ANTHROPIC_MODEL} max_tokens={max_tokens} "
+        f"[claude] {use_model} max_tokens={max_tokens} "
         f"→ {len(resp_text)} chars in {elapsed:.2f}s "
         f"(input_tokens={response.usage.input_tokens}, output_tokens={response.usage.output_tokens})"
     )

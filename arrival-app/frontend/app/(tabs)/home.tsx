@@ -80,12 +80,13 @@ export default function HomeScreen() {
 
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [convsExpanded, setConvsExpanded] = useState(false);
   const drawerAnim = useRef(new Animated.Value(0)).current;
 
   // Stores
   const {
     currentConversation, conversations, addMessage, createNewConversation, setCurrentConversation,
-    isRecording, isProcessing, setIsRecording, setIsProcessing,
+    deleteConversation, isRecording, isProcessing, setIsRecording, setIsProcessing,
   } = useConversationStore();
   const messages = currentConversation?.messages || [];
 
@@ -533,8 +534,8 @@ export default function HomeScreen() {
 
     const controller = new JobModeController(
       {
-        cooldownAfterSpeaking: 2000,
-        cooldownAfterDismiss: 5000,
+        cooldownAfterSpeaking: 1000,   // Quick turnaround for conversational flow
+        cooldownAfterDismiss: 3000,    // Shorter dismiss cooldown
         maxAlertsPerMinute: 6,
       },
       {
@@ -558,7 +559,7 @@ export default function HomeScreen() {
           try {
             const frame = await captureFrame();
             const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
-            const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+            const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
             // Bug 5: Read demoMode from store at call time
             const currentDemoMode = useSettingsStore.getState().demoMode;
             const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
@@ -577,7 +578,7 @@ export default function HomeScreen() {
         onStateChange: setJobAIState,
       },
       { minInterval: 4000, maxInterval: 15000, changeThreshold: 0.15, captureInterval: 4000 },
-      { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1500, meteringInterval: 100 },
+      { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1200, meteringInterval: 100 },
     );
 
     // Wire up the frame batcher to call analyzeFrame
@@ -898,27 +899,6 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Conversations */}
-          <Text style={styles.drawerSectionTitle}>Recent Conversations</Text>
-          <FlatList
-            data={conversations.slice(0, 20)}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.drawerConvItem}
-                onPress={() => {
-                  setCurrentConversation(item);
-                  toggleDrawer();
-                }}
-              >
-                <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.drawerConvText} numberOfLines={1}>{item.title}</Text>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
-            showsVerticalScrollIndicator={false}
-          />
-
           {/* Navigation links */}
           <View style={styles.drawerNav}>
             {([
@@ -926,6 +906,7 @@ export default function HomeScreen() {
               { icon: 'document-text-outline' as const, label: 'Manuals', route: '/manuals' },
               { icon: 'code-slash-outline' as const, label: 'Codes', route: '/codes' },
               { icon: 'calculator-outline' as const, label: 'Quick Tools', route: '/quick-tools' },
+              { icon: 'settings-outline' as const, label: 'Settings', route: '/settings' },
             ]).map((item) => (
               <TouchableOpacity
                 key={item.route}
@@ -937,6 +918,44 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Conversations — collapsible dropdown */}
+          <TouchableOpacity
+            style={styles.drawerSectionHeader}
+            onPress={() => setConvsExpanded(!convsExpanded)}
+          >
+            <Text style={styles.drawerSectionTitle}>Recent Conversations</Text>
+            <Ionicons name={convsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="rgba(255,255,255,0.4)" />
+          </TouchableOpacity>
+          {convsExpanded && (
+            <FlatList
+              data={conversations.slice(0, 20)}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.drawerConvItem}>
+                  <TouchableOpacity
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                    onPress={() => {
+                      setCurrentConversation(item);
+                      toggleDrawer();
+                    }}
+                  >
+                    <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.5)" />
+                    <Text style={styles.drawerConvText} numberOfLines={1}>{item.title}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => deleteConversation(item.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="rgba(255,255,255,0.3)" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              contentContainerStyle={{ paddingHorizontal: 16 }}
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 300 }}
+            />
+          )}
         </View>
       </Animated.View>
 
@@ -1157,7 +1176,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: Colors.backgroundDark || '#1C1C1E',
+    backgroundColor: '#2C2926',
     zIndex: 11,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
@@ -1194,15 +1213,20 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
   },
+  drawerSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
   drawerSectionTitle: {
     fontSize: 12,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.4)',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
   },
   drawerConvItem: {
     flexDirection: 'row',
@@ -1216,10 +1240,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
   },
   drawerNav: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    paddingTop: 12,
-    paddingBottom: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 4,
+    paddingBottom: 12,
     paddingHorizontal: 20,
     gap: 4,
   },

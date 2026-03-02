@@ -184,7 +184,11 @@ async def voice_chat(
         # --- Authenticated flow ---
         t0 = time.monotonic()
 
-        # 1. Auth + STT in parallel (independent of each other)
+        # Detect follow-up: if conversation already has ≥2 messages, skip
+        # slow memory/RAG lookups — context is in the conversation history.
+        is_followup = len(request.conversation_history) >= 2
+
+        # 1. Auth + STT in parallel (always needed)
         user_result, transcript = await asyncio.gather(
             get_current_user(req),
             transcribe_audio(request.audio_base64),
@@ -204,50 +208,42 @@ async def voice_chat(
 
         logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…'")
 
-        # 2. Memory + team_id + RAG(user-ns) all in parallel
-        t1 = time.monotonic()
-        phase_results = await asyncio.gather(
-            get_user_team_id(user_id),
-            retrieve_memories(user_id, transcript),
-            retrieve_context(user_id, transcript, team_id=None),
-            return_exceptions=True,
-        )
-        team_id = phase_results[0] if not isinstance(phase_results[0], Exception) else None
-        memories = phase_results[1] if not isinstance(phase_results[1], Exception) else []
-        rag_context = phase_results[2] if not isinstance(phase_results[2], Exception) else []
-        if isinstance(phase_results[0], Exception):
-            logger.warning(f"Team ID retrieval failed: {phase_results[0]}")
-        if isinstance(phase_results[1], Exception):
-            logger.warning(f"Memory retrieval failed: {phase_results[1]}")
-        if isinstance(phase_results[2], Exception):
-            logger.warning(f"RAG retrieval failed: {phase_results[2]}")
+        # 2. Context fetch — skip on follow-ups for speed (~2-4s saved)
+        team_id = None
+        memories: list = []
+        rag_context: list = []
 
-        # Quick team namespace search if team_id available
-        if team_id and not isinstance(phase_results[2], Exception):
-            try:
-                # Bug fix: Add timeout to team namespace RAG search
-                team_rag = await asyncio.wait_for(
-                    retrieve_context(user_id, transcript, team_id=team_id),
-                    timeout=4.0,
-                )
-                seen = {r["text"][:200] for r in rag_context}
-                for r in team_rag:
-                    if r["text"][:200] not in seen:
-                        rag_context.append(r)
-                        seen.add(r["text"][:200])
-                rag_context.sort(key=lambda x: x["score"], reverse=True)
-                rag_context = rag_context[:5]
-            except Exception as exc:
-                logger.warning(f"Team RAG search failed (continuing): {exc}")
-
-        logger.info(f"[voice-chat] Context fetched in {time.monotonic()-t1:.2f}s")
+        if is_followup:
+            logger.info("[voice-chat] Follow-up detected — skipping memory/RAG")
+        else:
+            t1 = time.monotonic()
+            phase_results = await asyncio.gather(
+                get_user_team_id(user_id),
+                retrieve_memories(user_id, transcript),
+                retrieve_context(user_id, transcript, team_id=None),
+                return_exceptions=True,
+            )
+            team_id = phase_results[0] if not isinstance(phase_results[0], Exception) else None
+            memories = phase_results[1] if not isinstance(phase_results[1], Exception) else []
+            rag_context = phase_results[2] if not isinstance(phase_results[2], Exception) else []
+            if isinstance(phase_results[0], Exception):
+                logger.warning(f"Team ID retrieval failed: {phase_results[0]}")
+            if isinstance(phase_results[1], Exception):
+                logger.warning(f"Memory retrieval failed: {phase_results[1]}")
+            if isinstance(phase_results[2], Exception):
+                logger.warning(f"RAG retrieval failed: {phase_results[2]}")
+            logger.info(f"[voice-chat] Context fetched in {time.monotonic()-t1:.2f}s")
 
         # Per-mode response tuning
         if request.mode == "job":
             voice_max_tokens = 200
             voice_prompt_prefix = (
-                "Keep responses to 2-4 sentences. You're talking to a tradesperson on a job site. "
-                "Be conversational — like a coworker, not a safety manual. "
+                "You're a coworker standing next to a tradesperson on a job site. "
+                "You can see what they see through their camera and you're listening to them. "
+                "Keep responses to 2-4 sentences. "
+                "If the user responds to something you just said (like an alert or suggestion), "
+                "continue the conversation naturally — pick up where you left off. "
+                "Don't repeat yourself. Don't re-explain things you already said. "
                 "If an image is attached but unclear or blurry, ignore it and answer the spoken question. "
                 "Never comment on image quality. "
                 "Describe what you actually see, not what you think it might be. "
@@ -269,12 +265,14 @@ async def voice_chat(
                 "(e.g. 'what is this?', 'what's wrong here?'). "
                 "If they ask a general question, ignore the image and just answer it. "
                 "If the image is unclear or blurry, ignore it. Never comment on image quality. "
-                "Describe what you actually see — don't guess. Ask what they want to do."
+                "Describe what you actually see — don't guess. "
+                "If the user is responding to something you said, continue the conversation naturally. "
+                "Don't repeat yourself or re-ask questions they already answered."
             )
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default
 
-        # 4. Call Claude chat with transcribed text + image + memories + RAG context + history
+        # 3. Call Claude chat — use fast voice model (Haiku) for low latency
         chat_result = await chat_with_claude(
             message=transcript,
             image_base64=request.image_base64,
@@ -283,16 +281,20 @@ async def voice_chat(
             rag_context=rag_context,
             max_tokens=voice_max_tokens,
             system_prompt_prefix=voice_prompt_prefix,
+            model=config.ANTHROPIC_VOICE_MODEL,
         )
 
-        # 5. Convert AI response to speech (TTS)
+        # 4. Convert AI response to speech (TTS)
         audio_base64 = await text_to_speech(
             chat_result["response"],
             voice_id=tts_voice_id,
             voice_settings=tts_voice_settings,
         )
 
-        # 6. Fire-and-forget: store memory
+        total_elapsed = time.monotonic() - t0
+        logger.info(f"[voice-chat] Total pipeline: {total_elapsed:.2f}s (followup={is_followup})")
+
+        # 5. Fire-and-forget: store memory + log query
         asyncio.create_task(_safe_task(
             store_memory(user_id, [
                 {"role": "user", "content": transcript},
@@ -301,7 +303,6 @@ async def voice_chat(
             task_name="voice_chat_store_memory",
         ))
 
-        # 7. Fire-and-forget: log query for team activity
         async def _log():
             await log_query(
                 user_id=user_id,
