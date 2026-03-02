@@ -20,6 +20,8 @@ from app.services.anthropic import chat_with_claude
 from app.services.elevenlabs import text_to_speech
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
+from app.services.error_codes import lookup_error_code, format_error_code_context
+from app.services.job_context import get_job_context, format_job_context_prompt
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
 
@@ -233,10 +235,22 @@ async def voice_chat(
             logger.warning(f"RAG retrieval failed: {rag_result}")
         logger.info(f"[voice-chat] Usage+RAG done in {time.monotonic()-t1:.2f}s (rag_results={len(rag_context)})")
 
+        # Static error code lookup — instant, no latency
+        error_code_result = lookup_error_code(transcript)
+        error_code_context = format_error_code_context(error_code_result) if error_code_result else ""
+        if error_code_result:
+            logger.info(f"[voice-chat] Error code hit: {error_code_result['brand']} {error_code_result['code']}")
+
         # Per-mode response tuning
         if request.mode == "job":
             voice_max_tokens = 200
+
+            # Get job equipment context if set
+            job_ctx = get_job_context(user_id)
+            job_context_prompt = format_job_context_prompt(job_ctx) + "\n\n" if job_ctx else ""
+
             voice_prompt_prefix = (
+                job_context_prompt +
                 "You're a knowledgeable coworker helping a tradesperson. "
                 "The user is talking to you — answer whatever they ask. "
                 "They might ask about a job, specs from a document, how to do something, "
@@ -248,6 +262,9 @@ async def voice_chat(
                 "Keep responses to 2-4 sentences. "
                 "Continue the conversation naturally. Don't repeat yourself."
             )
+            if error_code_context:
+                voice_prompt_prefix += "\n\n" + error_code_context
+
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
                 "stability": 0.6,
@@ -265,6 +282,9 @@ async def voice_chat(
                 "For any other question, ignore the image completely. Never describe what the camera shows. "
                 "Continue the conversation naturally. Don't repeat yourself."
             )
+            if error_code_context:
+                voice_prompt_prefix += "\n\n" + error_code_context
+
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default
 

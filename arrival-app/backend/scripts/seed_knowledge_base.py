@@ -23,6 +23,7 @@ from app import config
 from app.services.rag import (
     extract_text_from_file,
     chunk_text,
+    chunk_text_smart,
     _get_pinecone_index,
 )
 
@@ -61,7 +62,15 @@ async def index_file(filepath: Path) -> int:
 
     print(f"  Extracted {len(text)} chars from {filename}")
 
-    chunks = chunk_text(text)
+    # Use structure-aware chunking for PDFs/docs (trade manuals)
+    is_structured = filename.lower().endswith((".pdf", ".docx"))
+    if is_structured:
+        chunks = chunk_text_smart(text)
+        if not chunks:
+            chunks = chunk_text(text)  # Fallback
+        print(f"  Smart-chunked into {len(chunks)} chunks")
+    else:
+        chunks = chunk_text(text)
     if not chunks:
         print(f"  SKIP: No chunks produced from {filename}")
         return 0

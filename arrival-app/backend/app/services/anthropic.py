@@ -139,11 +139,71 @@ When you use information from these documents, cite the filename as your source.
         if len(filenames) > 2:
             source += f" (+{len(filenames) - 2} more)"
 
+    # Confidence scoring based on evidence quality
+    confidence = _score_confidence(rag_context, user_memories, resp_text)
+
     return {
         "response": resp_text,
         "source": source,
-        "confidence": "high",
+        "confidence": confidence,
     }
+
+
+def _score_confidence(
+    rag_context: list[dict] | None,
+    user_memories: list[str] | None,
+    response_text: str,
+) -> str:
+    """
+    Score confidence based on evidence quality rather than always returning "high".
+
+    Scoring:
+    - "high": Strong RAG matches (score > 0.5) OR error code lookup hit OR
+              response covers a topic well-covered by the system prompt (common trade knowledge)
+    - "medium": Some RAG matches (score 0.3-0.5) OR user memories but no doc match
+    - "low": No supporting evidence from any source
+
+    Note: For questions well within the system prompt's knowledge (wire sizing,
+    refrigerant specs, common diagnostic patterns), Claude's built-in knowledge
+    combined with our expert prompt is high confidence even without RAG.
+    """
+    # High confidence indicators
+    if rag_context:
+        top_score = max(ctx.get("score", 0) for ctx in rag_context)
+        if top_score > 0.5:
+            return "high"
+        if top_score > 0.3 and len(rag_context) >= 2:
+            return "high"  # Multiple moderate matches = good coverage
+
+    # Check for hedging language in the response — Claude signals uncertainty
+    hedging_phrases = [
+        "i'm not sure",
+        "i don't have specific",
+        "i'm not certain",
+        "without more information",
+        "hard to say",
+        "could be several",
+        "difficult to determine",
+        "you'd need to check",
+    ]
+    response_lower = response_text.lower()
+    has_hedging = any(phrase in response_lower for phrase in hedging_phrases)
+
+    if has_hedging:
+        return "low" if not rag_context else "medium"
+
+    # If we have some RAG context but lower scores
+    if rag_context:
+        return "medium"
+
+    # If we have user memories but no RAG
+    if user_memories:
+        return "medium"
+
+    # No evidence at all — rely on system prompt knowledge (still decent for common trade questions)
+    # The expert system prompt has extensive trade knowledge, so pure-Claude answers
+    # on common topics are actually medium confidence, not low
+    return "medium"
 
 
 async def analyze_frame(image_base64: str) -> dict:

@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers, usage, feedback
+from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers, usage, feedback, job_context
 
 # Configure logging to show INFO level (Render captures stdout)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -86,6 +86,7 @@ app.include_router(queries.router, prefix="/api", tags=["Queries"])
 app.include_router(saved_answers.router, prefix="/api", tags=["Saved Answers"])
 app.include_router(usage.router, prefix="/api", tags=["Usage"])
 app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
+app.include_router(job_context.router, prefix="/api", tags=["Job Context"])
 
 
 # --- Validation error logging (debug 422s) ---

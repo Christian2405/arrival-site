@@ -141,6 +141,102 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return [c for c in chunks if len(c) > 50]
 
 
+# ---------------------------------------------------------------------------
+# Structure-aware chunking — keeps tables, code blocks, and numbered lists intact
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+# Patterns that indicate structural boundaries we should NOT split within
+_SECTION_HEADER = _re.compile(r"^(?:#{1,4}\s|[A-Z][A-Z\s]{3,}$|Chapter\s+\d|Section\s+\d)", _re.MULTILINE)
+_TABLE_ROW = _re.compile(r"^\s*\|.*\|", _re.MULTILINE)
+_NUMBERED_STEP = _re.compile(r"^\s*\d{1,2}[\.\)]\s", _re.MULTILINE)
+_ERROR_CODE_LINE = _re.compile(
+    r"(?:code|error|fault|blink|flash|LED|status)\s*[:=]?\s*(?:[A-Z]?\d{1,4})",
+    _re.IGNORECASE,
+)
+
+
+def chunk_text_smart(text: str, max_chunk_size: int = 3000) -> list[str]:
+    """
+    Structure-aware chunking that keeps related content together.
+
+    Strategy:
+    1. Split text into "sections" using headers and double-newlines.
+    2. Within each section, keep tables, numbered lists, and error code blocks intact.
+    3. If a section exceeds max_chunk_size, fall back to sentence-boundary splitting.
+    4. Small adjacent sections are merged up to max_chunk_size.
+
+    This produces better RAG results for trade manuals because error code tables
+    and troubleshooting steps stay as single chunks instead of being split mid-row.
+    """
+    if not text or len(text) < 20:
+        return []
+
+    # Step 1: Split into sections by double newlines or headers
+    raw_sections = _re.split(r"\n\s*\n", text)
+
+    # Step 2: Further split on headers within sections
+    sections = []
+    for section in raw_sections:
+        # Check if this section contains multiple headers
+        headers = list(_SECTION_HEADER.finditer(section))
+        if len(headers) > 1:
+            # Split at each header
+            for i, match in enumerate(headers):
+                start = match.start()
+                end = headers[i + 1].start() if i + 1 < len(headers) else len(section)
+                sub = section[start:end].strip()
+                if sub:
+                    sections.append(sub)
+        elif section.strip():
+            sections.append(section.strip())
+
+    # Step 3: Merge small sections, keep large ones, split oversized ones
+    chunks = []
+    current_chunk = ""
+
+    for section in sections:
+        # Check if this section has structural content we want to keep intact
+        has_table = bool(_TABLE_ROW.search(section))
+        has_steps = len(_NUMBERED_STEP.findall(section)) >= 2
+        has_error_codes = len(_ERROR_CODE_LINE.findall(section)) >= 2
+        is_structural = has_table or has_steps or has_error_codes
+
+        if is_structural and len(section) <= max_chunk_size:
+            # Flush current buffer
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+            # Keep this structural section as its own chunk
+            chunks.append(section)
+        elif len(current_chunk) + len(section) + 2 <= max_chunk_size:
+            # Merge into current chunk
+            if current_chunk:
+                current_chunk += "\n\n" + section
+            else:
+                current_chunk = section
+        else:
+            # Flush current buffer
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+
+            if len(section) <= max_chunk_size:
+                current_chunk = section
+            else:
+                # Oversized section — fall back to basic splitting
+                sub_chunks = chunk_text(section, chunk_size=max_chunk_size, overlap=200)
+                chunks.extend(sub_chunks)
+
+    # Flush remaining
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    # Filter out very short chunks
+    return [c for c in chunks if len(c) > 50]
+
+
 async def index_document(
     document_id: str,
     user_id: str,
@@ -175,8 +271,16 @@ async def index_document(
             "Minimum is 20 characters for indexing."
         )
 
-    # Chunk
-    chunks = chunk_text(text)
+    # Chunk — use structure-aware chunking for PDFs and docs (trade manuals),
+    # basic chunking for plain text files
+    is_structured = content_type == "application/pdf" or filename.lower().endswith((".pdf", ".docx"))
+    if is_structured:
+        chunks = chunk_text_smart(text)
+        if not chunks:
+            chunks = chunk_text(text)  # Fallback
+        logger.info(f"[rag] Smart-chunked {filename}: {len(chunks)} chunks")
+    else:
+        chunks = chunk_text(text)
     if not chunks:
         logger.warning(f"[rag] No chunks produced from {filename} (text length: {len(text)})")
         return 0

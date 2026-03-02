@@ -222,6 +222,45 @@ export const feedbackAPI = {
   },
 };
 
+// --- Job Context API ---
+
+export interface JobContext {
+  equipment_type: string;
+  brand?: string | null;
+  model?: string | null;
+}
+
+export interface JobContextOptions {
+  equipment_types: string[];
+  brands: string[];
+}
+
+export const jobContextAPI = {
+  set: async (data: {
+    equipment_type: string;
+    brand?: string;
+    model?: string;
+  }): Promise<JobContext> => {
+    const response = await api.post('/job-context', data);
+    return response.data;
+  },
+
+  get: async (): Promise<JobContext | null> => {
+    const response = await api.get('/job-context');
+    return response.data;
+  },
+
+  clear: async () => {
+    const response = await api.delete('/job-context');
+    return response.data;
+  },
+
+  getOptions: async (): Promise<JobContextOptions> => {
+    const response = await api.get('/job-context/options');
+    return response.data;
+  },
+};
+
 // --- Usage API ---
 
 export interface UsageData {

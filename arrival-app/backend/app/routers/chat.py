@@ -20,6 +20,7 @@ from app.services.anthropic import chat_with_claude
 from app.services.memory import retrieve_memories, store_memory
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
+from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
 
@@ -216,6 +217,12 @@ async def chat(
                 if isinstance(phase1_results[1], Exception):
                     logger.warning(f"[chat] Team ID retrieval failed: {phase1_results[1]}")
 
+                # Static error code lookup — instant answers, no RAG latency
+                error_code_result = lookup_error_code(request.message)
+                error_code_context = format_error_code_context(error_code_result) if error_code_result else None
+                if error_code_result:
+                    logger.info(f"[chat] Error code hit: {error_code_result['brand']} {error_code_result['code']}")
+
                 # Phase 2: RAG search (now searches user + global + team namespaces in parallel internally)
                 try:
                     rag_context = await retrieve_context(user_id, request.message, team_id=team_id)
@@ -231,6 +238,7 @@ async def chat(
                     user_memories=memories,
                     rag_context=rag_context,
                     max_tokens=1024,
+                    system_prompt_prefix=error_code_context or "",
                 )
 
                 # Fire-and-forget background tasks
