@@ -227,14 +227,12 @@ async def voice_chat(
             voice_max_tokens = 200
             voice_prompt_prefix = (
                 "You're a knowledgeable coworker helping a tradesperson. "
-                "CRITICAL RULE: Listen to what the user SAYS and answer THAT question. "
-                "Do NOT describe or mention what you see in the camera unless the user explicitly asks "
-                "'what is this?', 'what am I looking at?', 'check this out', or similar. "
-                "If they ask about a job, a document, specs, or anything specific — answer it using the "
-                "document context provided. NEVER say 'I can see your desk' or describe the surroundings. "
-                "Keep responses to 2-4 sentences. "
-                "If the user responds to something you just said, continue naturally. "
-                "Don't repeat yourself."
+                "The user is talking to you — answer whatever they ask. "
+                "They might ask about a job, specs from a document, how to do something, "
+                "or just a general question they didn't want to type out. "
+                "A camera image may be attached as extra context — use it if relevant to their question, "
+                "ignore it if not. Keep responses to 2-4 sentences. "
+                "Continue the conversation naturally. Don't repeat yourself."
             )
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
@@ -248,12 +246,9 @@ async def voice_chat(
             voice_max_tokens = 150
             voice_prompt_prefix = (
                 "Keep your response to 1-3 sentences max. Spoken aloud. "
-                "CRITICAL RULE: Answer the user's spoken question. Do NOT describe the camera image "
-                "unless they explicitly ask about what they're looking at. "
-                "If they ask about a job, document, specs, or anything specific — answer it. "
-                "Never say 'I see your workspace' or describe surroundings. "
-                "If the user responds to something you said, continue naturally. "
-                "Don't repeat yourself."
+                "The user is talking instead of typing — answer whatever they ask. "
+                "A camera image may be attached as extra context — use it if relevant, ignore it if not. "
+                "Continue the conversation naturally. Don't repeat yourself."
             )
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default
