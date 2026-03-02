@@ -43,8 +43,8 @@ class DeleteResponse(BaseModel):
 
 
 class IndexRequest(BaseModel):
-    document_id: str
-    storage_path: str  # Kept for backwards compat, but we look up from DB (Bug #4)
+    document_id: str | None = None  # May be null if Supabase RLS blocks .select() after insert
+    storage_path: str
     team_id: str | None = None  # Bug #1: Optional team_id for team document indexing
 
 
@@ -183,30 +183,30 @@ async def index_doc(body: IndexRequest, request: Request):
         if not config.PINECONE_API_KEY:
             return IndexResponse(success=False, chunks_indexed=0, message="Pinecone not configured")
 
-        # Bug #3 & #4: Look up the document from the DB to verify ownership
-        # AND get the trusted storage_path (instead of trusting client value)
+        # Look up the document from the DB to verify ownership
         import httpx
-        doc_resp = await _lookup_document(body.document_id, user_token)
+        doc_resp = None
+        if body.document_id:
+            doc_resp = await _lookup_document(body.document_id, user_token)
+        if doc_resp is None:
+            # Fallback: look up by storage_path (handles null document_id from RLS issues)
+            doc_resp = await _lookup_document_by_path(body.storage_path, user_token)
         if doc_resp is None:
             raise HTTPException(
                 status_code=403,
                 detail="Document not found or you don't have access to it"
             )
 
-        # Use the DB-sourced storage_path, not the client-provided one (Bug #4)
+        # Use the DB-sourced values as source of truth
         trusted_storage_path = doc_resp["storage_path"]
-        # Use DB team_id as source of truth — don't let client override
+        document_id = doc_resp["id"]
         doc_team_id = doc_resp.get("team_id") or body.team_id
-        # If DB already has a team_id, always prefer it over client value
         if doc_resp.get("team_id"):
             doc_team_id = doc_resp["team_id"]
 
-        # Bug #4: Additional validation — storage_path must not contain path traversal
+        # Validation — storage_path must not contain path traversal
         if ".." in trusted_storage_path:
             raise HTTPException(status_code=400, detail="Invalid storage path")
-        # Validate expected pattern: {user_id_or_uuid}/{timestamp}_{filename}
-        if not re.match(r'^[a-zA-Z0-9\-]+/[0-9]+_.+$', trusted_storage_path):
-            raise HTTPException(status_code=400, detail="Storage path does not match expected pattern")
 
         # Download the file from Supabase Storage
         storage_url = (
@@ -245,7 +245,7 @@ async def index_doc(body: IndexRequest, request: Request):
 
             # Index via RAG pipeline (Bug #1: pass team_id)
             chunks = await index_document(
-                document_id=body.document_id,
+                document_id=document_id,
                 user_id=user_id,
                 filename=filename,
                 file_bytes=file_bytes,
@@ -305,5 +305,40 @@ async def _lookup_document(document_id: str, user_token: str) -> dict | None:
                 return rows[0]
     except Exception as e:
         logger.warning(f"[documents] Document lookup failed: {e}")
+
+    return None
+
+
+async def _lookup_document_by_path(storage_path: str, user_token: str) -> dict | None:
+    """
+    Look up a document by storage_path when document_id is null.
+    Handles the case where Supabase RLS blocks .select() after .insert(),
+    so the dashboard doesn't get the document ID back.
+    """
+    import httpx
+    if not config.SUPABASE_URL:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{config.SUPABASE_URL}/rest/v1/documents",
+                headers={
+                    "apikey": config.SUPABASE_ANON_KEY,
+                    "Authorization": f"Bearer {user_token}",
+                    "Content-Type": "application/json",
+                },
+                params={
+                    "storage_path": f"eq.{storage_path}",
+                    "select": "id,storage_path,uploaded_by,team_id",
+                    "limit": "1",
+                },
+            )
+            resp.raise_for_status()
+            rows = resp.json()
+            if rows:
+                return rows[0]
+    except Exception as e:
+        logger.warning(f"[documents] Document lookup by path failed: {e}")
 
     return None
