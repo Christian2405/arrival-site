@@ -685,9 +685,14 @@ export default function HomeScreen() {
               voiceAllowed={tierLimits.voiceOutput}
             />
 
-            <TouchableOpacity onPress={() => createNewConversation()} style={styles.iconBtn}>
-              <Ionicons name="add-circle-outline" size={24} color="#FFF" />
-            </TouchableOpacity>
+            {messages.length > 0 ? (
+              <TouchableOpacity onPress={() => createNewConversation()} style={styles.newSessionBtn}>
+                <Ionicons name="refresh" size={14} color="#FFF" />
+                <Text style={styles.newSessionText}>New</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.iconBtn} />
+            )}
           </View>
 
           {/* Demo mode badge */}
@@ -929,7 +934,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           {convsExpanded && (
             <FlatList
-              data={conversations.slice(0, 20)}
+              data={conversations.filter(c => c.messages.length > 0).slice(0, 20)}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <View style={styles.drawerConvItem}>
@@ -998,6 +1003,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.glassDark,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  newSessionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.glassDark,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 4,
+  },
+  newSessionText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // --- Demo badge ---

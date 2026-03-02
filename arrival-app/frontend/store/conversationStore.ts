@@ -180,6 +180,23 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   setIsProcessing: (isProcessing) => set({ isProcessing }),
 
   createNewConversation: (trade?: string) => {
+    const { currentConversation, conversations } = get();
+
+    // Save the current conversation to the list before creating a new one
+    if (currentConversation && currentConversation.messages.length > 0) {
+      const existingIndex = conversations.findIndex(c => c.id === currentConversation.id);
+      let updatedConversations;
+      if (existingIndex >= 0) {
+        updatedConversations = [...conversations];
+        updatedConversations[existingIndex] = currentConversation;
+      } else {
+        updatedConversations = [currentConversation, ...conversations];
+      }
+      set({ conversations: updatedConversations });
+      debouncedSave(updatedConversations);
+      syncConversationToSupabase(currentConversation).catch(() => {});
+    }
+
     const newConversation: Conversation = {
       id: generateId(),
       title: 'New Conversation',
