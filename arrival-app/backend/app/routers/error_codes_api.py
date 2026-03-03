@@ -9,6 +9,56 @@ from app.services.error_codes import ERROR_CODE_DB
 
 router = APIRouter()
 
+# Brand display name overrides (where .title() doesn't produce the right result)
+_BRAND_DISPLAY_NAMES = {
+    "ao_smith": "AO Smith",
+    "bradford_white": "Bradford White",
+}
+
+
+def _brand_display_name(brand_key: str) -> str:
+    """Convert brand_key (e.g. 'ao_smith') to display name (e.g. 'AO Smith')."""
+    return _BRAND_DISPLAY_NAMES.get(brand_key, brand_key.replace("_", " ").title())
+
+
+def _flatten_brand_codes(brand_data: dict) -> list[dict]:
+    """
+    Flatten the nested brand structure (equipment_type → codes) into a flat list.
+    ERROR_CODE_DB is: brand → { equipment_type: { code: { meaning, causes, fix } } }
+    Returns: [{ code, meaning, causes, fix, equipment_type }, ...]
+    """
+    flat = []
+    for equip_type, codes in brand_data.items():
+        if not isinstance(codes, dict):
+            continue
+        for code_key, info in codes.items():
+            if not isinstance(info, dict):
+                continue
+            flat.append({
+                "code": code_key,
+                "meaning": info.get("meaning", ""),
+                "causes": info.get("causes", []),
+                "fix": info.get("fix", ""),
+                "equipment_type": equip_type,
+            })
+    return flat
+
+
+def _count_brand_codes(brand_data: dict) -> int:
+    """Count total unique codes across all equipment types for a brand."""
+    total = 0
+    seen_equip_dicts = set()  # Avoid double-counting aliased equipment types
+    for equip_type, codes in brand_data.items():
+        if not isinstance(codes, dict):
+            continue
+        # Multiple equipment type keys can point to the same dict (aliases)
+        dict_id = id(codes)
+        if dict_id in seen_equip_dicts:
+            continue
+        seen_equip_dicts.add(dict_id)
+        total += len(codes)
+    return total
+
 
 @router.get("/error-codes")
 async def get_brands():
@@ -17,18 +67,12 @@ async def get_brands():
     Used by the frontend Codes page to show the brand list.
     """
     brands = []
-    for brand_key, codes in ERROR_CODE_DB.items():
-        # Convert brand_key to display name
-        display_name = brand_key.replace("_", " ").title()
-        if brand_key == "ao_smith":
-            display_name = "AO Smith"
-        elif brand_key == "bradford_white":
-            display_name = "Bradford White"
-
+    for brand_key, brand_data in ERROR_CODE_DB.items():
+        code_count = _count_brand_codes(brand_data)
         brands.append({
             "id": brand_key,
-            "name": display_name,
-            "code_count": len(codes),
+            "name": _brand_display_name(brand_key),
+            "code_count": code_count,
         })
 
     # Sort by name
@@ -39,33 +83,37 @@ async def get_brands():
 @router.get("/error-codes/{brand_id}")
 async def get_brand_codes(brand_id: str):
     """
-    Returns all error codes for a specific brand.
+    Returns all error codes for a specific brand, flattened across equipment types.
     """
-    codes = ERROR_CODE_DB.get(brand_id, {})
-    if not codes:
-        return {"brand": brand_id, "codes": []}
+    brand_data = ERROR_CODE_DB.get(brand_id, {})
+    if not brand_data:
+        return {"brand": brand_id, "brand_id": brand_id, "codes": []}
 
-    # Convert to list format
+    # Flatten nested structure and deduplicate aliased equipment types
+    seen_equip_dicts = set()
     code_list = []
-    for code, info in codes.items():
-        code_list.append({
-            "code": code,
-            "meaning": info.get("meaning", ""),
-            "causes": info.get("causes", []),
-            "fix": info.get("fix", ""),
-        })
+    for equip_type, codes in brand_data.items():
+        if not isinstance(codes, dict):
+            continue
+        dict_id = id(codes)
+        if dict_id in seen_equip_dicts:
+            continue
+        seen_equip_dicts.add(dict_id)
+        for code_key, info in codes.items():
+            if not isinstance(info, dict):
+                continue
+            code_list.append({
+                "code": code_key,
+                "meaning": info.get("meaning", ""),
+                "causes": info.get("causes", []),
+                "fix": info.get("fix", ""),
+            })
 
     # Sort codes naturally
     code_list.sort(key=lambda c: c["code"])
 
-    display_name = brand_id.replace("_", " ").title()
-    if brand_id == "ao_smith":
-        display_name = "AO Smith"
-    elif brand_id == "bradford_white":
-        display_name = "Bradford White"
-
     return {
-        "brand": display_name,
+        "brand": _brand_display_name(brand_id),
         "brand_id": brand_id,
         "codes": code_list,
     }

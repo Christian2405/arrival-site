@@ -92,7 +92,10 @@ export default function ManualsScreen() {
   const sections = Object.entries(groupedDocs)
     .map(([category, data]) => ({
       title: category,
-      data,
+      // When collapsed, pass empty data so SectionList renders no items
+      // (returning null from renderItem still allocates space for separators)
+      data: collapsedCategories.has(category) ? [] : data,
+      _fullCount: data.length, // Keep original count for the section header badge
     }))
     .sort((a, b) => {
       const configA = getCategoryConfig(a.title);
@@ -281,7 +284,7 @@ export default function ManualsScreen() {
                 </View>
                 <Text style={styles.sectionTitle}>{config.label}</Text>
                 <View style={styles.sectionCountBadge}>
-                  <Text style={styles.sectionCountText}>{section.data.length}</Text>
+                  <Text style={styles.sectionCountText}>{(section as any)._fullCount ?? section.data.length}</Text>
                 </View>
                 <Ionicons
                   name={isCollapsed ? 'chevron-forward' : 'chevron-down'}
@@ -291,8 +294,7 @@ export default function ManualsScreen() {
               </TouchableOpacity>
             );
           }}
-          renderItem={({ item, section }) => {
-            if (collapsedCategories.has(section.title)) return null;
+          renderItem={({ item }) => {
             return (
               <TouchableOpacity style={styles.manualCard} onPress={() => openDocument(item)} activeOpacity={0.6}>
                 <View style={styles.manualIcon}>

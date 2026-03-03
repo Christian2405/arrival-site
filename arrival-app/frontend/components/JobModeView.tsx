@@ -11,6 +11,7 @@ export type QuickActionType = 'text' | 'explain' | 'walkthrough';
 export interface JobAlert {
   message: string;
   severity: string;
+  ts?: number; // Timestamp to force useEffect re-trigger on identical messages
 }
 
 interface JobModeViewProps {

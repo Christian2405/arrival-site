@@ -60,7 +60,7 @@ export default function HomeScreen() {
   const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
   const [jobPaused, setJobPaused] = useState(false);
   const jobControllerRef = useRef<JobModeController | null>(null);
-  const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string } | null>(null);
+  const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string; ts: number } | null>(null);
   const jobAlertHistoryRef = useRef<string[]>([]);
 
   // Text Mode state
@@ -546,7 +546,7 @@ export default function HomeScreen() {
         onAlert: async (message, severity) => {
           // Track alert for session memory + quick action chips
           jobAlertHistoryRef.current.push(message);
-          setLastJobAlert({ message, severity });
+          setLastJobAlert({ message, severity, ts: Date.now() });
 
           addMessage({
             id: generateId(), role: 'assistant', content: message,
@@ -923,18 +923,28 @@ export default function HomeScreen() {
                     const currentDemoMode = useSettingsStore.getState().demoMode;
 
                     setJobAIState('processing');
-                    const result = await aiAPI.voiceChat(followUpText, frame, history, currentDemoMode, 'job');
+
+                    // Use text chat API (not voiceChat) since we're sending a text prompt, not audio.
+                    // voiceChat expects audio_base64 as first arg — sending text would cause a backend error.
+                    const chatResult = await aiAPI.chat(followUpText, frame, history, currentDemoMode);
 
                     addMessage({
-                      id: generateId(), role: 'assistant', content: result.response,
-                      source: result.source, confidence: validateConfidence(result.confidence),
+                      id: generateId(), role: 'assistant', content: chatResult.response,
+                      source: chatResult.source, confidence: validateConfidence(chatResult.confidence),
                       displayMode: 'job', timestamp: new Date(),
                     });
 
-                    if (result.audio_base64) {
-                      setJobAIState('speaking');
-                      await playAudio(result.audio_base64);
+                    // TTS the response so the tech hears it hands-free
+                    try {
+                      const ttsResp = await aiAPI.textToSpeech(chatResult.response, currentDemoMode);
+                      if (ttsResp.audio_base64) {
+                        setJobAIState('speaking');
+                        await playAudio(ttsResp.audio_base64);
+                      }
+                    } catch (ttsErr) {
+                      console.log('Job Mode quick action TTS error:', ttsErr);
                     }
+
                     setJobAIState('monitoring');
                   } catch (e) {
                     console.log('Job Mode quick action error:', e);
