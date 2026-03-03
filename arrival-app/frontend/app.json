@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Arrival",
+    "name": "Arrival AI",
     "slug": "arrival",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,24 +14,41 @@
       "backgroundColor": "#FFFFF5"
     },
     "ios": {
+      "bundleIdentifier": "com.arrivalcompany.arrival",
+      "buildNumber": "2",
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "Arrival uses the camera to see equipment and help diagnose issues.",
-        "NSMicrophoneUsageDescription": "Arrival uses the microphone for hands-free voice commands."
+        "NSMicrophoneUsageDescription": "Arrival uses the microphone for hands-free voice commands.",
+        "NSPhotoLibraryUsageDescription": "Arrival uses your photo library to analyze images of equipment and job sites."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.arrivalcompany.arrival",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFF5"
       },
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4fce28da-5d33-4da1-870e-d52d51d283e3"
+      },
+      "router": {}
     },
     "plugins": [
       "expo-router",
@@ -48,6 +65,7 @@
         }
       ],
       "expo-web-browser"
-    ]
+    ],
+    "owner": "christianfladgate"
   }
 }
