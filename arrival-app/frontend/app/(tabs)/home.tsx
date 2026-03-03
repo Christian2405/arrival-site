@@ -60,6 +60,8 @@ export default function HomeScreen() {
   const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
   const [jobPaused, setJobPaused] = useState(false);
   const jobControllerRef = useRef<JobModeController | null>(null);
+  const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string } | null>(null);
+  const jobAlertHistoryRef = useRef<string[]>([]);
 
   // Text Mode state
   const [inputText, setInputText] = useState('');
@@ -518,6 +520,8 @@ export default function HomeScreen() {
     // Bug fix: Reset jobPaused so re-entering job mode doesn't have stale pause state
     setJobPaused(false);
     setJobAIState('monitoring');
+    setLastJobAlert(null);
+    jobAlertHistoryRef.current = [];
 
     setInteractionMode(newMode);
   }, [interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
@@ -540,6 +544,10 @@ export default function HomeScreen() {
       },
       {
         onAlert: async (message, severity) => {
+          // Track alert for session memory + quick action chips
+          jobAlertHistoryRef.current.push(message);
+          setLastJobAlert({ message, severity });
+
           addMessage({
             id: generateId(), role: 'assistant', content: message,
             alertType: severity === 'critical' ? 'critical' : 'warning',
@@ -581,10 +589,11 @@ export default function HomeScreen() {
       { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1200, meteringInterval: 100 },
     );
 
-    // Wire up the frame batcher to call analyzeFrame
+    // Wire up the frame batcher to call analyzeFrame with session memory
     controller.frameBatcher['config'].onAnalyze = async (frame: string) => {
       try {
-        const result = await aiAPI.analyzeFrame(frame);
+        const recentAlerts = jobAlertHistoryRef.current.slice(-5);
+        const result = await aiAPI.analyzeFrame(frame, recentAlerts);
         if (result.alert && result.message) {
           await controller.handleFrameAlert(result.message, result.severity || 'warning');
         }
@@ -599,6 +608,9 @@ export default function HomeScreen() {
     return () => {
       controller.stop();
       jobControllerRef.current = null;
+      // Clear alert state when leaving Job Mode
+      setLastJobAlert(null);
+      jobAlertHistoryRef.current = [];
     };
   }, [interactionMode, permission?.granted]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -889,6 +901,46 @@ export default function HomeScreen() {
                   setJobPaused(!jobPaused);
                 }}
                 isPaused={jobPaused}
+                lastAlert={lastJobAlert}
+                onQuickAction={async (action, alertMsg) => {
+                  if (action === 'text') return; // Handled internally by JobModeView
+
+                  // Build follow-up prompt based on action type
+                  const followUpText = action === 'explain'
+                    ? `You just told me: "${alertMsg}". Explain that in more detail.`
+                    : `You just told me: "${alertMsg}". Walk me through fixing this step by step.`;
+
+                  try {
+                    // Add user follow-up to conversation
+                    addMessage({
+                      id: generateId(), role: 'user', content: followUpText,
+                      displayMode: 'job', timestamp: new Date(),
+                    });
+
+                    const frame = await captureFrame();
+                    const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+                    const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+                    const currentDemoMode = useSettingsStore.getState().demoMode;
+
+                    setJobAIState('processing');
+                    const result = await aiAPI.voiceChat(followUpText, frame, history, currentDemoMode, 'job');
+
+                    addMessage({
+                      id: generateId(), role: 'assistant', content: result.response,
+                      source: result.source, confidence: validateConfidence(result.confidence),
+                      displayMode: 'job', timestamp: new Date(),
+                    });
+
+                    if (result.audio_base64) {
+                      setJobAIState('speaking');
+                      await playAudio(result.audio_base64);
+                    }
+                    setJobAIState('monitoring');
+                  } catch (e) {
+                    console.log('Job Mode quick action error:', e);
+                    setJobAIState('monitoring');
+                  }
+                }}
               />
             </View>
           )}
@@ -909,16 +961,10 @@ export default function HomeScreen() {
         transform: [{ translateX: drawerAnim.interpolate({ inputRange: [0, 1], outputRange: [-DRAWER_WIDTH, 0] }) }],
         width: DRAWER_WIDTH,
       }]}>
-        <View style={[styles.drawerContent, { paddingTop: insets.top + 16 }]}>
-          {/* Profile section */}
-          <View style={styles.drawerProfile}>
-            <View style={styles.drawerAvatar}>
-              <Ionicons name="person" size={24} color="#FFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.drawerName}>{displayName}</Text>
-              <Text style={styles.drawerPlan}>{(plan || 'free').charAt(0).toUpperCase() + (plan || 'free').slice(1)} Plan</Text>
-            </View>
+        <View style={[styles.drawerContent, { paddingTop: insets.top + 12 }]}>
+          {/* Logo at top */}
+          <View style={styles.drawerLogoSection}>
+            <ArrivalLogo width={110} color={Colors.text} />
           </View>
 
           {/* Navigation links */}
@@ -926,17 +972,19 @@ export default function HomeScreen() {
             {([
               { icon: 'bookmark-outline' as const, label: 'Saved Answers', route: '/saved-answers' },
               { icon: 'document-text-outline' as const, label: 'Manuals', route: '/manuals' },
-              { icon: 'code-slash-outline' as const, label: 'Codes', route: '/codes' },
+              { icon: 'code-slash-outline' as const, label: 'Error Codes', route: '/codes' },
               { icon: 'calculator-outline' as const, label: 'Quick Tools', route: '/quick-tools' },
-              { icon: 'settings-outline' as const, label: 'Settings', route: '/settings' },
             ]).map((item) => (
               <TouchableOpacity
                 key={item.route}
                 style={styles.drawerNavItem}
                 onPress={() => { toggleDrawer(); router.push(item.route as any); }}
               >
-                <Ionicons name={item.icon} size={20} color="rgba(255,255,255,0.7)" />
+                <View style={styles.drawerNavIcon}>
+                  <Ionicons name={item.icon} size={18} color={Colors.accent} />
+                </View>
                 <Text style={styles.drawerNavText}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />
               </TouchableOpacity>
             ))}
           </View>
@@ -947,7 +995,7 @@ export default function HomeScreen() {
             onPress={() => setConvsExpanded(!convsExpanded)}
           >
             <Text style={styles.drawerSectionTitle}>Recent Conversations</Text>
-            <Ionicons name={convsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="rgba(255,255,255,0.4)" />
+            <Ionicons name={convsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textFaint} />
           </TouchableOpacity>
           {convsExpanded && (
             <FlatList
@@ -962,22 +1010,42 @@ export default function HomeScreen() {
                       toggleDrawer();
                     }}
                   >
-                    <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.5)" />
+                    <Ionicons name="chatbubble-outline" size={15} color={Colors.textMuted} />
                     <Text style={styles.drawerConvText} numberOfLines={1}>{item.title}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => deleteConversation(item.id)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Ionicons name="trash-outline" size={16} color="rgba(255,255,255,0.3)" />
+                    <Ionicons name="trash-outline" size={15} color={Colors.textFaint} />
                   </TouchableOpacity>
                 </View>
               )}
-              contentContainerStyle={{ paddingHorizontal: 16 }}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 300 }}
             />
           )}
+
+          {/* Spacer to push profile to bottom */}
+          <View style={{ flex: 1 }} />
+
+          {/* Profile at bottom */}
+          <TouchableOpacity
+            style={styles.drawerProfile}
+            onPress={() => { toggleDrawer(); router.push('/settings' as any); }}
+          >
+            <View style={styles.drawerAvatar}>
+              <Text style={styles.drawerAvatarText}>
+                {(displayName || 'U').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.drawerName}>{displayName}</Text>
+              <Text style={styles.drawerPlan}>{(plan || 'free').charAt(0).toUpperCase() + (plan || 'free').slice(1)} Plan</Text>
+            </View>
+            <Ionicons name="settings-outline" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -1212,42 +1280,56 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: '#2C2926',
+    backgroundColor: '#FFFFF5',
     zIndex: 11,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
     elevation: 20,
   },
   drawerContent: {
     flex: 1,
     paddingHorizontal: 0,
   },
+  drawerLogoSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#EBE7E2',
+  },
   drawerProfile: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingVertical: 16,
     gap: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#EBE7E2',
+    marginBottom: 8,
   },
   drawerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2A2622',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  drawerName: {
-    fontSize: 16,
-    fontWeight: '600',
+  drawerAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#FFF',
+  },
+  drawerName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A1A',
   },
   drawerPlan: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
+    color: '#A09A93',
+    marginTop: 1,
   },
   drawerSectionHeader: {
     flexDirection: 'row',
@@ -1258,10 +1340,10 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   drawerSectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A09A93',
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   drawerConvItem: {
@@ -1273,26 +1355,33 @@ const styles = StyleSheet.create({
   drawerConvText: {
     flex: 1,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#1A1A1A',
   },
   drawerNav: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    paddingTop: 4,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
     paddingHorizontal: 20,
-    gap: 4,
+    gap: 2,
+  },
+  drawerNavIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(212, 132, 42, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   drawerNavItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     gap: 12,
   },
   drawerNavText: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.8)',
+    color: '#1A1A1A',
   },
 
   // --- Permission overlay ---

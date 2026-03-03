@@ -122,9 +122,10 @@ export const aiAPI = {
     return response.data;
   },
 
-  analyzeFrame: async (imageBase64: string) => {
+  analyzeFrame: async (imageBase64: string, previousAlerts?: string[]) => {
     const response = await api.post('/analyze-frame', {
       image_base64: imageBase64,
+      previous_alerts: previousAlerts || [],
     });
     return response.data;
   },
@@ -275,6 +276,32 @@ export interface UsageData {
 export const usageAPI = {
   getUsage: async (): Promise<UsageData> => {
     const response = await api.get('/usage');
+    return response.data;
+  },
+};
+
+// --- Error Codes API (public, no auth needed) ---
+
+export interface ErrorCodeBrand {
+  id: string;
+  name: string;
+  code_count: number;
+}
+
+export interface ErrorCode {
+  code: string;
+  meaning: string;
+  causes: string[];
+  fix: string;
+}
+
+export const errorCodesAPI = {
+  getBrands: async (): Promise<{ brands: ErrorCodeBrand[]; total_codes: number }> => {
+    const response = await api.get('/error-codes');
+    return response.data;
+  },
+  getBrandCodes: async (brandId: string): Promise<{ brand: string; brand_id: string; codes: ErrorCode[] }> => {
+    const response = await api.get(`/error-codes/${brandId}`);
     return response.data;
   },
 };

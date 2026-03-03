@@ -10,21 +10,32 @@ import {
   Alert,
   Linking,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Colors } from '../../constants/Colors';
 import { useAuthStore } from '../../store/authStore';
 import { useDocumentsStore, Document, CODE_CATEGORIES } from '../../store/documentsStore';
 import { getTierLimits } from '../../constants/Tiers';
+import { errorCodesAPI, ErrorCodeBrand, ErrorCode } from '../../services/api';
 
-type ViewMode = 'my' | 'team';
+type ViewMode = 'built-in' | 'my-docs' | 'team';
 
 export default function CodesScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('my');
+  const [viewMode, setViewMode] = useState<ViewMode>('built-in');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Built-in error codes state
+  const [brands, setBrands] = useState<ErrorCodeBrand[]>([]);
+  const [totalCodes, setTotalCodes] = useState(0);
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+  const [brandCodes, setBrandCodes] = useState<ErrorCode[]>([]);
+  const [loadingCodes, setLoadingCodes] = useState(false);
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
   const { profile, subscription, teamMembership } = useAuthStore();
   const { personalDocs, teamDocs, loading, fetchDocuments, getSignedUrl } = useDocumentsStore();
@@ -34,32 +45,66 @@ export default function CodesScreen() {
   const userId = profile?.id;
   const teamId = teamMembership?.team_id;
 
-  // Fetch on mount
+  // Fetch brands on mount
   useEffect(() => {
+    loadBrands();
     if (userId) {
       fetchDocuments(userId, teamId);
     }
   }, [userId, teamId]);
 
+  const loadBrands = async () => {
+    try {
+      const data = await errorCodesAPI.getBrands();
+      setBrands(data.brands);
+      setTotalCodes(data.total_codes);
+    } catch (e) {
+      console.log('Failed to load brands:', e);
+    }
+  };
+
+  const loadBrandCodes = async (brandId: string) => {
+    if (selectedBrand === brandId) {
+      setSelectedBrand(null);
+      setBrandCodes([]);
+      return;
+    }
+    setLoadingCodes(true);
+    setSelectedBrand(brandId);
+    try {
+      const data = await errorCodesAPI.getBrandCodes(brandId);
+      setBrandCodes(data.codes);
+    } catch (e) {
+      console.log('Failed to load codes:', e);
+      setBrandCodes([]);
+    }
+    setLoadingCodes(false);
+  };
+
   // Pull-to-refresh
   const onRefresh = useCallback(async () => {
     if (!userId) return;
     setRefreshing(true);
-    await fetchDocuments(userId, teamId);
+    await Promise.all([loadBrands(), fetchDocuments(userId, teamId)]);
     setRefreshing(false);
   }, [userId, teamId]);
 
   // Filter docs by CODE_CATEGORIES
   const sourceList = viewMode === 'team' ? teamDocs : personalDocs;
-  const codeDocs = sourceList.filter((d) =>
-    CODE_CATEGORIES.includes(d.category)
-  );
-
-  // Apply search
+  const codeDocs = sourceList.filter((d) => CODE_CATEGORIES.includes(d.category));
   const filteredDocs = codeDocs.filter((d) =>
     d.file_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Filter built-in codes by search
+  const filteredBrandCodes = searchQuery
+    ? brandCodes.filter(
+        (c) =>
+          c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.meaning.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : brandCodes;
 
   const openDocument = async (doc: Document) => {
     try {
@@ -67,7 +112,7 @@ export default function CodesScreen() {
       if (url) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Error', 'Could not open document. Please try again.');
+        Alert.alert('Error', 'Could not open document.');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to open document.');
@@ -88,121 +133,252 @@ export default function CodesScreen() {
   const categoryLabel = (cat: string) =>
     cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+  // Brand icon mapping
+  const getBrandIcon = (brandId: string): string => {
+    const icons: Record<string, string> = {
+      carrier: 'snow-outline',
+      goodman: 'snow-outline',
+      lennox: 'snow-outline',
+      trane: 'snow-outline',
+      rheem: 'flame-outline',
+      rinnai: 'water-outline',
+      ao_smith: 'water-outline',
+      bradford_white: 'water-outline',
+      daikin: 'snow-outline',
+      mitsubishi: 'snow-outline',
+      fujitsu: 'snow-outline',
+    };
+    return icons[brandId] || 'build-outline';
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#2A2622" />
+          <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Codes</Text>
+        <Text style={styles.headerTitle}>Error Codes</Text>
         <View style={styles.headerRight}>
-          {codeDocs.length > 0 && (
+          {totalCodes > 0 && (
             <View style={styles.countBadge}>
-              <Text style={styles.countText}>{codeDocs.length}</Text>
+              <Text style={styles.countText}>{totalCodes}</Text>
             </View>
           )}
         </View>
       </View>
 
-      {/* Team toggle (business only) */}
-      {tierLimits.teamDocs && teamId && (
-        <View style={styles.toggleContainer}>
-          <View style={styles.toggleBar}>
+      {/* View mode toggle */}
+      <View style={styles.toggleContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toggleScroll}>
+          <TouchableOpacity
+            style={[styles.toggleChip, viewMode === 'built-in' && styles.toggleChipActive]}
+            onPress={() => setViewMode('built-in')}
+          >
+            <Ionicons name="flash" size={14} color={viewMode === 'built-in' ? '#FFF' : Colors.textMuted} />
+            <Text style={[styles.toggleChipText, viewMode === 'built-in' && styles.toggleChipTextActive]}>
+              Built-in Codes
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleChip, viewMode === 'my-docs' && styles.toggleChipActive]}
+            onPress={() => setViewMode('my-docs')}
+          >
+            <Ionicons name="folder-outline" size={14} color={viewMode === 'my-docs' ? '#FFF' : Colors.textMuted} />
+            <Text style={[styles.toggleChipText, viewMode === 'my-docs' && styles.toggleChipTextActive]}>
+              My Docs
+            </Text>
+          </TouchableOpacity>
+          {tierLimits.teamDocs && teamId && (
             <TouchableOpacity
-              style={[styles.toggleBtn, viewMode === 'my' && styles.toggleBtnActive]}
-              onPress={() => setViewMode('my')}
-            >
-              <Text style={[styles.toggleText, viewMode === 'my' && styles.toggleTextActive]}>
-                My Docs
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleBtn, viewMode === 'team' && styles.toggleBtnActive]}
+              style={[styles.toggleChip, viewMode === 'team' && styles.toggleChipActive]}
               onPress={() => setViewMode('team')}
             >
-              <Text style={[styles.toggleText, viewMode === 'team' && styles.toggleTextActive]}>
-                Team Docs
+              <Ionicons name="people-outline" size={14} color={viewMode === 'team' ? '#FFF' : Colors.textMuted} />
+              <Text style={[styles.toggleChipText, viewMode === 'team' && styles.toggleChipTextActive]}>
+                Team
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      )}
+          )}
+        </ScrollView>
+      </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color="#A09A93" />
+          <Ionicons name="search" size={16} color={Colors.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search codes & diagnostics..."
-            placeholderTextColor="#C7C2BC"
+            placeholder={viewMode === 'built-in' ? 'Search error codes...' : 'Search documents...'}
+            placeholderTextColor={Colors.textFaint}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={16} color="#C7C2BC" />
+              <Ionicons name="close-circle" size={16} color={Colors.textFaint} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* Content */}
-      {loading && !refreshing ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color="#2A2622" />
-        </View>
-      ) : filteredDocs.length === 0 ? (
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="document-text-outline" size={40} color="#C7C2BC" />
-          </View>
-          <Text style={styles.emptyTitle}>
-            {searchQuery ? 'No Results' : viewMode === 'team' ? 'No Team Codes' : 'No Codes Yet'}
-          </Text>
-          <Text style={styles.emptySubtitle}>
-            {searchQuery
-              ? 'Try a different search term.'
-              : 'Upload diagnostic workflows and code\ndocuments on the Arrival website to\nreference them here.'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredDocs}
-          keyExtractor={(item) => item.id}
+      {/* BUILT-IN CODES VIEW */}
+      {viewMode === 'built-in' && (
+        <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2A2622" />
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.codeCard} onPress={() => openDocument(item)} activeOpacity={0.6}>
-              <View style={styles.codeIcon}>
-                <Ionicons name="document-text" size={20} color="#2A2622" />
-              </View>
-              <View style={styles.codeInfo}>
-                <Text style={styles.codeTitle} numberOfLines={1}>{item.file_name}</Text>
-                <View style={styles.codeMeta}>
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{categoryLabel(item.category)}</Text>
-                  </View>
-                  <Text style={styles.metaText}>{formatFileSize(item.file_size)}</Text>
-                  <Text style={styles.metaDot}>&middot;</Text>
-                  <Text style={styles.metaText}>{formatDate(item.created_at)}</Text>
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.textDark} />}
+        >
+          {/* Brand grid */}
+          <View style={styles.brandGrid}>
+            {brands.map((brand) => (
+              <TouchableOpacity
+                key={brand.id}
+                style={[styles.brandCard, selectedBrand === brand.id && styles.brandCardActive]}
+                onPress={() => loadBrandCodes(brand.id)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.brandIconWrap, selectedBrand === brand.id && styles.brandIconWrapActive]}>
+                  <Ionicons
+                    name={getBrandIcon(brand.id) as any}
+                    size={20}
+                    color={selectedBrand === brand.id ? '#FFF' : Colors.accent}
+                  />
                 </View>
-                {item.team_id && (
-                  <View style={styles.teamTag}>
-                    <Ionicons name="people-outline" size={11} color="#A09A93" />
-                    <Text style={styles.teamTagText}>Team</Text>
-                  </View>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
-            </TouchableOpacity>
+                <Text style={[styles.brandName, selectedBrand === brand.id && styles.brandNameActive]}>{brand.name}</Text>
+                <Text style={[styles.brandCount, selectedBrand === brand.id && styles.brandCountActive]}>
+                  {brand.code_count} codes
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Selected brand codes */}
+          {selectedBrand && (
+            <View style={styles.codesSection}>
+              {loadingCodes ? (
+                <ActivityIndicator size="small" color={Colors.textDark} style={{ paddingVertical: 20 }} />
+              ) : filteredBrandCodes.length === 0 ? (
+                <Text style={styles.noCodesText}>
+                  {searchQuery ? 'No codes match your search.' : 'No codes available.'}
+                </Text>
+              ) : (
+                filteredBrandCodes.map((code) => {
+                  const isExpanded = expandedCode === `${selectedBrand}_${code.code}`;
+                  return (
+                    <TouchableOpacity
+                      key={code.code}
+                      style={styles.codeItem}
+                      onPress={() => setExpandedCode(isExpanded ? null : `${selectedBrand}_${code.code}`)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.codeHeader}>
+                        <View style={styles.codeBadge}>
+                          <Text style={styles.codeBadgeText}>{code.code}</Text>
+                        </View>
+                        <Text style={styles.codeMeaning} numberOfLines={isExpanded ? undefined : 1}>
+                          {code.meaning}
+                        </Text>
+                        <Ionicons
+                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={16}
+                          color={Colors.textFaint}
+                        />
+                      </View>
+
+                      {isExpanded && (
+                        <View style={styles.codeDetails}>
+                          {code.causes.length > 0 && (
+                            <View style={styles.codeDetailBlock}>
+                              <Text style={styles.codeDetailLabel}>Common Causes</Text>
+                              {code.causes.map((cause, i) => (
+                                <View key={i} style={styles.causeRow}>
+                                  <Text style={styles.causeNumber}>{i + 1}</Text>
+                                  <Text style={styles.causeText}>{cause}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                          {code.fix && (
+                            <View style={styles.codeDetailBlock}>
+                              <Text style={styles.codeDetailLabel}>First Step</Text>
+                              <Text style={styles.fixText}>{code.fix}</Text>
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            style={styles.askArrivalBtn}
+                            onPress={() => {
+                              router.back();
+                              // Navigate home and set message about this code
+                              setTimeout(() => {
+                                router.push('/(tabs)/home' as any);
+                              }, 100);
+                            }}
+                          >
+                            <Ionicons name="chatbubble-outline" size={14} color={Colors.accent} />
+                            <Text style={styles.askArrivalText}>Ask Arrival about this code</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
           )}
-        />
+        </ScrollView>
+      )}
+
+      {/* DOCUMENTS VIEW */}
+      {(viewMode === 'my-docs' || viewMode === 'team') && (
+        loading && !refreshing ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={Colors.textDark} />
+          </View>
+        ) : filteredDocs.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="document-text-outline" size={40} color={Colors.textFaint} />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'No Results' : viewMode === 'team' ? 'No Team Codes' : 'No Uploaded Codes'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {searchQuery
+                ? 'Try a different search term.'
+                : 'Upload diagnostic workflows and code\ndocuments on the Arrival website.'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredDocs}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.textDark} />}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.docCard} onPress={() => openDocument(item)} activeOpacity={0.6}>
+                <View style={styles.docIcon}>
+                  <Ionicons name="document-text" size={20} color={Colors.textDark} />
+                </View>
+                <View style={styles.docInfo}>
+                  <Text style={styles.docTitle} numberOfLines={1}>{item.file_name}</Text>
+                  <View style={styles.docMeta}>
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryText}>{categoryLabel(item.category)}</Text>
+                    </View>
+                    <Text style={styles.metaText}>{formatFileSize(item.file_size)}</Text>
+                    <Text style={styles.metaDot}>&middot;</Text>
+                    <Text style={styles.metaText}>{formatDate(item.created_at)}</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />
+              </TouchableOpacity>
+            )}
+          />
+        )
       )}
     </SafeAreaView>
   );
@@ -211,7 +387,7 @@ export default function CodesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
   },
   header: {
     flexDirection: 'row',
@@ -230,16 +406,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 28,
     fontWeight: '800',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: -0.5,
     marginLeft: 4,
   },
   headerRight: {
-    width: 36,
+    width: 44,
     alignItems: 'center',
   },
   countBadge: {
-    backgroundColor: '#2A2622',
+    backgroundColor: Colors.accent,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -250,37 +426,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Toggle
+  // Toggle chips
   toggleContainer: {
-    paddingHorizontal: 16,
     paddingBottom: 8,
   },
-  toggleBar: {
+  toggleScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  toggleChip: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 3,
-  },
-  toggleBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
-  toggleBtnActive: {
-    backgroundColor: '#2A2622',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
+  toggleChipActive: {
+    backgroundColor: Colors.textDark,
+    borderColor: Colors.textDark,
   },
-  toggleText: {
-    fontSize: 14,
+  toggleChipText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#A09A93',
+    color: Colors.textMuted,
   },
-  toggleTextActive: {
+  toggleChipTextActive: {
     color: '#FFF',
   },
 
@@ -292,7 +466,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 42,
@@ -306,9 +480,164 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#2A2622',
+    color: Colors.textDark,
     paddingVertical: 0,
     letterSpacing: -0.2,
+  },
+
+  // Brand grid
+  brandGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+  brandCard: {
+    width: '31%',
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  brandCardActive: {
+    backgroundColor: Colors.textDark,
+  },
+  brandIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(212, 132, 42, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  brandIconWrapActive: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  brandName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  brandNameActive: {
+    color: '#FFF',
+  },
+  brandCount: {
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  brandCountActive: {
+    color: 'rgba(255,255,255,0.6)',
+  },
+
+  // Codes list
+  codesSection: {
+    gap: 6,
+  },
+  codeItem: {
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  codeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 10,
+  },
+  codeBadge: {
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  codeBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.3,
+  },
+  codeMeaning: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.textDark,
+    letterSpacing: -0.2,
+  },
+  codeDetails: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderWarm,
+    paddingTop: 12,
+    gap: 12,
+  },
+  codeDetailBlock: {
+    gap: 6,
+  },
+  codeDetailLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  causeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  causeNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.accent,
+    width: 16,
+  },
+  causeText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 20,
+  },
+  fixText: {
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 20,
+  },
+  askArrivalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(212, 132, 42, 0.08)',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  askArrivalText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.accent,
+  },
+  noCodesText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: 20,
   },
 
   // Loading
@@ -330,41 +659,36 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2A2622',
+    color: Colors.textDark,
     marginBottom: 8,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#A09A93',
+    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
   },
 
-  // List
+  // Document list
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
     paddingTop: 4,
     gap: 8,
   },
-  codeCard: {
+  docCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     borderRadius: 14,
     padding: 14,
     shadowColor: '#000',
@@ -373,33 +697,33 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  codeIcon: {
+  docIcon: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  codeInfo: {
+  docInfo: {
     flex: 1,
   },
-  codeTitle: {
+  docTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#2A2622',
+    color: Colors.textDark,
     marginBottom: 5,
     letterSpacing: -0.2,
   },
-  codeMeta: {
+  docMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     flexWrap: 'wrap',
   },
   categoryBadge: {
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 5,
@@ -407,26 +731,15 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#A09A93',
+    color: Colors.textMuted,
     letterSpacing: 0.2,
   },
   metaText: {
     fontSize: 12,
-    color: '#C7C2BC',
+    color: Colors.textFaint,
   },
   metaDot: {
     fontSize: 12,
-    color: '#C7C2BC',
-  },
-  teamTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 5,
-  },
-  teamTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#A09A93',
+    color: Colors.textFaint,
   },
 });

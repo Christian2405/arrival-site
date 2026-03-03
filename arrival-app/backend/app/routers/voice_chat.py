@@ -21,6 +21,7 @@ from app.services.elevenlabs import text_to_speech
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
 from app.services.error_codes import lookup_error_code, format_error_code_context
+from app.services.diagnostic_flows import lookup_diagnostic_flow, format_diagnostic_context
 from app.services.job_context import get_job_context, format_job_context_prompt
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
@@ -241,6 +242,14 @@ async def voice_chat(
         if error_code_result:
             logger.info(f"[voice-chat] Error code hit: {error_code_result['brand']} {error_code_result['code']}")
 
+        # Diagnostic flow lookup — if no error code, check for symptom match
+        diagnostic_context = ""
+        if not error_code_result:
+            diag_result = lookup_diagnostic_flow(transcript)
+            if diag_result:
+                diagnostic_context = format_diagnostic_context(diag_result)
+                logger.info(f"[voice-chat] Diagnostic flow hit: {diag_result['title']}")
+
         # Per-mode response tuning
         if request.mode == "job":
             voice_max_tokens = 200
@@ -251,19 +260,34 @@ async def voice_chat(
 
             voice_prompt_prefix = (
                 job_context_prompt +
-                "You're a knowledgeable coworker helping a tradesperson. "
-                "The user is talking to you — answer whatever they ask. "
-                "They might ask about a job, specs from a document, how to do something, "
-                "or just a general question they didn't want to type out. "
-                "A camera image may be attached but ONLY use it if the user explicitly asks about something visual "
-                "(e.g. 'what is this?', 'what do you see?', 'what's wrong here?'). "
-                "For any other question, completely ignore the image and answer based on the spoken question only. "
-                "Never describe the camera view, never say you can see their workspace, never comment on image quality. "
-                "Keep responses to 2-4 sentences. "
-                "Continue the conversation naturally. Don't repeat yourself."
+                "You're an experienced coworker watching over their shoulder. Calm, helpful, not annoying. "
+                "Talk like a person, not a manual. Use contractions. Keep it under 3 sentences unless they ask for more.\n\n"
+
+                "RULES:\n"
+                "- Just answer. Don't start with 'Great question' or 'I'd be happy to help.'\n"
+                "- Don't end with 'Let me know if you have any other questions.' Just stop.\n"
+                "- Don't say 'WARNING' or 'ALERT'. Say 'Hey, heads up...' or 'You might want to check...' or 'That looks like...'\n"
+                "- Use words like 'probably', 'usually', 'most likely' — that's how techs actually talk.\n"
+                "- Lead with the most common cause. '9 times out of 10 that's the capacitor' is better than listing 5 things.\n"
+                "- If they respond to something you said, have a conversation. If they say 'yeah I see it', ask 'want me to walk you through fixing it?' If they say 'it's fine', drop it.\n"
+                "- Don't keep talking after they've acknowledged something. One answer, done, unless they ask more.\n"
+                "- A camera image may be attached but ONLY use it if they explicitly ask about something visual. "
+                "For any other question, completely ignore the image.\n\n"
+
+                "EXAMPLE RESPONSES (this is your tone):\n"
+                "Q: 'What's the superheat target on a TXV system?'\n"
+                "A: 'On a TXV you're looking at subcooling, not superheat — target 10 to 12 degrees. If it's high, you're probably low on charge.'\n\n"
+                "Q: 'This Carrier keeps short cycling'\n"
+                "A: 'On a Carrier that age, check the flame sensor first — pull it out and hit it with some emery cloth. That fixes it probably 80% of the time.'\n\n"
+                "Q: 'What size wire for a 40 amp circuit?'\n"
+                "A: '8 gauge copper. If it's a long run, over 50 feet, bump it up to 6 gauge for voltage drop.'\n\n"
+                "Q: 'Yeah I see the corrosion'\n"
+                "A: 'Want me to walk you through cleaning it up, or are you good?'\n"
             )
             if error_code_context:
                 voice_prompt_prefix += "\n\n" + error_code_context
+            elif diagnostic_context:
+                voice_prompt_prefix += "\n\n" + diagnostic_context
 
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
@@ -276,14 +300,26 @@ async def voice_chat(
         else:
             voice_max_tokens = 150
             voice_prompt_prefix = (
-                "Keep your response to 1-3 sentences max. Spoken aloud. "
-                "The user is talking instead of typing — answer whatever they ask. "
-                "A camera image may be attached but ONLY reference it if the user explicitly asks about something visual. "
-                "For any other question, ignore the image completely. Never describe what the camera shows. "
-                "Continue the conversation naturally. Don't repeat yourself."
+                "Keep it to 1-3 sentences. This is spoken aloud — make it sound natural, not written.\n\n"
+
+                "RULES:\n"
+                "- Just answer. No 'Great question!' No 'I'd be happy to help.'\n"
+                "- Don't end with 'Let me know if you have other questions.' Just stop.\n"
+                "- Use contractions. Say 'you're' not 'you are', 'don't' not 'do not'.\n"
+                "- Use 'probably', 'usually', 'most likely' — that's how people talk.\n"
+                "- A camera image may be attached but ONLY use it if they ask about something visual.\n"
+                "- Continue the conversation naturally. Don't repeat yourself.\n\n"
+
+                "EXAMPLE RESPONSES (match this tone):\n"
+                "Q: 'What causes a furnace to short cycle?'\n"
+                "A: 'Usually it's a dirty flame sensor — pull it and clean it with emery cloth. If that's not it, check your filter, a clogged filter will overheat it and trip the limit switch.'\n\n"
+                "Q: 'How do I check a capacitor?'\n"
+                "A: 'Kill the power, discharge it, then put your meter on microfarads. Compare what you read to what's printed on the cap — if it's more than 10% off, swap it.'\n"
             )
             if error_code_context:
                 voice_prompt_prefix += "\n\n" + error_code_context
+            elif diagnostic_context:
+                voice_prompt_prefix += "\n\n" + diagnostic_context
 
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default

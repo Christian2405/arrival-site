@@ -21,6 +21,7 @@ from app.services.memory import retrieve_memories, store_memory
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
 from app.services.error_codes import lookup_error_code, format_error_code_context
+from app.services.diagnostic_flows import lookup_diagnostic_flow, format_diagnostic_context
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
 
@@ -223,6 +224,14 @@ async def chat(
                 if error_code_result:
                     logger.info(f"[chat] Error code hit: {error_code_result['brand']} {error_code_result['code']}")
 
+                # Diagnostic flow lookup — if no error code match, check for symptom match
+                diagnostic_context = None
+                if not error_code_result:
+                    diag_result = lookup_diagnostic_flow(request.message)
+                    if diag_result:
+                        diagnostic_context = format_diagnostic_context(diag_result)
+                        logger.info(f"[chat] Diagnostic flow hit: {diag_result['title']}")
+
                 # Phase 2: RAG search (now searches user + global + team namespaces in parallel internally)
                 try:
                     rag_context = await retrieve_context(user_id, request.message, team_id=team_id)
@@ -238,7 +247,7 @@ async def chat(
                     user_memories=memories,
                     rag_context=rag_context,
                     max_tokens=1024,
-                    system_prompt_prefix=error_code_context or "",
+                    system_prompt_prefix=error_code_context or diagnostic_context or "",
                 )
 
                 # Fire-and-forget background tasks

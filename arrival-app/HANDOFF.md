@@ -1,7 +1,7 @@
 # Arrival AI — Handoff Document
 ## "50-Year Veteran in Your Pocket" Upgrade
 
-**Last Updated:** March 3, 2026
+**Last Updated:** March 3, 2026 (Evening — Knowledge Expansion)
 **Previous Commit:** `10cefc3` | **Latest:** see git log
 
 ---
@@ -45,13 +45,38 @@ The AI gave generic, shallow responses. System prompt was 12 lines with zero tra
 - Used by `seed_knowledge_base.py` for PDFs/docx files
 
 ### Day 7-8: Static Error Code Lookup
-- **New file:** `backend/app/services/error_codes.py` (~600 lines)
-- Hardcoded dictionary: 9 brands (Rheem, Carrier, Goodman, Lennox, Trane, Rinnai, AO Smith, Daikin, Mitsubishi), 100+ error codes
+- **New file:** `backend/app/services/error_codes.py` (~1900 lines, expanded)
+- Hardcoded dictionary: **11 brands** (Rheem, Carrier, Goodman, Lennox, Trane, Rinnai, AO Smith, Daikin, Mitsubishi, **Bradford White**, **Fujitsu**), **421 error codes**
 - `lookup_error_code(query)` — regex parses natural language ("Rheem furnace blinking 3 times") to extract brand + code
 - `format_error_code_context(result)` — formats as prompt prefix injected before Claude call
-- **Modified:** `backend/app/routers/chat.py` — Error code lookup before Claude call in text chat
-- **Modified:** `backend/app/routers/voice_chat.py` — Error code lookup before Claude call in voice chat
-- Brand aliases (Ruud→Rheem, Bryant→Carrier, Amana→Goodman)
+- **Modified:** `backend/app/routers/chat.py` — Error code + diagnostic flow lookup before Claude call in text chat
+- **Modified:** `backend/app/routers/voice_chat.py` — Error code + diagnostic flow lookup before Claude call in voice chat
+- Brand aliases (Ruud→Rheem, Bryant→Carrier, Amana→Goodman, Bradford→Bradford White)
+
+### Day 7-8 (Expanded): Diagnostic Flow Lookup
+- **New file:** `backend/app/services/diagnostic_flows.py` (~700 lines)
+- 10 complete diagnostic scenarios with step-by-step troubleshooting:
+  1. No Heat — Gas Furnace
+  2. No Cool — Air Conditioning
+  3. No Hot Water — Gas Water Heater
+  4. No Hot Water — Electric Water Heater
+  5. Furnace Short Cycling
+  6. AC Freezing Up / Icing
+  7. Weak Airflow from Vents
+  8. Breaker Keeps Tripping
+  9. Not Enough Hot Water / Runs Out Fast
+  10. Thermostat Not Responding / Blank Screen
+- `lookup_diagnostic_flow(query)` — scores symptom keyword matches to find best diagnostic flow
+- `format_diagnostic_context(result)` — formats as prompt prefix (used when no error code match)
+- Wired into `chat.py`, `voice_chat.py`, and `quality_test.py` — error code takes priority, diagnostic flow is fallback
+
+### Day 7-8 (Expanded): Expert Knowledge Base for RAG
+- **New directory:** `backend/knowledge/` — 3 comprehensive expert knowledge files for Pinecone seeding
+  - `hvac_expert_knowledge.md` (~4000 words) — Furnace diagnostics, AC diagnostics, heat pump specifics, mini-split/ductless
+  - `plumbing_expert_knowledge.md` (~4500 words) — Water heater troubleshooting, drain/waste, supply side, gas piping
+  - `electrical_expert_knowledge.md` (~5000 words) — Panel/breaker diagnostics, circuit diagnostics, motor circuits, safety/code
+- Written from veteran tradesman perspective with specific readings, values, and brand-specific tips
+- **To seed into Pinecone:** `cd backend && python -m scripts.seed_knowledge_base ../knowledge/` (or `./knowledge/`)
 
 ### Day 8: Confidence Scoring
 - **File:** `backend/app/services/anthropic.py` — Added `_score_confidence()` function
@@ -84,7 +109,8 @@ The AI gave generic, shallow responses. System prompt was 12 lines with zero tra
 - **AI:** Anthropic Claude (Sonnet for text chat, Haiku for voice)
 - **STT:** Deepgram Nova-2
 - **TTS:** ElevenLabs Flash v2.5
-- **Voice pipeline:** Record → STT → error code lookup → Claude (with RAG + job context) → TTS
+- **Voice pipeline:** Record → STT → error code lookup → diagnostic flow lookup → Claude (with RAG + job context) → TTS
+- **Instant lookup chain:** Error codes (421 codes, 11 brands) → Diagnostic flows (10 scenarios) → RAG (Pinecone)
 
 ---
 
@@ -127,14 +153,16 @@ The AI gave generic, shallow responses. System prompt was 12 lines with zero tra
 
 2. **Rotate Anthropic API key:** Also shared in chat. Regenerate at console.anthropic.com and update on Render.
 
-3. **Re-run 100-question test** after deploying the error code fixes to see if score improves above 2.7+
+3. ~~**Seed knowledge base files into Pinecone:**~~ ✅ **DONE** (March 3, 2026) — 51 chunks indexed from 3 expert knowledge files (19 HVAC + 15 plumbing + 17 electrical). Total `global_knowledge` namespace: ~692 chunks.
 
-4. **Nice-to-haves (not critical):**
-   - Tier 2 sources (Gray Furnaceman scraping) — already covered by static error code dict
+4. **Re-run 100-question test** after deploying all fixes + knowledge expansion to see if score improves above 2.7+
+
+5. **Nice-to-haves (not critical):**
+   - Tier 2 sources (Gray Furnaceman scraping) — already covered by static error code dict (now 421 codes)
    - Tier 3 ManualsLib — grab specific model manuals as needed
-   - 2 failed PDF downloads (AO Smith Maintenance, NEC Ampacity) — info already covered
+   - 2 failed PDF downloads (AO Smith Maintenance, NEC Ampacity) — info already covered by knowledge base files
 
-5. **Local dev dependencies:** If running scripts locally, you need:
+6. **Local dev dependencies:** If running scripts locally, you need:
    ```bash
    pip3 install anthropic httpx pinecone
    ```
@@ -146,24 +174,29 @@ The AI gave generic, shallow responses. System prompt was 12 lines with zero tra
 ```
 backend/
   app/
-    config.py                    — Expert system prompt (100 lines)
+    config.py                    — Expert system prompt (100 lines), image analysis rules
     main.py                      — Registered feedback + job_context routers
     routers/
-      chat.py                    — max_tokens 1024, error code lookup
-      voice_chat.py              — Error code lookup + job context injection
+      chat.py                    — max_tokens 1024, error code + diagnostic flow lookup
+      voice_chat.py              — Error code + diagnostic flow lookup + job context injection
       feedback.py                — NEW: POST /api/feedback
       job_context.py             — NEW: Job context CRUD endpoints
     services/
       anthropic.py               — _score_confidence(), frame analysis (strict), error code prefix ordering
       rag.py                     — global_knowledge namespace, chunk_text_smart()
-      error_codes.py             — NEW: Static lookup, 9 brands, 100+ codes, strengthened context formatting
+      error_codes.py             — NEW: Static lookup, 11 brands, 421 codes (expanded)
+      diagnostic_flows.py        — NEW: 10 diagnostic scenarios, symptom matching, context formatting
       job_context.py             — NEW: In-memory store with 8hr TTL
+  knowledge/                     — NEW: Expert knowledge files for Pinecone RAG seeding
+    hvac_expert_knowledge.md     — Furnace, AC, heat pump, mini-split diagnostics (~4000 words)
+    plumbing_expert_knowledge.md — Water heaters, drains, supply, gas piping (~4500 words)
+    electrical_expert_knowledge.md — Panels, circuits, motors, safety/code (~5000 words)
   migrations/
     003_create_feedback_table.sql — NEW: Supabase migration (ALREADY RUN)
   scripts/
     download_manuals.py          — NEW: Downloads manufacturer PDFs
-    seed_knowledge_base.py       — NEW: Indexes PDFs to Pinecone
-    quality_test.py              — NEW: 100-question quality test
+    seed_knowledge_base.py       — NEW: Indexes PDFs/md files to Pinecone
+    quality_test.py              — NEW: 100-question quality test (uses error code + diagnostic flow lookup)
     quality_test_questions.csv   — NEW: Questions + expected answers
 
 frontend/

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Colors } from '../../constants/Colors';
 import { useSavedAnswersStore, SavedAnswer } from '../../store/savedAnswersStore';
 
 export default function SavedAnswersScreen() {
@@ -58,11 +59,18 @@ export default function SavedAnswersScreen() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Monochrome confidence: dark for high, medium gray for medium, light for low
-  const getConfidenceColor = (confidence: string): string => {
-    if (confidence === 'high') return '#2A2622';
-    if (confidence === 'medium') return '#A09A93';
-    return '#C7C2BC';
+  const getConfidenceStyle = (confidence: string) => {
+    if (confidence === 'high') return { color: Colors.confidenceHigh, label: 'High' };
+    if (confidence === 'medium') return { color: Colors.confidenceMedium, label: 'Medium' };
+    return { color: Colors.confidenceLow, label: 'Low' };
+  };
+
+  const getTradeColor = (trade: string) => {
+    const lower = trade?.toLowerCase() || '';
+    if (lower.includes('hvac') || lower.includes('heating') || lower.includes('cooling')) return Colors.tradeHvac;
+    if (lower.includes('electric')) return Colors.tradeElectrical;
+    if (lower.includes('plumb')) return Colors.tradePlumbing;
+    return Colors.tradeGeneral;
   };
 
   return (
@@ -70,7 +78,7 @@ export default function SavedAnswersScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#2A2622" />
+          <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Saved Answers</Text>
         <View style={styles.headerRight}>
@@ -86,18 +94,18 @@ export default function SavedAnswersScreen() {
       {answers.length > 0 && (
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={16} color="#A09A93" />
+            <Ionicons name="search" size={16} color={Colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search saved answers..."
-              placeholderTextColor="#C7C2BC"
+              placeholderTextColor={Colors.textFaint}
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={16} color="#C7C2BC" />
+                <Ionicons name="close-circle" size={16} color={Colors.textFaint} />
               </TouchableOpacity>
             )}
           </View>
@@ -108,7 +116,7 @@ export default function SavedAnswersScreen() {
       {filteredAnswers.length === 0 && answers.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="bookmark-outline" size={36} color="#C7C2BC" />
+            <Ionicons name="bookmark-outline" size={36} color={Colors.accent} />
           </View>
           <Text style={styles.emptyTitle}>No saved answers</Text>
           <Text style={styles.emptySubtitle}>
@@ -130,12 +138,16 @@ export default function SavedAnswersScreen() {
             <View style={styles.stepConnector} />
 
             <View style={styles.step}>
-              <View style={styles.stepNumber}>
+              <View style={[styles.stepNumber, { backgroundColor: Colors.accent }]}>
                 <Text style={styles.stepNumberText}>2</Text>
               </View>
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Long-press a response</Text>
-                <Text style={styles.stepHint}>Hold on any AI answer you find useful</Text>
+                <Text style={styles.stepTitle}>Tap the bookmark icon</Text>
+                <Text style={styles.stepHint}>
+                  Each AI response has a{' '}
+                  <Ionicons name="bookmark-outline" size={12} color={Colors.textMuted} />
+                  {' '}icon at the bottom
+                </Text>
               </View>
             </View>
 
@@ -146,16 +158,18 @@ export default function SavedAnswersScreen() {
                 <Text style={styles.stepNumberText}>3</Text>
               </View>
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Tap "Save Answer"</Text>
-                <Text style={styles.stepHint}>It will appear here for quick access</Text>
+                <Text style={styles.stepTitle}>Find it here</Text>
+                <Text style={styles.stepHint}>Saved answers appear on this page for quick access</Text>
               </View>
             </View>
           </View>
         </View>
       ) : filteredAnswers.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="search-outline" size={36} color="#C7C2BC" />
-          <Text style={[styles.emptyTitle, { marginTop: 16 }]}>No results</Text>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="search-outline" size={36} color={Colors.textFaint} />
+          </View>
+          <Text style={styles.emptyTitle}>No results</Text>
           <Text style={styles.emptySubtitle}>
             Try a different search term
           </Text>
@@ -167,7 +181,8 @@ export default function SavedAnswersScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
-            const confidenceColor = getConfidenceColor(item.confidence || 'low');
+            const confidenceStyle = getConfidenceStyle(item.confidence || 'low');
+            const tradeColor = getTradeColor(item.trade || '');
             const isExpanded = expandedId === item.id;
 
             return (
@@ -175,21 +190,21 @@ export default function SavedAnswersScreen() {
                 style={styles.answerCard}
                 activeOpacity={0.6}
                 onPress={() => setExpandedId(isExpanded ? null : item.id)}
-                onLongPress={() => handleDelete(item)}
               >
+                {/* Top row: trade badge + date + confidence + delete */}
                 <View style={styles.answerTop}>
                   <View style={styles.answerTopLeft}>
-                    <View style={styles.answerTradeBadge}>
-                      <Text style={styles.answerTradeText}>{item.trade}</Text>
+                    <View style={[styles.answerTradeBadge, { backgroundColor: tradeColor + '12' }]}>
+                      <Text style={[styles.answerTradeText, { color: tradeColor }]}>{item.trade}</Text>
                     </View>
                     <Text style={styles.answerDate}>{formatDate(item.savedAt)}</Text>
                   </View>
                   <View style={styles.answerTopRight}>
                     {item.confidence && (
                       <View style={styles.confidenceRow}>
-                        <View style={[styles.confidenceDot, { backgroundColor: confidenceColor }]} />
+                        <View style={[styles.confidenceDot, { backgroundColor: confidenceStyle.color }]} />
                         <Text style={styles.confidenceText}>
-                          {item.confidence}
+                          {confidenceStyle.label}
                         </Text>
                       </View>
                     )}
@@ -198,27 +213,45 @@ export default function SavedAnswersScreen() {
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={styles.deleteBtn}
                     >
-                      <Ionicons name="trash-outline" size={15} color="#A09A93" />
+                      <Ionicons name="trash-outline" size={15} color={Colors.textMuted} />
                     </TouchableOpacity>
                   </View>
                 </View>
 
+                {/* Question */}
                 <Text style={styles.answerQuestion} numberOfLines={isExpanded ? undefined : 2}>
                   {item.question}
                 </Text>
-                <Text style={styles.answerPreview} numberOfLines={isExpanded ? undefined : 3}>
-                  {item.answer}
-                </Text>
 
+                {/* Answer preview/full */}
+                <View style={[styles.answerBody, isExpanded && styles.answerBodyExpanded]}>
+                  <Text style={styles.answerPreview} numberOfLines={isExpanded ? undefined : 3}>
+                    {item.answer}
+                  </Text>
+                </View>
+
+                {/* Source */}
                 {item.source && (
                   <View style={styles.sourceRow}>
-                    <Ionicons name="document-text-outline" size={11} color="#A09A93" />
+                    <Ionicons name="document-text-outline" size={11} color={Colors.textMuted} />
                     <Text style={styles.sourceText}>{item.source}</Text>
                   </View>
                 )}
 
+                {/* Expand hint */}
                 {!isExpanded && item.answer.length > 150 && (
-                  <Text style={styles.readMore}>Tap to read more</Text>
+                  <View style={styles.readMoreRow}>
+                    <Text style={styles.readMore}>Tap to read more</Text>
+                    <Ionicons name="chevron-down" size={14} color={Colors.accent} />
+                  </View>
+                )}
+
+                {/* Collapsed indicator */}
+                {isExpanded && item.answer.length > 150 && (
+                  <View style={styles.readMoreRow}>
+                    <Text style={styles.readMore}>Tap to collapse</Text>
+                    <Ionicons name="chevron-up" size={14} color={Colors.accent} />
+                  </View>
                 )}
               </TouchableOpacity>
             );
@@ -232,7 +265,7 @@ export default function SavedAnswersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
   },
   header: {
     flexDirection: 'row',
@@ -251,16 +284,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 28,
     fontWeight: '800',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: -0.5,
     marginLeft: 4,
   },
   headerRight: {
-    width: 36,
+    width: 44,
     alignItems: 'center',
   },
   countBadge: {
-    backgroundColor: '#2A2622',
+    backgroundColor: Colors.accent,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -270,6 +303,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+
+  // Search
   searchContainer: {
     paddingHorizontal: 16,
     paddingBottom: 8,
@@ -277,7 +312,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 42,
@@ -291,10 +326,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#2A2622',
+    color: Colors.textDark,
     paddingVertical: 0,
     letterSpacing: -0.2,
   },
+
+  // Empty
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -306,7 +343,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -319,13 +356,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2A2622',
+    color: Colors.textDark,
     marginBottom: 8,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#A09A93',
+    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 32,
@@ -333,7 +370,7 @@ const styles = StyleSheet.create({
 
   // Steps card
   stepsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     borderRadius: 16,
     padding: 20,
     width: '100%',
@@ -352,7 +389,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2A2622',
+    backgroundColor: Colors.textDark,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
@@ -369,19 +406,19 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: -0.2,
     marginBottom: 2,
   },
   stepHint: {
     fontSize: 13,
-    color: '#A09A93',
+    color: Colors.textMuted,
     lineHeight: 18,
   },
   stepConnector: {
     width: 1,
     height: 12,
-    backgroundColor: '#EBE7E2',
+    backgroundColor: Colors.borderWarm,
     marginLeft: 14,
     marginVertical: 4,
   },
@@ -390,10 +427,10 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
-    gap: 8,
+    gap: 10,
   },
   answerCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     borderRadius: 14,
     padding: 16,
     shadowColor: '#000',
@@ -419,50 +456,67 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   answerTradeBadge: {
-    backgroundColor: '#F3F0EB',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 5,
+    borderRadius: 6,
   },
   answerTradeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#2A2622',
     letterSpacing: 0.2,
   },
   answerDate: {
     fontSize: 11,
-    color: '#A09A93',
+    color: Colors.textMuted,
   },
   answerQuestion: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#2A2622',
+    color: Colors.textDark,
     marginBottom: 6,
     lineHeight: 21,
     letterSpacing: -0.2,
   },
+  answerBody: {
+    paddingLeft: 0,
+  },
+  answerBodyExpanded: {
+    backgroundColor: 'rgba(0,0,0,0.015)',
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: -4,
+  },
   answerPreview: {
     fontSize: 14,
-    color: '#A09A93',
+    color: Colors.textMuted,
     lineHeight: 20,
   },
   sourceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
     gap: 4,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderWarm,
   },
   sourceText: {
     fontSize: 11,
-    color: '#A09A93',
+    color: Colors.textMuted,
     fontStyle: 'italic',
+    flex: 1,
+  },
+  readMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    justifyContent: 'center',
   },
   readMore: {
     fontSize: 12,
-    color: '#2A2622',
+    color: Colors.accent,
     fontWeight: '600',
-    marginTop: 8,
   },
   confidenceRow: {
     flexDirection: 'row',
@@ -476,15 +530,14 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     fontSize: 11,
-    color: '#A09A93',
+    color: Colors.textMuted,
     fontWeight: '600',
-    textTransform: 'capitalize',
   },
   deleteBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
   },

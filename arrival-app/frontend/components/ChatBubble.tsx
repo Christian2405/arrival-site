@@ -139,29 +139,41 @@ export default function ChatBubble({ message, onSave, onFeedback, userQuestion }
         </View>
       )}
 
-      {/* Feedback thumbs — only on assistant messages */}
-      {!isUser && onFeedback && (
+      {/* Actions row — feedback thumbs + bookmark */}
+      {!isUser && (onFeedback || onSave) && (
         <View style={styles.feedbackRow}>
-          {feedbackGiven ? (
-            <View style={styles.feedbackDone}>
-              <Ionicons
-                name={feedbackGiven === 'positive' ? 'thumbs-up' : 'thumbs-down'}
-                size={12}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.feedbackDoneText}>
-                {feedbackGiven === 'positive' ? 'Thanks!' : 'Noted'}
-              </Text>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity onPress={handleThumbsUp} style={styles.feedbackBtn} hitSlop={8}>
-                <Ionicons name="thumbs-up-outline" size={14} color={Colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleThumbsDown} style={styles.feedbackBtn} hitSlop={8}>
-                <Ionicons name="thumbs-down-outline" size={14} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </>
+          {onFeedback && (
+            feedbackGiven ? (
+              <View style={styles.feedbackDone}>
+                <Ionicons
+                  name={feedbackGiven === 'positive' ? 'thumbs-up' : 'thumbs-down'}
+                  size={12}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.feedbackDoneText}>
+                  {feedbackGiven === 'positive' ? 'Thanks!' : 'Noted'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity onPress={handleThumbsUp} style={styles.feedbackBtn} hitSlop={8}>
+                  <Ionicons name="thumbs-up-outline" size={14} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleThumbsDown} style={styles.feedbackBtn} hitSlop={8}>
+                  <Ionicons name="thumbs-down-outline" size={14} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              </>
+            )
+          )}
+          {/* Bookmark button — visible tap target for saving */}
+          {onSave && !saved && (
+            <TouchableOpacity
+              onPress={() => { onSave(); setSaved(true); }}
+              style={[styles.feedbackBtn, { marginLeft: 'auto' }]}
+              hitSlop={8}
+            >
+              <Ionicons name="bookmark-outline" size={14} color={Colors.textSecondary} />
+            </TouchableOpacity>
           )}
         </View>
       )}
