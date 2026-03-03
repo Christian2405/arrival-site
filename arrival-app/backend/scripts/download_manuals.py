@@ -27,10 +27,26 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 PDF_SOURCES = [
+    # --- Rheem ---
+    {
+        "filename": "Rheem_Gas_Furnace_Fault_Codes.pdf",
+        "url": "https://pts.myrheem.com/docstore/webdocs/Public/ServicePublic/Trouble2a/pdfs/Gas_Furnace/IO/92-103343-01-00_Fault_Code_Label.pdf",
+        "brand": "Rheem",
+    },
+    {
+        "filename": "Rheem_R92PA_Troubleshooting_Chart.pdf",
+        "url": "https://pts.myrheem.com/docstore/webdocs/Public/ServicePublic/Trouble2a/pdfs/Gas_Furnace/R92P/R92PA_Trouble-Shooting_Chart.pdf",
+        "brand": "Rheem",
+    },
     # --- Rinnai Tankless ---
     {
         "filename": "Rinnai_Tankless_Diagnostic_Codes.pdf",
         "url": "https://media.rinnai.us/salsify_asset/2b8fa85d-1d96-41ce-86f6-c5d5b2b1e9e9/100000652-Troubleshooting%20TWH%20Diagnostic%20Codes%20(3).pdf",
+        "brand": "Rinnai",
+    },
+    {
+        "filename": "Rinnai_Condensing_Error_Codes.pdf",
+        "url": "https://media.rinnai.us/salsify_asset/TB-075%20Condensing%20water%20heater%20error%20codes.pdf",
         "brand": "Rinnai",
     },
     # --- AO Smith ---
@@ -64,6 +80,12 @@ PDF_SOURCES = [
     {
         "filename": "Goodman_GCVC96_Service_Instructions.pdf",
         "url": "https://www.hvacdirect.com/media/hvac/pdf/GCVC96-Service.pdf",
+        "brand": "Goodman",
+    },
+    # --- Goodman (additional) ---
+    {
+        "filename": "Goodman_GMEC96_Service_Instructions.pdf",
+        "url": "https://documents.alpinehomeair.com/product/Goodman%20GMEC96%20Service%20Instructions.pdf",
         "brand": "Goodman",
     },
     # --- Square D ---

@@ -84,7 +84,7 @@ async def chat_with_claude(
     system_prompt = config.SYSTEM_PROMPT
 
     if system_prompt_prefix:
-        system_prompt = system_prompt + "\n\n" + system_prompt_prefix
+        system_prompt = system_prompt_prefix + "\n\n" + system_prompt
 
     if user_memories:
         memory_block = "\n".join(f"- {m}" for m in user_memories)
@@ -217,23 +217,32 @@ async def analyze_frame(image_base64: str) -> dict:
 
     client = _get_client()
 
-    analysis_prompt = """You are watching a trade worker's job site camera.
+    analysis_prompt = """You are a passive observer on a trade worker's phone camera. Your job is ONLY to flag genuine, clear safety hazards.
 
-Only speak up if you see something clearly wrong — exposed wires, active leak, obvious hazard.
-If you're not certain, stay quiet. False alerts are worse than no alerts.
-Don't alert on things you can't clearly identify. If you're guessing, don't say anything.
+RESPOND "OK" UNLESS ALL THREE CONDITIONS ARE MET:
+1. You can clearly see and identify the specific object or condition (not guessing)
+2. It is an immediate safety hazard (active leak, exposed live wires, gas flame where it shouldn't be, structural collapse risk)
+3. You are highly confident — if you're even slightly unsure, say OK
 
-If the image is unclear, dark, or blurry — respond OK.
-If you see nothing wrong — respond OK.
-If you're not sure — respond OK.
+ALWAYS RESPOND "OK" FOR:
+- Cosmetic damage (peeling paint, wallpaper, stains, discoloration, scratches, dents)
+- Things that MIGHT be damage but could also be normal wear, shadows, or camera artifacts
+- Anything you'd need to touch, smell, or measure to confirm
+- Conditions that aren't an immediate danger, even if they need repair eventually
+- Dark, blurry, or unclear images
+- Anything you can't identify with certainty
 
 Respond with exactly: OK
 
-UNLESS you see a clear, obvious hazard. Then respond with a JSON object:
-{"severity": "warning", "message": "Hey, [describe what you see in plain language]"}
+ONLY if you see a clear, unmistakable, immediate hazard, respond with a JSON object:
+{"severity": "warning", "message": "Hey, [describe ONLY what you can actually see — not what you think it might mean]"}
 
-Be conversational. "Hey, looks like there's water pooling under that pipe" not "WARNING: Potential water damage detected."
-Use "critical" only for immediate danger to life (live exposed wires, gas leak, fire)."""
+CRITICAL RULES:
+- NEVER guess what's behind a wall, above a ceiling, or outside the frame
+- NEVER diagnose from a single image — describe what you see, not what you think caused it
+- NEVER say "water damage", "mold", "structural issue" unless it's unmistakable and severe
+- Use "critical" ONLY for immediate danger to life (sparking wires, active fire, gas ignition)
+- When in doubt, ALWAYS say OK. A missed cosmetic issue is fine. A false alarm is annoying."""
 
     if image_base64.startswith("iVBOR"):
         media_type = "image/png"

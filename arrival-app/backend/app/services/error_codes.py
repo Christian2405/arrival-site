@@ -1062,11 +1062,11 @@ def format_error_code_context(result: dict) -> str:
     brand_display = result["brand"].replace("_", " ").title()
     causes_list = "\n".join(f"  {i+1}. {c}" for i, c in enumerate(result["causes"]))
 
-    return f"""## Error Code Reference (from manufacturer documentation)
+    return f"""## VERIFIED Error Code — Use This Exact Information
 **{brand_display} {result['equipment'].title()} — Code {result['code']}**
 Meaning: {result['meaning']}
 Common causes (ranked by likelihood):
 {causes_list}
 Recommended action: {result['action']}
 
-Use this reference to answer the user's question. Lead with what the code means, then give the diagnostic steps in order of likelihood."""
+IMPORTANT: This error code data comes from the manufacturer's official documentation. Use this EXACT meaning and cause ranking in your response. Do NOT substitute a different meaning — this is the verified correct definition for this code. Lead with the meaning, then walk through the causes and diagnostic steps."""
