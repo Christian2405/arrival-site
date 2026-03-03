@@ -1721,6 +1721,13 @@
                 }
             }, 50);
         };
+        // Auto-show page based on URL path (for /privacy, /terms direct links)
+        (function() {
+            var path = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+            if (path === 'privacy' || path === 'terms') {
+                showPage(path);
+            }
+        })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="auth.js"></script>

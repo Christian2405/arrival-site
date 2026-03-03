@@ -4,3 +4,14 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Clean URLs for Apple App Store requirements
+[[redirects]]
+  from = "/privacy"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/terms"
+  to = "/index.html"
+  status = 200
