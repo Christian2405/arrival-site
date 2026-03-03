@@ -2,13 +2,27 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { useSettingsStore } from '../store/settingsStore';
 import { useConversationStore } from '../store/conversationStore';
 import { useAuthStore } from '../store/authStore';
 import { useSavedAnswersStore } from '../store/savedAnswersStore';
 import { Colors } from '../constants/Colors';
+import OfflineBanner from '../components/OfflineBanner';
 
-export default function RootLayout() {
+// Initialize Sentry — DSN comes from env; no-op if not set
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    debug: __DEV__,
+    tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+    enableAutoSessionTracking: true,
+    attachStacktrace: true,
+  });
+}
+
+function RootLayout() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const loadConversations = useConversationStore((s) => s.loadConversations);
   const loadAnswers = useSavedAnswersStore((s) => s.loadAnswers);
@@ -58,6 +72,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="auto" />
+      <OfflineBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
         <Stack.Screen name="signup" />
@@ -66,3 +81,6 @@ export default function RootLayout() {
     </>
   );
 }
+
+// Wrap with Sentry for crash reporting (no-op if DSN not set)
+export default SENTRY_DSN ? Sentry.wrap(RootLayout) : RootLayout;

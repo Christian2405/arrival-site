@@ -5,7 +5,7 @@ import {
   TouchableWithoutFeedback, AppState, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +42,7 @@ function validateConfidence(v?: string): Message['confidence'] | undefined {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { prefill } = useLocalSearchParams<{ prefill?: string }>();
 
   // Camera
   const cameraRef = useRef<CameraView>(null);
@@ -122,6 +123,19 @@ export default function HomeScreen() {
 
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => { aiAPI.warmup(); }, []);
+
+  // Prefill from codes screen (or any deep link)
+  useEffect(() => {
+    if (prefill && typeof prefill === 'string') {
+      setInputText(prefill);
+      // Switch to text mode if not already
+      if (interactionMode !== 'text') {
+        setInteractionMode('text');
+      }
+      // Clear the param so it doesn't re-trigger
+      router.setParams({ prefill: undefined } as any);
+    }
+  }, [prefill]);
 
   // --- Camera capture (silent, no shutter) ---
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
@@ -450,7 +464,7 @@ export default function HomeScreen() {
       const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
       const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
       const currentDemoMode = useSettingsStore.getState().demoMode;
-      const response = await aiAPI.chat(text, imageForThisMessage, history, currentDemoMode);
+      const response = await aiAPI.chat(text, imageForThisMessage, history, currentDemoMode, useSettingsStore.getState().units);
 
       addMessage({
         id: generateId(), role: 'assistant', content: response.response,
@@ -860,6 +874,33 @@ export default function HomeScreen() {
                       />
                     </TouchableOpacity>
 
+                    {/* Camera capture */}
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          if (!cameraRef.current) return;
+                          const photo = await cameraRef.current.takePictureAsync({
+                            base64: true,
+                            quality: 0.5,
+                            exif: false,
+                            shutterSound: false,
+                          });
+                          if (photo?.base64) {
+                            setPendingImage(photo.base64);
+                          }
+                        } catch (e) {
+                          console.log('[Camera] Capture error:', e);
+                        }
+                      }}
+                      style={styles.inputIconBtn}
+                    >
+                      <Ionicons
+                        name="camera-outline"
+                        size={20}
+                        color={pendingImage ? Colors.accent : 'rgba(255,255,255,0.5)'}
+                      />
+                    </TouchableOpacity>
+
                     <TextInput
                       style={styles.textInput}
                       value={inputText}
@@ -926,7 +967,7 @@ export default function HomeScreen() {
 
                     // Use text chat API (not voiceChat) since we're sending a text prompt, not audio.
                     // voiceChat expects audio_base64 as first arg — sending text would cause a backend error.
-                    const chatResult = await aiAPI.chat(followUpText, frame, history, currentDemoMode);
+                    const chatResult = await aiAPI.chat(followUpText, frame, history, currentDemoMode, useSettingsStore.getState().units);
 
                     addMessage({
                       id: generateId(), role: 'assistant', content: chatResult.response,

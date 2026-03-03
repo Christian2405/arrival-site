@@ -16,9 +16,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../constants/Colors';
 import { useAuthStore } from '../../store/authStore';
 import { useDocumentsStore, Document, MANUAL_CATEGORIES } from '../../store/documentsStore';
+import { documentsAPI } from '../../services/api';
 import { getTierLimits } from '../../constants/Tiers';
 
 type ViewMode = 'my' | 'team';
@@ -115,6 +117,34 @@ export default function ManualsScreen() {
     });
   };
 
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const file = result.assets[0];
+      setUploading(true);
+
+      await documentsAPI.upload(file.uri, file.name, file.mimeType || 'application/pdf');
+
+      // Refresh document list
+      if (userId) await fetchDocuments(userId, teamId);
+
+      Alert.alert('Uploaded', `"${file.name}" has been uploaded and will be available for AI reference.`);
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || 'Failed to upload document. Please try again.';
+      Alert.alert('Upload Error', msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const openDocument = async (doc: Document) => {
     try {
       const url = await getSignedUrl(doc.storage_path);
@@ -161,6 +191,18 @@ export default function ManualsScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Manuals</Text>
         <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.uploadBtn}
+            onPress={handleUpload}
+            disabled={uploading}
+            activeOpacity={0.7}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color={Colors.textDark} />
+            ) : (
+              <Ionicons name="cloud-upload-outline" size={20} color={Colors.textDark} />
+            )}
+          </TouchableOpacity>
           {manualDocs.length > 0 && (
             <View style={styles.countBadge}>
               <Text style={styles.countText}>{manualDocs.length}</Text>
@@ -232,7 +274,7 @@ export default function ManualsScreen() {
             <Text style={styles.emptySubtitle}>
               {searchQuery
                 ? 'Try a different search term.'
-                : 'Upload equipment manuals and service guides\non the Arrival website to reference them here.'}
+                : 'Upload equipment manuals and service guides\nusing the upload button above.'}
             </Text>
           </View>
 
@@ -351,8 +393,22 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   headerRight: {
-    width: 44,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  uploadBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   countBadge: {
     backgroundColor: Colors.accent,

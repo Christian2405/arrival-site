@@ -108,6 +108,7 @@ class ChatRequest(BaseModel):
     message: str
     image_base64: str | None = None
     conversation_history: list[dict] = []
+    units: str = "imperial"
 
 
 class ChatResponse(BaseModel):
@@ -239,6 +240,9 @@ async def chat(
                     logger.warning(f"[chat] RAG retrieval failed: {e}")
                     rag_context = []
 
+                # Build units instruction if user prefers metric
+                units_note = "\n\nIMPORTANT: The user prefers METRIC units. Use Celsius, millimeters, liters, kilopascals, meters, etc. Convert any imperial measurements." if request.units == "metric" else ""
+
                 # Call Claude with all context
                 result = await chat_with_claude(
                     message=request.message,
@@ -247,7 +251,7 @@ async def chat(
                     user_memories=memories,
                     rag_context=rag_context,
                     max_tokens=1024,
-                    system_prompt_prefix=error_code_context or diagnostic_context or "",
+                    system_prompt_prefix=(error_code_context or diagnostic_context or "") + units_note,
                 )
 
                 # Fire-and-forget background tasks

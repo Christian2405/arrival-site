@@ -19,9 +19,10 @@ logger = logging.getLogger(__name__)
 
 # ── Tier definitions ──────────────────────────────────────────────
 TIER_LIMITS = {
-    "free":       {"max_queries_per_day": 10,    "max_documents": 0,    "job_mode": False},
-    "pro":        {"max_queries_per_day": 50,    "max_documents": 20,   "job_mode": False},
-    "business":   {"max_queries_per_day": 250,   "max_documents": 9999, "job_mode": True},
+    # Free tier is generous for launch — all features unlocked, no IAP yet
+    "free":       {"max_queries_per_day": 9999,  "max_documents": 20,   "job_mode": True},
+    "pro":        {"max_queries_per_day": 9999,  "max_documents": 20,   "job_mode": True},
+    "business":   {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True},
     "enterprise": {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True},
 }
 

@@ -60,7 +60,7 @@ async def analyze(request: FrameRequest, req: Request):
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid request or configuration error")
     except Exception as e:
         logger.error(f"[analyze] Frame analysis failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Frame analysis failed")

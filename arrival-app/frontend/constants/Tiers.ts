@@ -14,12 +14,12 @@ export interface TierLimits {
 
 export const TIER_LIMITS: Record<string, TierLimits> = {
   free: {
-    maxQueries: 10,
-    maxDocs: 0,
-    jobMode: false,
-    proactiveAlerts: false,
+    maxQueries: -1,   // Unlimited for launch — gate later with IAP
+    maxDocs: 20,
+    jobMode: true,
+    proactiveAlerts: true,
     teamDocs: false,
-    voiceOutput: false,
+    voiceOutput: true,
   },
   pro: {
     maxQueries: 50,

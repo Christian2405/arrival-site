@@ -310,11 +310,9 @@ export default function CodesScreen() {
                           <TouchableOpacity
                             style={styles.askArrivalBtn}
                             onPress={() => {
-                              router.back();
-                              // Navigate home and set message about this code
-                              setTimeout(() => {
-                                router.push('/(tabs)/home' as any);
-                              }, 100);
+                              const brandObj = brands.find(b => b.id === selectedBrand);
+                              const query = `Tell me about ${brandObj?.name || 'this'} error code ${code.code}: ${code.meaning}`;
+                              router.push({ pathname: '/(tabs)/home', params: { prefill: query } } as any);
                             }}
                           >
                             <Ionicons name="chatbubble-outline" size={14} color={Colors.accent} />

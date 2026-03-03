@@ -313,7 +313,7 @@ CRITICAL RULES:
 
     # Bug #16: Use await with the async client
     response = await client.messages.create(
-        model=config.ANTHROPIC_MODEL,
+        model=config.ANTHROPIC_VOICE_MODEL,
         max_tokens=256,
         system=analysis_prompt,
         messages=messages,

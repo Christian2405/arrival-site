@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers, usage, feedback, job_context, error_codes_api
+from app.routers import stt, chat, tts, voice_chat, documents, analyze, queries, saved_answers, usage, feedback, job_context, error_codes_api, account
 
 # Configure logging to show INFO level (Render captures stdout)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Arrival API",
-    version="2.0.0",
+    version="1.0.0",
     description="AI voice & camera assistant for trade workers",
     lifespan=lifespan,
 )
@@ -88,6 +88,7 @@ app.include_router(usage.router, prefix="/api", tags=["Usage"])
 app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
 app.include_router(job_context.router, prefix="/api", tags=["Job Context"])
 app.include_router(error_codes_api.router, prefix="/api", tags=["Error Codes"])
+app.include_router(account.router, prefix="/api", tags=["Account"])
 
 
 # --- Validation error logging (debug 422s) ---
@@ -104,14 +105,14 @@ async def health():
     """Health check endpoint — returns API status and version."""
     return {
         "status": "healthy",
-        "version": "2.0.0",
+        "version": "1.0.0",
         "service": "Arrival API",
     }
 
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "Arrival API", "version": "2.0.0"}
+    return {"status": "ok", "service": "Arrival API", "version": "1.0.0"}
 
 
 # --- Diagnostics endpoint — times each service independently ---

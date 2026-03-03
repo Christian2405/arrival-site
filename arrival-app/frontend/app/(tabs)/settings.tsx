@@ -141,6 +141,34 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await useAuthStore.getState().getAccessToken();
+              const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+              await fetch(`${BASE_URL}/api/account`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              await signOut();
+              Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+            } catch (e) {
+              Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const initials = profile
     ? `${profile.first_name?.charAt(0) || ''}${profile.last_name?.charAt(0) || ''}`
     : 'A';
@@ -327,12 +355,9 @@ export default function SettingsScreen() {
               <Ionicons name="moon-outline" size={18} color="#2A2622" />
               <Text style={styles.rowLabel}>Dark Mode</Text>
             </View>
-            <Switch
-              value={false}
-              disabled
-              trackColor={{ false: '#E8E4DF', true: '#FE6B3F' }}
-              thumbColor="#fff"
-            />
+            <View style={styles.comingSoonBadge}>
+              <Text style={styles.comingSoonText}>Coming Soon</Text>
+            </View>
           </View>
         </View>
 
@@ -423,7 +448,11 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Arrival v2.0.0</Text>
+        <TouchableOpacity style={[styles.signOutButton, { marginTop: 8 }]} onPress={handleDeleteAccount} activeOpacity={0.6}>
+          <Text style={[styles.signOutText, { fontSize: 13, color: '#A09A93' }]}>Delete Account</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.versionText}>Arrival v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );

@@ -64,7 +64,14 @@
           "microphonePermission": "Arrival needs microphone access for voice commands."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "spheree",
+          "project": "arrival-mobile"
+        }
+      ]
     ],
     "owner": "christianfladgate"
   }
