@@ -3,12 +3,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 export interface VADConfig {
   speechThreshold: number;      // dB level for speech (default: -30)
-  silenceThreshold: number;     // dB level for silence (default: -50)
+  silenceThreshold: number;     // dB level for silence (default: -38) — UNUSED now, kept for compat
   speechMinDuration: number;    // ms of speech before triggering (default: 300)
-  silenceMaxDuration: number;   // ms of silence before ending (default: 1500)
+  silenceMaxDuration: number;   // ms below speechThreshold before ending (default: 1200)
+  maxSpeechDuration?: number;   // ms max recording time — safety valve (default: 15000)
   meteringInterval: number;     // ms between metering checks (default: 100)
   onSpeechStart: () => void;
-  onSpeechEnd: (audioBase64: string) => Promise<void>; // BUG 2 FIX: returns Promise
+  onSpeechEnd: (audioBase64: string) => Promise<void>;
 }
 
 export default class VoiceActivityDetector {
@@ -21,8 +22,8 @@ export default class VoiceActivityDetector {
   private lastSpeechTime: number = 0;
   private isProcessing: boolean = false;
   private enabled: boolean = false;
-  private isPausing: boolean = false;    // BUG 1 FIX: guard against pause/resume race
-  private hasPermission: boolean = false; // BUG 5 FIX: cache permission result
+  private isPausing: boolean = false;
+  private hasPermission: boolean = false;
 
   constructor(config: VADConfig) {
     this.config = config;
@@ -36,7 +37,6 @@ export default class VoiceActivityDetector {
   async stop() {
     this.enabled = false;
     this.stopMetering();
-    // BUG 6 FIX: defensively access recording in a try block
     const rec = this.recording;
     this.recording = null;
     if (rec) {
@@ -49,7 +49,6 @@ export default class VoiceActivityDetector {
     }
   }
 
-  // BUG 1 FIX: pause is now async, awaits stop before nulling
   async pause() {
     this.isPausing = true;
     this.stopMetering();
@@ -60,7 +59,6 @@ export default class VoiceActivityDetector {
       this.recording = null;
     }
     // Reset iOS audio session to playback mode so TTS routes to loudspeaker.
-    // Without this, allowsRecordingIOS stays true and audio plays through earpiece (quiet).
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
@@ -84,11 +82,9 @@ export default class VoiceActivityDetector {
   }
 
   private async startListening() {
-    // BUG 1 FIX: don't start if a pause is in progress
     if (!this.enabled || this.isProcessing || this.isPausing) return;
 
     try {
-      // BUG 5 FIX: only request permission if not already cached
       if (!this.hasPermission) {
         const { status } = await Audio.requestPermissionsAsync();
         if (status !== 'granted') return;
@@ -110,6 +106,8 @@ export default class VoiceActivityDetector {
       this.isSpeaking = false;
       this.speechConfirmed = false;
 
+      const maxSpeechDuration = this.config.maxSpeechDuration ?? 15000;
+
       // Poll metering
       this.meteringTimer = setInterval(async () => {
         if (!this.recording) return;
@@ -122,6 +120,7 @@ export default class VoiceActivityDetector {
           const now = Date.now();
 
           if (metering > this.config.speechThreshold) {
+            // Active speech detected
             this.lastSpeechTime = now;
 
             if (!this.isSpeaking) {
@@ -134,8 +133,17 @@ export default class VoiceActivityDetector {
               this.speechConfirmed = true;
               this.config.onSpeechStart();
             }
-          } else if (this.isSpeaking && this.speechConfirmed && metering < this.config.silenceThreshold) {
-            // Silence after confirmed speech
+
+            // Safety valve: force end after max duration (no one talks for 15s straight to an AI)
+            if (this.speechConfirmed && now - this.speechStartTime >= maxSpeechDuration) {
+              await this.handleSpeechEnd();
+            }
+          } else if (this.isSpeaking && this.speechConfirmed) {
+            // Below speech threshold — check if silence duration met.
+            // KEY FIX: We only check if metering is below speechThreshold,
+            // NOT requiring absolute silence. Any drop below speech level
+            // for silenceMaxDuration = end of speech. This works in noisy
+            // environments where ambient noise sits between -40 and -30 dB.
             if (now - this.lastSpeechTime >= this.config.silenceMaxDuration) {
               await this.handleSpeechEnd();
             }
@@ -166,7 +174,7 @@ export default class VoiceActivityDetector {
       const uri = this.recording.getURI();
       this.recording = null;
 
-      // BUG 4 FIX: reset audio mode so TTS plays through speaker, not earpiece
+      // Reset audio mode so TTS plays through speaker, not earpiece
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
@@ -177,17 +185,13 @@ export default class VoiceActivityDetector {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // BUG 3 FIX: clean up temp audio file
         await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
-
-        // BUG 2 FIX: await onSpeechEnd so restart delay begins after pipeline completes
         await this.config.onSpeechEnd(audioBase64);
       }
     } catch (e) {
       console.log('[VAD] speech end error:', e);
     } finally {
       this.isProcessing = false;
-      // Restart listening — fast restart for responsive feel
       if (this.enabled) {
         setTimeout(() => this.startListening(), 200);
       }
