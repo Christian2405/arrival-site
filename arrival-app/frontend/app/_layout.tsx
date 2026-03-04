@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
+import { Audio } from 'expo-av';
 import * as Sentry from '@sentry/react-native';
 import { useSettingsStore } from '../store/settingsStore';
 import { useConversationStore } from '../store/conversationStore';
@@ -34,6 +35,13 @@ function RootLayout() {
   useEffect(() => {
     initialize();
     loadSettings();
+
+    // Set initial audio mode — ensures iOS routes to loudspeaker at full volume.
+    // Without this, iOS may default to earpiece (quiet) from a previous recording session.
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+    }).catch(() => {});
   }, []);
 
   // Bug #32: Load conversations and saved answers only after auth is initialized

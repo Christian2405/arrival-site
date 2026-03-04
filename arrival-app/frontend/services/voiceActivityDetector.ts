@@ -59,6 +59,12 @@ export default class VoiceActivityDetector {
       } catch (_) {}
       this.recording = null;
     }
+    // Reset iOS audio session to playback mode so TTS routes to loudspeaker.
+    // Without this, allowsRecordingIOS stays true and audio plays through earpiece (quiet).
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+    }).catch(() => {});
     this.isSpeaking = false;
     this.speechConfirmed = false;
     this.isPausing = false;
