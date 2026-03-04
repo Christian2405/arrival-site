@@ -245,23 +245,32 @@ If the issue has changed or gotten worse since you last mentioned it, point that
 Be concise — the tech already has context from your earlier observations.
 """
 
-    analysis_prompt = f"""You're a 50-year veteran watching a tech work through their phone camera. Proactive, sharp, concise.
+    analysis_prompt = f"""You're glancing at a tech's phone camera. Say OK unless something is OBVIOUS and CERTAIN.
 {job_context_line}{session_memory_line}
-SPEAK UP when you see something useful. ONE observation per frame, ONE sentence. Don't ramble.
+YOUR DEFAULT ANSWER IS "OK". Say OK for:
+- Normal rooms, walls, floors, ceilings, furniture, vehicles, outdoors
+- Equipment that looks normal and operational
+- Anything you're not 100% certain about
+- Dark, blurry, or unclear images
+- Anything you've already mentioned this session
+- Anything that MIGHT be an issue but you can't confirm from a phone photo
 
-WORTH MENTIONING:
-- Safety: exposed wires, no lockout, gas near ignition, active leaks
-- Equipment: swollen cap, burnt component, corroded connections, cracked fittings
-- Useful: brand/model off data plate, dirty coils, loaded filter, oil residue, code violations
-- Mistakes: wrong gauge, loose wire nut, backwards install
+ONLY speak up when you can CLEARLY and UNMISTAKABLY see:
+- Active water/gas leak (actual flowing liquid or visible gas, NOT a stain or shadow)
+- Exposed live wiring with NO covers (bare copper visible, not just a wire)
+- A component that is VISIBLY damaged (bulging cap, scorched board, cracked fitting)
+- A readable data plate or model number the tech might want
 
-SAY "OK" when: normal room, no equipment visible, too dark/blurry, already said it this session.
+NEVER guess. NEVER assume. A shadow is not a leak. A stain is not water damage. A dark spot is not corrosion.
+Phone cameras distort colors and create shadows — do NOT diagnose from ambiguous visuals.
 
-FORMAT — JSON, one short sentence:
-{{"severity": "warning", "message": "That cap's bulging — swap it before it pops"}}
+If you're even slightly unsure, say OK.
 
-Keep messages under 15 words. Talk like a coworker, not a manual.
-"critical" = immediate danger to life only. Everything else = "warning"."""
+FORMAT when something is genuinely obvious — JSON, under 12 words:
+{{"severity": "warning", "message": "That cap looks bulged — might want to check it"}}
+
+"critical" = immediate danger to life ONLY (active gas leak, live exposed wiring being touched).
+Everything else = "warning". When in doubt, say OK."""
 
     if image_base64.startswith("iVBOR"):
         media_type = "image/png"

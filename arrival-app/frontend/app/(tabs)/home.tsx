@@ -621,8 +621,14 @@ export default function HomeScreen() {
             if (result.audio_base64) {
               await playAudio(result.audio_base64);
             }
-          } catch (e) {
-            console.log('Job Mode voice error:', e);
+          } catch (e: any) {
+            console.error('[JobMode] voice response failed:', e);
+            // Surface the error so the user knows something went wrong
+            addMessage({
+              id: generateId(), role: 'assistant',
+              content: 'Sorry, I didn\'t catch that. Try again.',
+              displayMode: 'job', timestamp: new Date(),
+            });
           }
         },
         onStateChange: setJobAIState,

@@ -27,6 +27,7 @@ export default class JobModeController {
   private dismissed: boolean = false;
   private dismissTime: number = 0;
   private operationLock: boolean = false;
+  private operationLockTimer: ReturnType<typeof setTimeout> | null = null;
   private _interrupted: boolean = false;
   private pendingCriticalAlert: { message: string; severity: string } | null = null;
   private dismissTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -79,6 +80,29 @@ export default class JobModeController {
     return true;
   }
 
+  /** Acquire the operation lock with a 30s safety timeout. If the lock
+   *  isn't released within 30s, force-release it so speech isn't permanently dropped. */
+  private acquireLock(): boolean {
+    if (this.operationLock) return false;
+    this.operationLock = true;
+    // Safety watchdog — force-release after 30s
+    this.operationLockTimer = setTimeout(() => {
+      console.warn('[JobMode] operationLock watchdog fired — force releasing after 30s');
+      this.releaseLock();
+      this.callbacks.onStateChange('monitoring');
+      this.vad.resume();
+    }, 30000);
+    return true;
+  }
+
+  private releaseLock() {
+    this.operationLock = false;
+    if (this.operationLockTimer) {
+      clearTimeout(this.operationLockTimer);
+      this.operationLockTimer = null;
+    }
+  }
+
   private scheduleTimeout(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
     const id = setTimeout(() => {
       this.pendingTimeouts = this.pendingTimeouts.filter(t => t !== id);
@@ -104,7 +128,7 @@ export default class JobModeController {
       if (!this.canSpeak()) return;
     }
 
-    this.operationLock = true;
+    if (!this.acquireLock()) return;
     this.alertTimestamps.push(Date.now());
     await this.vad.pause();
     this.aiSpeaking = true;
@@ -117,17 +141,15 @@ export default class JobModeController {
       this.lastSpeakTime = Date.now();
 
       if (this._interrupted) {
-        // Interrupted — stop everything, go straight back to listening.
-        // No queue. The user's next utterance is a fresh conversational turn.
         this._interrupted = false;
-        this.operationLock = false;
+        this.releaseLock();
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
       } else {
         this.scheduleTimeout(() => {
           this.callbacks.onStateChange('monitoring');
           this.vad.resume();
-          this.operationLock = false;
+          this.releaseLock();
           if (this.pendingCriticalAlert) {
             const alert = this.pendingCriticalAlert;
             this.pendingCriticalAlert = null;
@@ -144,8 +166,7 @@ export default class JobModeController {
     // If already processing something, just drop it.
     // This is how real conversations work — you don't queue sentences.
     // The user will speak again once the mic is back on.
-    if (this.operationLock) return;
-    this.operationLock = true;
+    if (!this.acquireLock()) return;
 
     await this.vad.pause();
     this.aiSpeaking = true;
@@ -160,18 +181,15 @@ export default class JobModeController {
       this.lastSpeakTime = Date.now();
 
       if (this._interrupted) {
-        // Interrupted — go straight back to listening.
-        // The conversation history has the text of whatever was said,
-        // so context is preserved even though we stopped the audio.
         this._interrupted = false;
-        this.operationLock = false;
+        this.releaseLock();
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
       } else {
         this.scheduleTimeout(() => {
           this.callbacks.onStateChange('monitoring');
           this.vad.resume();
-          this.operationLock = false;
+          this.releaseLock();
           if (this.pendingCriticalAlert) {
             const alert = this.pendingCriticalAlert;
             this.pendingCriticalAlert = null;
@@ -213,6 +231,7 @@ export default class JobModeController {
     for (const id of this.pendingTimeouts) { clearTimeout(id); }
     this.pendingTimeouts = [];
     if (this.dismissTimeout) { clearTimeout(this.dismissTimeout); this.dismissTimeout = null; }
+    if (this.operationLockTimer) { clearTimeout(this.operationLockTimer); this.operationLockTimer = null; }
     this.frameBatcher.stop();
     await this.vad.stop();
     this.aiSpeaking = false;
