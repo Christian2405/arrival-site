@@ -72,6 +72,7 @@ export default function HomeScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   // Keyboard height — tracked manually for instant (no-animation) positioning
+  const keyboardAnim = useRef(new Animated.Value(0)).current;
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // PTT frame capture ref
@@ -116,8 +117,14 @@ export default function HomeScreen() {
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      Animated.spring(keyboardAnim, { toValue: e.endCoordinates.height, useNativeDriver: false, damping: 20, stiffness: 150 }).start();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      Animated.spring(keyboardAnim, { toValue: 0, useNativeDriver: false, damping: 20, stiffness: 150 }).start();
+    });
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
@@ -707,7 +714,7 @@ export default function HomeScreen() {
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
 
       {/* Main content */}
-      <View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardHeight : 0 }}>
+      <Animated.View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardAnim : 0 }}>
         <View style={[styles.content, { paddingTop: insets.top }]}>
 
           {/* TOP BAR: Hamburger + Mode Selector + New Chat */}
@@ -860,7 +867,7 @@ export default function HomeScreen() {
                 )}
 
                 {/* Input bar container — no safe area padding when keyboard is up */}
-                <View style={{ paddingBottom: keyboardHeight > 0 ? 2 : Math.max(insets.bottom, 6), paddingHorizontal: 8 }}>
+                <View style={{ paddingBottom: keyboardHeight > 0 ? 10 : Math.max(insets.bottom, 6), paddingHorizontal: 10 }}>
                   <View style={styles.inputBar}>
                     {/* Photo picker */}
                     <TouchableOpacity
@@ -883,7 +890,7 @@ export default function HomeScreen() {
                       <Ionicons
                         name="image-outline"
                         size={IconSize.md}
-                        color={pendingImage ? Colors.accent : Colors.textMuted}
+                        color={pendingImage ? '#FFF' : 'rgba(255,255,255,0.5)'}
                       />
                     </TouchableOpacity>
 
@@ -910,7 +917,7 @@ export default function HomeScreen() {
                       <Ionicons
                         name="camera-outline"
                         size={IconSize.md}
-                        color={pendingImage ? Colors.accent : Colors.textMuted}
+                        color={pendingImage ? '#FFF' : 'rgba(255,255,255,0.5)'}
                       />
                     </TouchableOpacity>
 
@@ -919,7 +926,7 @@ export default function HomeScreen() {
                       value={inputText}
                       onChangeText={setInputText}
                       placeholder="Ask anything..."
-                      placeholderTextColor={Colors.textFaint}
+                      placeholderTextColor="rgba(255,255,255,0.4)"
                       editable={!isProcessing}
                       multiline={true}
                       returnKeyType="default"
@@ -1009,7 +1016,7 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
-      </View>
+      </Animated.View>
 
       {/* DRAWER OVERLAY */}
       {drawerOpen && (
@@ -1037,7 +1044,7 @@ export default function HomeScreen() {
             onPress={() => { createNewConversation(); toggleDrawer(); }}
             activeOpacity={0.7}
           >
-            <Ionicons name="add-circle-outline" size={IconSize.lg} color={Colors.accent} />
+            <Ionicons name="add-circle-outline" size={IconSize.lg} color={Colors.textDark} />
             <Text style={styles.drawerNewChatText}>New Chat</Text>
           </TouchableOpacity>
 
@@ -1057,7 +1064,7 @@ export default function HomeScreen() {
                 onPress={() => { toggleDrawer(); router.push(item.route as any); }}
               >
                 <View style={styles.drawerNavIcon}>
-                  <Ionicons name={item.icon} size={18} color={Colors.accent} />
+                  <Ionicons name={item.icon} size={18} color={Colors.textMuted} />
                 </View>
                 <Text style={styles.drawerNavText}>{item.label}</Text>
                 <Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />
@@ -1280,16 +1287,13 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: Colors.card,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: Radius.full,
     paddingLeft: 6,
     paddingRight: 5,
     paddingVertical: 5,
     minHeight: 44,
     maxHeight: 120,
-    borderWidth: 1,
-    borderColor: Colors.borderWarm,
-    ...Shadow.subtle,
   },
   inputIconBtn: {
     width: 34,
@@ -1310,7 +1314,7 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     fontSize: FontSize.base,
-    color: Colors.textDark,
+    color: '#FFF',
     paddingVertical: 6,
     paddingHorizontal: Spacing.sm,
     maxHeight: 100,
@@ -1320,7 +1324,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.accent,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1381,14 +1385,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.base,
     marginBottom: Spacing.sm,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: Colors.backgroundWarm,
     borderRadius: Radius.md,
     marginHorizontal: Spacing.base,
   },
   drawerNewChatText: {
     fontSize: FontSize.base,
     fontWeight: '600',
-    color: Colors.accent,
+    color: Colors.textDark,
     letterSpacing: -0.2,
   },
   drawerProfile: {
@@ -1460,7 +1464,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
   },

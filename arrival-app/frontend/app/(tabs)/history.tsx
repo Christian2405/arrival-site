@@ -76,9 +76,8 @@ export default function HistoryScreen() {
           </Text>
         )}
         <View style={styles.cardFooter}>
-          <View style={[styles.tradeBadge, { backgroundColor: badgeColor + '12' }]}>
-            <View style={[styles.tradeDot, { backgroundColor: badgeColor }]} />
-            <Text style={[styles.tradeBadgeText, { color: badgeColor }]}>{item.trade}</Text>
+          <View style={styles.tradeBadge}>
+            <Text style={styles.tradeBadgeText}>{item.trade}</Text>
           </View>
           <Text style={styles.messageCount}>
             {messageCount} message{messageCount !== 1 ? 's' : ''}
@@ -159,7 +158,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundWarm,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -189,7 +188,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   searchContainer: {
     paddingHorizontal: Spacing.base,
@@ -203,7 +203,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   searchInput: {
     flex: 1,
@@ -221,8 +222,9 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
     borderRadius: Radius.lg,
-    padding: Spacing.base,
-    ...Shadow.medium,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   cardTop: {
     flexDirection: 'row',
@@ -231,7 +233,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   cardTitle: {
-    fontSize: FontSize.base,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.textDark,
     flex: 1,
@@ -260,17 +262,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
     borderRadius: Radius.sm,
-    gap: 5,
-  },
-  tradeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    backgroundColor: Colors.border,
   },
   tradeBadgeText: {
     fontSize: FontSize.xs,
     fontWeight: '700',
     letterSpacing: 0.2,
+    color: Colors.textMuted,
   },
   messageCount: {
     fontSize: FontSize.xs,
@@ -309,11 +307,10 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   startChatBtn: {
-    backgroundColor: Colors.textDark,
+    backgroundColor: Colors.tradeGeneral,
     paddingHorizontal: 28,
     paddingVertical: 15,
     borderRadius: Radius.lg,
-    ...Shadow.medium,
   },
   startChatBtnText: {
     color: Colors.card,

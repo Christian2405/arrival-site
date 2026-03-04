@@ -119,7 +119,7 @@ export default function SavedAnswersScreen() {
       {filteredAnswers.length === 0 && answers.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="bookmark-outline" size={36} color={Colors.accent} />
+            <Ionicons name="bookmark-outline" size={36} color={Colors.textFaint} />
           </View>
           <Text style={styles.emptyTitle}>No saved answers</Text>
           <Text style={styles.emptySubtitle}>
@@ -141,7 +141,7 @@ export default function SavedAnswersScreen() {
             <View style={styles.stepConnector} />
 
             <View style={styles.step}>
-              <View style={[styles.stepNumber, { backgroundColor: Colors.accent }]}>
+              <View style={[styles.stepNumber, { backgroundColor: Colors.tradeGeneral }]}>
                 <Text style={styles.stepNumberText}>2</Text>
               </View>
               <View style={styles.stepContent}>
@@ -245,7 +245,7 @@ export default function SavedAnswersScreen() {
                 {!isExpanded && item.answer.length > 150 && (
                   <View style={styles.readMoreRow}>
                     <Text style={styles.readMore}>Tap to read more</Text>
-                    <Ionicons name="chevron-down" size={14} color={Colors.accent} />
+                    <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
                   </View>
                 )}
 
@@ -253,7 +253,7 @@ export default function SavedAnswersScreen() {
                 {isExpanded && item.answer.length > 150 && (
                   <View style={styles.readMoreRow}>
                     <Text style={styles.readMore}>Tap to collapse</Text>
-                    <Ionicons name="chevron-up" size={14} color={Colors.accent} />
+                    <Ionicons name="chevron-up" size={14} color={Colors.textMuted} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -268,7 +268,7 @@ export default function SavedAnswersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundWarm,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.tradeGeneral,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: Radius.md,
@@ -320,7 +320,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   searchInput: {
     flex: 1,
@@ -369,7 +370,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: 20,
     width: '100%',
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   step: {
     flexDirection: 'row',
@@ -424,7 +426,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: Radius.lg,
     padding: Spacing.base,
-    ...Shadow.medium,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   answerTop: {
     flexDirection: 'row',
@@ -502,7 +505,7 @@ const styles = StyleSheet.create({
   },
   readMore: {
     fontSize: FontSize.xs,
-    color: Colors.accent,
+    color: Colors.textMuted,
     fontWeight: '600',
   },
   confidenceRow: {

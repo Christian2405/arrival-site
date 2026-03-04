@@ -314,7 +314,7 @@ export default function CodesScreen() {
                               router.push({ pathname: '/(tabs)/home', params: { prefill: query } } as any);
                             }}
                           >
-                            <Ionicons name="chatbubble-outline" size={14} color={Colors.accent} />
+                            <Ionicons name="chatbubble-outline" size={14} color={Colors.tradeGeneral} />
                             <Text style={styles.askArrivalText}>Ask Arrival about this code</Text>
                           </TouchableOpacity>
                         </View>
@@ -384,7 +384,7 @@ export default function CodesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundWarm,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.tradeGeneral,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: Radius.md,
@@ -468,7 +468,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   searchInput: {
     flex: 1,
@@ -491,7 +492,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: 14,
     alignItems: 'center',
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   brandCardActive: {
     backgroundColor: Colors.textDark,
@@ -522,7 +524,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    ...Shadow.subtle,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   codeHeader: {
     flexDirection: 'row',
@@ -531,7 +534,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   codeBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.tradeGeneral,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
     borderRadius: Radius.sm,
@@ -577,7 +580,7 @@ const styles = StyleSheet.create({
   causeNumber: {
     fontSize: FontSize.xs,
     fontWeight: '700',
-    color: Colors.accent,
+    color: Colors.tradeGeneral,
     width: 16,
   },
   causeText: {
@@ -597,14 +600,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: 'rgba(124,115,106,0.12)',
     borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },
   askArrivalText: {
     fontSize: FontSize.sm,
     fontWeight: '600',
-    color: Colors.accent,
+    color: Colors.tradeGeneral,
   },
   noCodesText: {
     fontSize: FontSize.sm,
@@ -665,7 +668,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: Radius.lg,
     padding: 14,
-    ...Shadow.medium,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   docIcon: {
     width: 42,

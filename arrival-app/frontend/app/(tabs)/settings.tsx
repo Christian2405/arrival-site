@@ -470,7 +470,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundWarm,
+    backgroundColor: Colors.background,
   },
   headerRow: {
     flexDirection: 'row',
@@ -501,13 +501,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: Radius.lg,
     padding: 18,
-    ...Shadow.medium,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: Radius.full,
-    backgroundColor: Colors.textDark,
+    backgroundColor: Colors.tradeGeneral,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -537,7 +538,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.full,
-    backgroundColor: Colors.backgroundWarm,
+    backgroundColor: Colors.border,
   },
   planBadgeText: {
     fontSize: FontSize.xs,
@@ -550,11 +551,11 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: FontSize.xs,
     fontWeight: '600',
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     paddingHorizontal: 20,
-    marginTop: 28,
+    marginTop: 22,
     marginBottom: 10,
   },
 
@@ -563,7 +564,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     marginHorizontal: Spacing.base,
     borderRadius: Radius.lg,
-    ...Shadow.medium,
+    borderWidth: 1,
+    borderColor: Colors.borderWarm,
   },
 
   // Row
@@ -620,8 +622,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   segmentActive: {
-    backgroundColor: Colors.textDark,
-    ...Shadow.subtle,
+    backgroundColor: Colors.tradeGeneral,
   },
   segmentText: {
     fontSize: FontSize.sm,
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: FontSize.base,
     fontWeight: '600',
-    color: Colors.errorMuted,
+    color: Colors.textMuted,
     letterSpacing: -0.2,
   },
 
