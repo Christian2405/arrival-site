@@ -212,20 +212,28 @@ async def voice_chat(
 
         logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…' (team={team_id})")
 
-        # Job mode optimization: skip RAG for short conversational responses
-        # Short replies like "yeah", "ok", "what about X" don't need document search
+        # Optimization: skip RAG for short conversational responses in job mode
         _is_short_conversational = (
             request.mode == "job"
             and len(transcript.split()) <= 8
             and len(request.conversation_history) > 0
         )
 
-        # Job mode optimization: only include image if transcript mentions visual content
-        _visual_keywords = {"see", "look", "show", "camera", "picture", "photo", "image", "what's this", "what is this", "what's that", "what is that", "this look", "that look"}
+        # ALL MODES: Strip image unless transcript contains visual keywords.
+        # Without this, Claude sees the camera frame and describes it even when
+        # the user asks a non-visual question like "test" or "what size wire?".
+        _visual_keywords = {
+            "see", "look", "show", "camera", "picture", "photo", "image",
+            "what's this", "what is this", "what's that", "what is that",
+            "this look", "that look", "what do you", "point", "pointing",
+            "check this", "check that", "wrong here", "wrong with",
+            "identify", "read this", "read that", "model number",
+            "what brand", "what model",
+        }
         _transcript_lower = transcript.lower()
         _wants_visual = any(kw in _transcript_lower for kw in _visual_keywords)
-        if request.mode == "job" and not _wants_visual and request.image_base64:
-            logger.info("[voice-chat] Job mode: stripping image (no visual keywords)")
+        if not _wants_visual and request.image_base64:
+            logger.info(f"[voice-chat] Stripping image — no visual keywords in: '{transcript[:40]}'")
             request.image_base64 = None
 
         # 2. Usage check + RAG doc search in parallel (searches both user + team namespaces)
@@ -294,8 +302,8 @@ async def voice_chat(
                 "- Lead with the most common cause. '9 times out of 10 that's the capacitor' is better than listing 5 things.\n"
                 "- If they respond to something you said, have a conversation. If they say 'yeah I see it', ask 'want me to walk you through fixing it?' If they say 'it's fine', drop it.\n"
                 "- Don't keep talking after they've acknowledged something. One answer, done, unless they ask more.\n"
-                "- A camera image may be attached but ONLY use it if they explicitly ask about something visual. "
-                "For any other question, completely ignore the image.\n\n"
+                "- If an image is attached, ONLY reference it if they explicitly asked about something visual. "
+                "Otherwise COMPLETELY IGNORE the image. NEVER volunteer 'I can see...' observations.\n\n"
 
                 "EXAMPLE RESPONSES (this is your tone):\n"
                 "Q: 'What's the superheat target on a TXV system?'\n"
@@ -326,12 +334,15 @@ async def voice_chat(
                 "Keep it to 1-3 sentences. This is spoken aloud — make it sound natural, not written.\n\n"
 
                 "RULES:\n"
-                "- Just answer. No 'Great question!' No 'I'd be happy to help.'\n"
-                "- Don't end with 'Let me know if you have other questions.' Just stop.\n"
+                "- Just answer the question they asked. Nothing else.\n"
+                "- No 'Great question!' No 'I'd be happy to help.' No 'Let me know if you have other questions.'\n"
                 "- Use contractions. Say 'you're' not 'you are', 'don't' not 'do not'.\n"
                 "- Use 'probably', 'usually', 'most likely' — that's how people talk.\n"
-                "- A camera image may be attached but ONLY use it if they ask about something visual.\n"
-                "- Continue the conversation naturally. Don't repeat yourself.\n\n"
+                "- If an image is attached, ONLY describe it if the user explicitly asked about something visual "
+                "(e.g. 'what do you see', 'look at this', 'what brand is this'). "
+                "For ANY other question, COMPLETELY IGNORE the image.\n"
+                "- Continue the conversation naturally. Don't repeat yourself.\n"
+                "- NEVER volunteer observations about the image. NEVER say 'I can see...' unless they asked you to look.\n\n"
 
                 "EXAMPLE RESPONSES (match this tone):\n"
                 "Q: 'What causes a furnace to short cycle?'\n"
