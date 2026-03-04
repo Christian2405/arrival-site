@@ -361,7 +361,7 @@ export default function HomeScreen() {
 
         const currentDemoMode = useSettingsStore.getState().demoMode;
         const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
-        const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+        const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
         const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, currentDemoMode, 'default');
 
         if (SAVE_COMMANDS.test(result.transcript)) {
@@ -605,7 +605,8 @@ export default function HomeScreen() {
             let frame: string | undefined;
             try { frame = await captureFrame(); } catch {}
             const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
-            const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+            // Job mode: only 6 recent messages (3 exchanges) — less input tokens = faster Claude response
+            const history = currentMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
             const currentDemoMode = useSettingsStore.getState().demoMode;
             const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
 

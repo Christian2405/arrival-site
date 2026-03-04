@@ -151,10 +151,12 @@ async def voice_chat(
         )
 
     # Sanitize conversation_history — only allow valid roles, truncate content
+    # Voice messages are short — cap at 500 chars each to keep input tokens low
+    _content_limit = 500 if request.mode == "job" else 2000
     safe_history = [
         {
             "role": msg["role"],
-            "content": str(msg.get("content", ""))[:MAX_CONTENT_LENGTH],
+            "content": str(msg.get("content", ""))[:_content_limit],
         }
         for msg in request.conversation_history
         if isinstance(msg, dict)
@@ -213,12 +215,10 @@ async def voice_chat(
 
         logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…' (team={team_id})")
 
-        # Optimization: skip RAG for short conversational responses in job mode
-        _is_short_conversational = (
-            request.mode == "job"
-            and len(transcript.split()) <= 8
-            and len(request.conversation_history) > 0
-        )
+        # Job mode: skip RAG entirely — the system prompt + 50-year vet personality
+        # has enough trade knowledge. RAG adds 1-3s latency and job mode needs to
+        # feel like a real conversation, not a document search.
+        _skip_rag = request.mode == "job"
 
         # ALL MODES: Strip image unless transcript contains visual keywords.
         # Without this, Claude sees the camera frame and describes it even when
@@ -239,9 +239,9 @@ async def voice_chat(
 
         # 2. Usage check + RAG doc search in parallel (searches both user + team namespaces)
         t1 = time.monotonic()
-        if _is_short_conversational:
-            # Skip RAG for short conversational job mode responses — saves 1-3s
-            logger.info("[voice-chat] Job mode: skipping RAG for short conversational response")
+        if _skip_rag:
+            # Job mode: skip RAG entirely — saves 1-3s per response
+            logger.info("[voice-chat] Job mode: skipping RAG for conversational speed")
             usage_result = await check_query_limit(user_id)
             usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
             rag_context = []
@@ -284,7 +284,7 @@ async def voice_chat(
 
         # Per-mode response tuning
         if request.mode == "job":
-            voice_max_tokens = 250
+            voice_max_tokens = 150  # 1-3 spoken sentences — keep it tight for speed
 
             # Get job equipment context if set
             job_ctx = get_job_context(user_id)
@@ -323,8 +323,8 @@ async def voice_chat(
 
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
-                "stability": 0.7,
-                "similarity_boost": 0.8,
+                "stability": 0.75,
+                "similarity_boost": 0.85,
                 "style": 0.0,
                 "use_speaker_boost": True,
                 "speed": 1.0,
