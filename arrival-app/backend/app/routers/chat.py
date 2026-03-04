@@ -240,6 +240,23 @@ async def chat(
                     logger.warning(f"[chat] RAG retrieval failed: {e}")
                     rag_context = []
 
+                # Strip image unless the message contains visual keywords.
+                # Prevents Claude from describing the camera when user asks a text question
+                # with an auto-captured frame attached.
+                if request.image_base64:
+                    _visual_keywords = {
+                        "see", "look", "show", "camera", "picture", "photo", "image",
+                        "what's this", "what is this", "what's that", "what is that",
+                        "this look", "that look", "what do you", "point", "pointing",
+                        "check this", "check that", "wrong here", "wrong with",
+                        "identify", "read this", "read that", "model number",
+                        "what brand", "what model",
+                    }
+                    _msg_lower = request.message.lower()
+                    if not any(kw in _msg_lower for kw in _visual_keywords):
+                        logger.info(f"[chat] Stripping image — no visual keywords in: '{request.message[:40]}'")
+                        request.image_base64 = None
+
                 # Build units instruction if user prefers metric
                 units_note = "\n\nIMPORTANT: The user prefers METRIC units. Use Celsius, millimeters, liters, kilopascals, meters, etc. Convert any imperial measurements." if request.units == "metric" else ""
 

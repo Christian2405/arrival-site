@@ -601,14 +601,15 @@ export default function HomeScreen() {
         },
         onVoiceResponse: async (audioBase64) => {
           try {
-            // Skip image capture for most job mode voice — saves 2-4s latency.
-            // Image is only useful when user asks about something visual.
-            // Backend will re-check transcript for visual keywords after STT.
+            // Always capture a frame for job mode voice — the camera is already active.
+            // Backend will strip the image unless the transcript contains visual keywords,
+            // so non-visual questions stay fast while "what do you see?" actually works.
+            let frame: string | undefined;
+            try { frame = await captureFrame(); } catch {}
             const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
             const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-            // Bug 5: Read demoMode from store at call time
             const currentDemoMode = useSettingsStore.getState().demoMode;
-            const result = await aiAPI.voiceChat(audioBase64, undefined, history, currentDemoMode, 'job');
+            const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
 
             addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
             addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() }); // Bug 14

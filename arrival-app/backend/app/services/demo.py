@@ -48,7 +48,7 @@ DEMO_RESPONSES = [
 ]
 
 DEFAULT_RESPONSE = {
-    "response": "Based on what I can see, I'd recommend checking the manufacturer's service manual for the specific model number on the data plate. In the meantime, verify all electrical connections are tight, check for any visible damage or corrosion, and make sure the unit has proper airflow. Can you tell me the model number or describe the specific issue you're seeing?",
+    "response": "I'd need a bit more detail to give you a solid answer. What's the brand and model number off the data plate? And what exactly is the unit doing — or not doing? The more specific you are, the faster we narrow it down.",
     "source": "General HVAC Best Practices",
     "confidence": "medium",
 }
