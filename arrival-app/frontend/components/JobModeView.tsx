@@ -117,8 +117,9 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
   }, []);
 
   // --- Quick Action Chips: show/hide when lastAlert changes ---
+  // Only show chips when in monitoring state (not while listening/processing/speaking)
   useEffect(() => {
-    if (lastAlert && lastAlert.message) {
+    if (lastAlert && lastAlert.message && aiState === 'monitoring') {
       // New proactive alert arrived — show chips
       setActiveAlert(lastAlert);
       setShowChips(true);
@@ -141,7 +142,15 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
       }, CHIP_AUTO_DISMISS_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastAlert]);
+  }, [lastAlert, aiState]);
+
+  // Dismiss chips when AI starts listening/processing/speaking
+  useEffect(() => {
+    if (aiState !== 'monitoring' && showChips) {
+      dismissChips();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiState]);
 
   const dismissChips = useCallback(() => {
     if (chipsDismissTimer.current) {

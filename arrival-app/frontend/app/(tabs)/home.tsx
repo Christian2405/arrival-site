@@ -562,9 +562,9 @@ export default function HomeScreen() {
 
     const controller = new JobModeController(
       {
-        cooldownAfterSpeaking: 1000,   // Quick turnaround for conversational flow
-        cooldownAfterDismiss: 3000,    // Shorter dismiss cooldown
-        maxAlertsPerMinute: 6,
+        cooldownAfterSpeaking: 5000,   // Don't pop chips right after AI speaks
+        cooldownAfterDismiss: 8000,    // Long cooldown after user dismisses
+        maxAlertsPerMinute: 3,         // Max 3 proactive alerts per minute
       },
       {
         onAlert: async (message, severity) => {
@@ -589,12 +589,14 @@ export default function HomeScreen() {
         },
         onVoiceResponse: async (audioBase64) => {
           try {
-            const frame = await captureFrame();
+            // Skip image capture for most job mode voice — saves 2-4s latency.
+            // Image is only useful when user asks about something visual.
+            // Backend will re-check transcript for visual keywords after STT.
             const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
             const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
             // Bug 5: Read demoMode from store at call time
             const currentDemoMode = useSettingsStore.getState().demoMode;
-            const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
+            const result = await aiAPI.voiceChat(audioBase64, undefined, history, currentDemoMode, 'job');
 
             addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
             addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() }); // Bug 14

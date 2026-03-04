@@ -212,28 +212,51 @@ async def voice_chat(
 
         logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…' (team={team_id})")
 
-        # 2. Usage check + RAG doc search in parallel (searches both user + team namespaces)
-        t1 = time.monotonic()
-        usage_result, rag_result = await asyncio.gather(
-            check_query_limit(user_id),
-            retrieve_context(user_id, transcript, team_id=team_id),
-            return_exceptions=True,
+        # Job mode optimization: skip RAG for short conversational responses
+        # Short replies like "yeah", "ok", "what about X" don't need document search
+        _is_short_conversational = (
+            request.mode == "job"
+            and len(transcript.split()) <= 8
+            and len(request.conversation_history) > 0
         )
 
-        # Handle usage check
-        usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
-        if isinstance(usage_result, Exception):
-            logger.warning(f"Usage check failed: {usage_result}")
+        # Job mode optimization: only include image if transcript mentions visual content
+        _visual_keywords = {"see", "look", "show", "camera", "picture", "photo", "image", "what's this", "what is this", "what's that", "what is that", "this look", "that look"}
+        _transcript_lower = transcript.lower()
+        _wants_visual = any(kw in _transcript_lower for kw in _visual_keywords)
+        if request.mode == "job" and not _wants_visual and request.image_base64:
+            logger.info("[voice-chat] Job mode: stripping image (no visual keywords)")
+            request.image_base64 = None
+
+        # 2. Usage check + RAG doc search in parallel (searches both user + team namespaces)
+        t1 = time.monotonic()
+        if _is_short_conversational:
+            # Skip RAG for short conversational job mode responses — saves 1-3s
+            logger.info("[voice-chat] Job mode: skipping RAG for short conversational response")
+            usage_result = await check_query_limit(user_id)
+            usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
+            rag_context = []
+        else:
+            usage_result, rag_result = await asyncio.gather(
+                check_query_limit(user_id),
+                retrieve_context(user_id, transcript, team_id=team_id),
+                return_exceptions=True,
+            )
+            # Handle usage check
+            usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
+            if isinstance(usage_result, Exception):
+                logger.warning(f"Usage check failed: {usage_result}")
+
+            # Handle RAG results
+            rag_context = rag_result if not isinstance(rag_result, Exception) else []
+            if isinstance(rag_result, Exception):
+                logger.warning(f"RAG retrieval failed: {rag_result}")
+
         if not usage["allowed"]:
             raise HTTPException(
                 status_code=429,
                 detail="Daily limit reached. Resets at midnight.",
             )
-
-        # Handle RAG results
-        rag_context = rag_result if not isinstance(rag_result, Exception) else []
-        if isinstance(rag_result, Exception):
-            logger.warning(f"RAG retrieval failed: {rag_result}")
         logger.info(f"[voice-chat] Usage+RAG done in {time.monotonic()-t1:.2f}s (rag_results={len(rag_context)})")
 
         # Static error code lookup — instant, no latency
