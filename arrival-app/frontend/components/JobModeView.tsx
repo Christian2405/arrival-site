@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, Animated, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, Animated, StyleSheet, TouchableOpacity, ScrollView, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
 import { jobContextAPI, JobContext } from '../services/api';
@@ -11,20 +11,19 @@ export type QuickActionType = 'text' | 'explain' | 'walkthrough';
 export interface JobAlert {
   message: string;
   severity: string;
-  ts?: number; // Timestamp to force useEffect re-trigger on identical messages
+  ts?: number;
 }
 
 interface JobModeViewProps {
   aiState: JobAIState;
   onPause?: () => void;
   isPaused?: boolean;
-  /** The most recent proactive alert (frame analysis only). Triggers quick action chips. */
   lastAlert?: JobAlert | null;
-  /** Called when the tech taps a quick action chip */
   onQuickAction?: (action: QuickActionType, alertMessage: string) => void;
+  /** Called when user taps to interrupt AI speaking */
+  onInterrupt?: () => void;
 }
 
-// Equipment type display config
 const EQUIPMENT_OPTIONS = [
   { key: 'furnace', label: 'Furnace', icon: 'flame-outline' as const },
   { key: 'air_conditioner', label: 'AC', icon: 'snow-outline' as const },
@@ -42,13 +41,6 @@ const TOP_BRANDS = [
   'Daikin', 'Mitsubishi', 'Rinnai', 'AO Smith', 'Square D',
 ];
 
-const STATE_CONFIG = {
-  monitoring: { icon: 'eye' as const, label: 'Monitoring...', color: '#34C759', ringColor: 'rgba(52,199,89,0.3)' },
-  listening: { icon: 'ear' as const, label: 'Listening...', color: '#FF9500', ringColor: 'rgba(255,149,0,0.3)' },
-  processing: { icon: 'sparkles' as const, label: 'Thinking...', color: Colors.accent, ringColor: `rgba(212,132,42,0.3)` },
-  speaking: { icon: 'volume-high' as const, label: 'Speaking...', color: '#4A90D9', ringColor: 'rgba(74,144,217,0.3)' },
-};
-
 const QUICK_ACTIONS: { key: QuickActionType; icon: string; label: string }[] = [
   { key: 'text', icon: 'document-text-outline', label: 'Show in text' },
   { key: 'explain', icon: 'chatbubble-outline', label: 'Explain more' },
@@ -58,10 +50,11 @@ const QUICK_ACTIONS: { key: QuickActionType; icon: string; label: string }[] = [
 const CHIP_AUTO_DISMISS_MS = 8000;
 const TEXT_DISPLAY_MS = 10000;
 
-export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQuickAction }: JobModeViewProps) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const ringOpacity = useRef(new Animated.Value(0.3)).current;
-  const dotOpacity = useRef(new Animated.Value(1)).current;
+export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQuickAction, onInterrupt }: JobModeViewProps) {
+  // --- Glass pill animations ---
+  const eyeGlow = useRef(new Animated.Value(0.5)).current;
+  const voicePulse = useRef(new Animated.Value(1)).current;
+  const interruptOpacity = useRef(new Animated.Value(0)).current;
 
   // Quick action chips state
   const chipsOpacity = useRef(new Animated.Value(0)).current;
@@ -116,61 +109,83 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
     }
   }, []);
 
-  // --- Quick Action Chips: show/hide when lastAlert changes ---
-  // Only show chips when in monitoring state (not while listening/processing/speaking)
+  // --- Eye pill: subtle glow when monitoring/analyzing ---
+  useEffect(() => {
+    eyeGlow.stopAnimation();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(eyeGlow, { toValue: 1, duration: 2000, useNativeDriver: true }),
+        Animated.timing(eyeGlow, { toValue: 0.5, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+    return () => { eyeGlow.stopAnimation(); };
+  }, [eyeGlow]);
+
+  // --- Voice pill: reacts to state ---
+  useEffect(() => {
+    voicePulse.stopAnimation();
+    if (aiState === 'listening') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(voicePulse, { toValue: 1.2, duration: 400, useNativeDriver: true }),
+          Animated.timing(voicePulse, { toValue: 1, duration: 400, useNativeDriver: true }),
+        ])
+      ).start();
+    } else if (aiState === 'speaking') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(voicePulse, { toValue: 1.1, duration: 500, useNativeDriver: true }),
+          Animated.timing(voicePulse, { toValue: 1, duration: 500, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      voicePulse.setValue(1);
+    }
+    return () => { voicePulse.stopAnimation(); };
+  }, [aiState, voicePulse]);
+
+  // --- Interrupt hint: fade in when speaking ---
+  useEffect(() => {
+    Animated.timing(interruptOpacity, {
+      toValue: aiState === 'speaking' ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [aiState, interruptOpacity]);
+
+  // --- Quick Action Chips ---
   useEffect(() => {
     if (lastAlert && lastAlert.message && aiState === 'monitoring') {
-      // New proactive alert arrived — show chips
       setActiveAlert(lastAlert);
       setShowChips(true);
-
-      // Clear any existing text card
       dismissTextCard();
-
-      // Animate in
       chipsOpacity.setValue(0);
       chipsTranslateY.setValue(20);
       Animated.parallel([
         Animated.timing(chipsOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
         Animated.timing(chipsTranslateY, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
-
-      // Auto-dismiss timer
       if (chipsDismissTimer.current) clearTimeout(chipsDismissTimer.current);
-      chipsDismissTimer.current = setTimeout(() => {
-        dismissChips();
-      }, CHIP_AUTO_DISMISS_MS);
+      chipsDismissTimer.current = setTimeout(() => { dismissChips(); }, CHIP_AUTO_DISMISS_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastAlert, aiState]);
 
-  // Dismiss chips when AI starts listening/processing/speaking
   useEffect(() => {
-    if (aiState !== 'monitoring' && showChips) {
-      dismissChips();
-    }
+    if (aiState !== 'monitoring' && showChips) { dismissChips(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiState]);
 
   const dismissChips = useCallback(() => {
-    if (chipsDismissTimer.current) {
-      clearTimeout(chipsDismissTimer.current);
-      chipsDismissTimer.current = null;
-    }
+    if (chipsDismissTimer.current) { clearTimeout(chipsDismissTimer.current); chipsDismissTimer.current = null; }
     Animated.parallel([
       Animated.timing(chipsOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
       Animated.timing(chipsTranslateY, { toValue: 10, duration: 200, useNativeDriver: true }),
-    ]).start(() => {
-      setShowChips(false);
-      setActiveAlert(null);
-    });
+    ]).start(() => { setShowChips(false); setActiveAlert(null); });
   }, [chipsOpacity, chipsTranslateY]);
 
   const dismissTextCard = useCallback(() => {
-    if (textDismissTimer.current) {
-      clearTimeout(textDismissTimer.current);
-      textDismissTimer.current = null;
-    }
+    if (textDismissTimer.current) { clearTimeout(textDismissTimer.current); textDismissTimer.current = null; }
     Animated.timing(textCardOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
       setTextCardMessage(null);
     });
@@ -179,27 +194,18 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
   const handleQuickAction = useCallback((action: QuickActionType) => {
     if (!activeAlert) return;
     const msg = activeAlert.message;
-
-    // Dismiss chips immediately
     dismissChips();
-
     if (action === 'text') {
-      // Show the text card on screen
       setTextCardMessage(msg);
       textCardOpacity.setValue(0);
       Animated.timing(textCardOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-      // Auto-dismiss text card
       if (textDismissTimer.current) clearTimeout(textDismissTimer.current);
-      textDismissTimer.current = setTimeout(() => {
-        dismissTextCard();
-      }, TEXT_DISPLAY_MS);
+      textDismissTimer.current = setTimeout(() => { dismissTextCard(); }, TEXT_DISPLAY_MS);
     } else {
-      // Delegate to parent (explain / walkthrough)
       onQuickAction?.(action, msg);
     }
   }, [activeAlert, dismissChips, onQuickAction, textCardOpacity, dismissTextCard]);
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (chipsDismissTimer.current) clearTimeout(chipsDismissTimer.current);
@@ -207,126 +213,59 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
     };
   }, []);
 
-  // --- Pulse animations ---
-  useEffect(() => {
-    pulseAnim.stopAnimation();
-    ringOpacity.stopAnimation();
-    dotOpacity.stopAnimation();
-
-    if (aiState === 'monitoring') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.08, duration: 2500, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 2500, useNativeDriver: true }),
-        ])
-      ).start();
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(ringOpacity, { toValue: 0.6, duration: 2500, useNativeDriver: true }),
-          Animated.timing(ringOpacity, { toValue: 0.2, duration: 2500, useNativeDriver: true }),
-        ])
-      ).start();
-    } else if (aiState === 'listening') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.2, duration: 300, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        ])
-      ).start();
-      Animated.timing(ringOpacity, { toValue: 0.8, duration: 200, useNativeDriver: true }).start();
-    } else if (aiState === 'processing') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.05, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 0.95, duration: 800, useNativeDriver: true }),
-        ])
-      ).start();
-      Animated.timing(ringOpacity, { toValue: 0.5, duration: 200, useNativeDriver: true }).start();
-    } else if (aiState === 'speaking') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.12, duration: 500, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        ])
-      ).start();
-      Animated.timing(ringOpacity, { toValue: 0.7, duration: 200, useNativeDriver: true }).start();
-    }
-
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(dotOpacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-        Animated.timing(dotOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-
-    return () => {
-      pulseAnim.stopAnimation();
-      ringOpacity.stopAnimation();
-      dotOpacity.stopAnimation();
-    };
-  }, [aiState]);
-
-  const config = STATE_CONFIG[aiState];
+  // Voice icon and color based on state
+  const voiceIcon: keyof typeof Ionicons.glyphMap =
+    aiState === 'speaking' ? 'volume-high' :
+    aiState === 'processing' ? 'ellipsis-horizontal' :
+    'mic';
+  const voiceColor =
+    aiState === 'listening' ? '#FF9500' :
+    aiState === 'speaking' ? '#4A90D9' :
+    aiState === 'processing' ? Colors.accent :
+    'rgba(255,255,255,0.6)';
+  const voiceActive = aiState !== 'monitoring';
 
   const equipLabel = jobContext
     ? `${jobContext.brand || ''} ${jobContext.equipment_type.replace('_', ' ')}${jobContext.model ? ` (${jobContext.model})` : ''}`.trim()
     : null;
 
   return (
-    <View style={styles.container}>
-      {/* Equipment context bar */}
-      {jobContext && !showEquipmentPicker ? (
-        <TouchableOpacity style={styles.contextBar} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
-          <Ionicons name="build-outline" size={IconSize.sm} color={Colors.accent} />
-          <Text style={styles.contextText} numberOfLines={1}>{equipLabel}</Text>
-          <TouchableOpacity onPress={handleClearContext} hitSlop={8} style={styles.contextClear}>
-            <Ionicons name="close-circle" size={IconSize.sm} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      ) : !showEquipmentPicker ? (
-        <TouchableOpacity style={styles.setContextBtn} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
-          <Ionicons name="build-outline" size={IconSize.sm} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.setContextText}>Set equipment</Text>
-        </TouchableOpacity>
-      ) : null}
+    <View style={s.container} pointerEvents="box-none">
 
-      {/* Equipment picker */}
+      {/* Equipment picker (full overlay) */}
       {showEquipmentPicker ? (
-        <View style={styles.pickerContainer}>
-          <Text style={styles.pickerTitle}>What are you working on?</Text>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
+        <View style={s.pickerContainer}>
+          <Text style={s.pickerTitle}>What are you working on?</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow} contentContainerStyle={s.chipRowContent}>
             {EQUIPMENT_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.chip, selectedEquipment === opt.key && styles.chipSelected]}
+                style={[s.eqChip, selectedEquipment === opt.key && s.eqChipSelected]}
                 onPress={() => setSelectedEquipment(opt.key)}
                 activeOpacity={0.7}
               >
                 <Ionicons name={opt.icon} size={IconSize.sm} color={selectedEquipment === opt.key ? '#FFF' : 'rgba(255,255,255,0.6)'} />
-                <Text style={[styles.chipText, selectedEquipment === opt.key && styles.chipTextSelected]}>{opt.label}</Text>
+                <Text style={[s.eqChipText, selectedEquipment === opt.key && s.eqChipTextSelected]}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-
           {selectedEquipment && (
             <>
-              <Text style={styles.pickerSubtitle}>Brand (optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
+              <Text style={s.pickerSubtitle}>Brand (optional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow} contentContainerStyle={s.chipRowContent}>
                 {TOP_BRANDS.map(brand => (
                   <TouchableOpacity
                     key={brand}
-                    style={[styles.chip, selectedBrand === brand && styles.chipSelected]}
+                    style={[s.eqChip, selectedBrand === brand && s.eqChipSelected]}
                     onPress={() => setSelectedBrand(selectedBrand === brand ? null : brand)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.chipText, selectedBrand === brand && styles.chipTextSelected]}>{brand}</Text>
+                    <Text style={[s.eqChipText, selectedBrand === brand && s.eqChipTextSelected]}>{brand}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-
               <TextInput
-                style={styles.modelInput}
+                style={s.modelInput}
                 placeholder="Model # (optional)"
                 placeholderTextColor="rgba(255,255,255,0.3)"
                 value={modelInput}
@@ -335,87 +274,91 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
               />
             </>
           )}
-
-          <View style={styles.pickerActions}>
-            <TouchableOpacity onPress={() => setShowEquipmentPicker(false)} style={styles.pickerCancel}>
-              <Text style={styles.pickerCancelText}>Cancel</Text>
+          <View style={s.pickerActions}>
+            <TouchableOpacity onPress={() => setShowEquipmentPicker(false)} style={s.pickerCancel}>
+              <Text style={s.pickerCancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSetContext}
-              style={[styles.pickerConfirm, !selectedEquipment && styles.pickerConfirmDisabled]}
+              style={[s.pickerConfirm, !selectedEquipment && s.pickerConfirmDisabled]}
               disabled={!selectedEquipment}
             >
-              <Text style={styles.pickerConfirmText}>Set</Text>
+              <Text style={s.pickerConfirmText}>Set</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : (
         <>
-          {/* LIVE indicator */}
-          <View style={styles.liveRow}>
-            <Animated.View style={[styles.liveDot, { opacity: dotOpacity }]} />
-            <Text style={styles.liveText}>LIVE</Text>
+          {/* ── TWO GLASS PILLS ── */}
+          <View style={s.pillRow}>
+            {/* Eye pill — camera watching */}
+            <Animated.View style={[s.pill, { opacity: eyeGlow }]}>
+              <Ionicons name="eye" size={18} color="#34C759" />
+            </Animated.View>
+
+            {/* Voice pill — mic/speaker state */}
+            <Animated.View style={[
+              s.pill,
+              voiceActive && s.pillActive,
+              { transform: [{ scale: voicePulse }] },
+            ]}>
+              <Ionicons name={voiceIcon} size={18} color={voiceColor} />
+            </Animated.View>
           </View>
 
-          {/* Main status ring */}
-          <View style={styles.ringContainer}>
-            <Animated.View
-              style={[
-                styles.outerRing,
-                {
-                  borderColor: config.color,
-                  backgroundColor: config.ringColor,
-                  transform: [{ scale: pulseAnim }],
-                  opacity: ringOpacity,
-                },
-              ]}
-            />
-            <View style={[styles.innerCircle, { backgroundColor: config.color }]}>
-              <Ionicons name={config.icon} size={40} color="#FFF" />
-            </View>
-          </View>
+          {/* Equipment badge — tap to change */}
+          {jobContext ? (
+            <TouchableOpacity style={s.equipBadge} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
+              <Ionicons name="build-outline" size={14} color={Colors.accent} />
+              <Text style={s.equipBadgeText} numberOfLines={1}>{equipLabel}</Text>
+              <TouchableOpacity onPress={handleClearContext} hitSlop={8}>
+                <Ionicons name="close-circle" size={14} color="rgba(255,255,255,0.3)" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={s.setEquipBtn} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
+              <Ionicons name="build-outline" size={14} color="rgba(255,255,255,0.4)" />
+              <Text style={s.setEquipText}>Set equipment</Text>
+            </TouchableOpacity>
+          )}
 
-          <Text style={[styles.stateLabel, { color: config.color }]}>{config.label}</Text>
-          <Text style={styles.subtitle}>
-            {aiState === 'monitoring' ? 'Watching for issues...' :
-             aiState === 'listening' ? 'Hearing you...' :
-             aiState === 'processing' ? 'Analyzing...' :
-             'Responding...'}
-          </Text>
-
-          {/* "Show in text" card — appears when tech taps the text chip */}
+          {/* "Show in text" card */}
           {textCardMessage && (
-            <Animated.View style={[styles.textCard, { opacity: textCardOpacity }]}>
-              <TouchableOpacity style={styles.textCardClose} onPress={dismissTextCard} hitSlop={8}>
+            <Animated.View style={[s.textCard, { opacity: textCardOpacity }]}>
+              <TouchableOpacity style={s.textCardClose} onPress={dismissTextCard} hitSlop={8}>
                 <Ionicons name="close" size={IconSize.sm} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
-              <Text style={styles.textCardMessage}>{textCardMessage}</Text>
+              <Text style={s.textCardMsg}>{textCardMessage}</Text>
             </Animated.View>
           )}
 
-          {/* Quick action chips — only after proactive alerts */}
+          {/* Quick action chips — after proactive alerts only */}
           {showChips && activeAlert && (
-            <Animated.View style={[styles.quickActionsContainer, { opacity: chipsOpacity, transform: [{ translateY: chipsTranslateY }] }]}>
-              {QUICK_ACTIONS.map((action) => (
+            <Animated.View style={[s.chipsRow, { opacity: chipsOpacity, transform: [{ translateY: chipsTranslateY }] }]}>
+              {QUICK_ACTIONS.map(action => (
                 <TouchableOpacity
                   key={action.key}
-                  style={styles.quickActionChip}
+                  style={s.actionChip}
                   onPress={() => handleQuickAction(action.key)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name={action.icon as any} size={IconSize.sm} color="#FFF" />
-                  <Text style={styles.quickActionLabel}>{action.label}</Text>
+                  <Ionicons name={action.icon as any} size={14} color="#FFF" />
+                  <Text style={s.actionChipText}>{action.label}</Text>
                 </TouchableOpacity>
               ))}
             </Animated.View>
           )}
 
-          {/* Pause button */}
-          {onPause && (
-            <TouchableOpacity style={styles.pauseButton} onPress={onPause} activeOpacity={0.7}>
-              <Ionicons name={isPaused ? 'play' : 'pause'} size={IconSize.md} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.pauseText}>{isPaused ? 'Resume' : 'Pause'}</Text>
-            </TouchableOpacity>
+          {/* TAP TO INTERRUPT — full screen overlay when AI is speaking */}
+          {aiState === 'speaking' && (
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: interruptOpacity }]} pointerEvents="box-none">
+              <Pressable style={s.interruptOverlay} onPress={onInterrupt}>
+                <View style={s.interruptBadge}>
+                  <Ionicons name="hand-left-outline" size={14} color="rgba(255,255,255,0.8)" />
+                  <Text style={s.interruptText}>Tap to interrupt</Text>
+                </View>
+              </Pressable>
+            </Animated.View>
           )}
         </>
       )}
@@ -423,117 +366,144 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 40,
-  },
-  liveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 40,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF3B30',
-  },
-  liveText: {
-    color: '#FF3B30',
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  ringContainer: {
-    width: 160,
-    height: 160,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  outerRing: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 3,
-  },
-  innerCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stateLabel: {
-    fontSize: FontSize.lg,
-    fontWeight: '600',
-    marginTop: Spacing.lg,
-  },
-  subtitle: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: FontSize.sm,
-    marginTop: 6,
-  },
-  pauseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Spacing.xl,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  pauseText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: FontSize.sm,
-    fontWeight: '500',
+    paddingBottom: 60,
   },
 
-  // Equipment context bar
-  contextBar: {
+  // --- Two glass pills ---
+  pillRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  pill: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pillActive: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+
+  // --- Equipment badge ---
+  equipBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: Radius.full,
-    marginBottom: Spacing.base,
-    maxWidth: '80%',
+    borderRadius: 20,
+    maxWidth: '75%',
   },
-  contextText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: FontSize.sm,
+  equipBadgeText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
     fontWeight: '500',
     flex: 1,
     textTransform: 'capitalize',
   },
-  contextClear: {
-    padding: 2,
-  },
-  setContextBtn: {
+  setEquipBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 6,
-    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.12)',
     borderStyle: 'dashed',
-    marginBottom: Spacing.base,
   },
-  setContextText: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: FontSize.sm,
+  setEquipText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 13,
   },
 
-  // Equipment picker
+  // --- Interrupt overlay ---
+  interruptOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 100,
+  },
+  interruptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  interruptText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  // --- Text card ---
+  textCard: {
+    marginTop: 24,
+    marginHorizontal: 24,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    maxWidth: '85%',
+  },
+  textCardClose: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+  },
+  textCardMsg: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    lineHeight: 20,
+    paddingRight: 20,
+  },
+
+  // --- Quick action chips ---
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  actionChipText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // --- Equipment picker ---
   pickerContainer: {
     width: '100%',
     paddingHorizontal: 20,
@@ -560,7 +530,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     paddingVertical: Spacing.xs,
   },
-  chip: {
+  eqChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -571,16 +541,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  chipSelected: {
+  eqChipSelected: {
     backgroundColor: Colors.accent,
     borderColor: Colors.accent,
   },
-  chipText: {
+  eqChipText: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: FontSize.sm,
     fontWeight: '500',
   },
-  chipTextSelected: {
+  eqChipTextSelected: {
     color: '#FFF',
   },
   modelInput: {
@@ -624,57 +594,5 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: FontSize.sm,
     fontWeight: '600',
-  },
-
-  // Quick action chips
-  quickActionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-    paddingHorizontal: 20,
-  },
-  quickActionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  quickActionLabel: {
-    color: '#FFF',
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-
-  // Text card (shown when "Show in text" is tapped)
-  textCard: {
-    marginTop: 20,
-    marginHorizontal: Spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: Radius.lg,
-    padding: Spacing.base,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    maxWidth: '85%',
-  },
-  textCardClose: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    padding: Spacing.xs,
-  },
-  textCardMessage: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: FontSize.sm,
-    lineHeight: 20,
-    letterSpacing: -0.2,
-    paddingRight: 20,
   },
 });

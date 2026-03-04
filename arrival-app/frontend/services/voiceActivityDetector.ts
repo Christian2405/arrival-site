@@ -181,9 +181,9 @@ export default class VoiceActivityDetector {
       console.log('[VAD] speech end error:', e);
     } finally {
       this.isProcessing = false;
-      // Restart listening for next utterance after a short delay
+      // Restart listening — fast restart for responsive feel
       if (this.enabled) {
-        setTimeout(() => this.startListening(), 500);
+        setTimeout(() => this.startListening(), 200);
       }
     }
   }

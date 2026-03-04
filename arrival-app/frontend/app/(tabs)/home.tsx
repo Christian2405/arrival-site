@@ -623,6 +623,7 @@ export default function HomeScreen() {
           }
         },
         onStateChange: setJobAIState,
+        onInterrupt: () => { stopAudio(); },
       },
       { minInterval: 4000, maxInterval: 15000, changeThreshold: 0.15, captureInterval: 4000 },
       { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1200, meteringInterval: 100 },
@@ -959,7 +960,6 @@ export default function HomeScreen() {
               <JobModeView
                 aiState={jobAIState}
                 onPause={() => {
-                  // Bug 17: Guard null controller
                   if (!jobControllerRef.current) return;
                   if (jobPaused) {
                     jobControllerRef.current.vad.resume();
@@ -971,6 +971,9 @@ export default function HomeScreen() {
                 }}
                 isPaused={jobPaused}
                 lastAlert={lastJobAlert}
+                onInterrupt={() => {
+                  jobControllerRef.current?.interrupt();
+                }}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView
 
