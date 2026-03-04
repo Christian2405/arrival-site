@@ -703,14 +703,8 @@ export default function HomeScreen() {
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       )}
 
-      {/* Text mode: solid light background covering camera */}
-      {interactionMode === 'text' && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
-      )}
-      {/* Voice/Job mode: dark overlay on camera */}
-      {interactionMode !== 'text' && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
-      )}
+      {/* Dark overlay on camera feed */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
 
       {/* Main content */}
       <View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardHeight : 0 }}>
@@ -718,8 +712,8 @@ export default function HomeScreen() {
 
           {/* TOP BAR: Hamburger + Mode Selector + New Chat */}
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={toggleDrawer} style={[styles.iconBtn, interactionMode === 'text' && styles.iconBtnLight]}>
-              <Ionicons name="menu" size={IconSize.lg} color={interactionMode === 'text' ? Colors.textDark : '#FFF'} />
+            <TouchableOpacity onPress={toggleDrawer} style={styles.iconBtn}>
+              <Ionicons name="menu" size={IconSize.lg} color="#FFF" />
             </TouchableOpacity>
 
             <ModeSelector
@@ -727,13 +721,13 @@ export default function HomeScreen() {
               onModeChange={handleModeChange}
               jobModeAllowed={tierLimits.jobMode}
               voiceAllowed={tierLimits.voiceOutput}
-              variant={interactionMode === 'text' ? 'light' : 'dark'}
+              variant="dark"
             />
 
             {messages.length > 0 ? (
-              <TouchableOpacity onPress={() => createNewConversation()} style={[styles.newSessionBtn, interactionMode === 'text' && styles.iconBtnLight]}>
-                <Ionicons name="refresh" size={FontSize.sm} color={interactionMode === 'text' ? Colors.textDark : '#FFF'} />
-                <Text style={[styles.newSessionText, interactionMode === 'text' && { color: Colors.textDark }]}>New</Text>
+              <TouchableOpacity onPress={() => createNewConversation()} style={styles.newSessionBtn}>
+                <Ionicons name="refresh" size={FontSize.sm} color="#FFF" />
+                <Text style={styles.newSessionText}>New</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.iconBtn} />
@@ -839,7 +833,7 @@ export default function HomeScreen() {
                   </Animated.View>
                 ) : (
                   <View style={styles.emptyState}>
-                    <ArrivalLogo width={48} color={Colors.textDark} />
+                    <ArrivalLogo width={48} color="rgba(255,255,255,0.7)" />
                     <Text style={styles.emptyTitle}>Arrival AI</Text>
                     <Text style={styles.emptySubtitle}>Type a question to get started</Text>
                   </View>
@@ -1174,9 +1168,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  iconBtnLight: {
-    backgroundColor: Colors.backgroundWarm,
-  },
   newSessionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1248,7 +1239,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   emptyTitle: {
-    color: Colors.textDark,
+    color: 'rgba(255,255,255,0.9)',
     fontSize: FontSize.xl,
     fontWeight: '700',
     letterSpacing: -0.5,
@@ -1256,7 +1247,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.base,
   },
   emptySubtitle: {
-    color: Colors.textMuted,
+    color: 'rgba(255,255,255,0.5)',
     fontSize: FontSize.base,
     marginTop: Spacing.sm,
     textAlign: 'center',
@@ -1280,7 +1271,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   processingText: {
-    color: Colors.textMuted,
+    color: 'rgba(255,255,255,0.6)',
     fontSize: FontSize.sm,
     fontStyle: 'italic',
   },
