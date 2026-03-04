@@ -601,9 +601,7 @@ export default function HomeScreen() {
         },
         onVoiceResponse: async (audioBase64) => {
           try {
-            // Always capture a frame for job mode voice — the camera is already active.
-            // Backend will strip the image unless the transcript contains visual keywords,
-            // so non-visual questions stay fast while "what do you see?" actually works.
+            // Capture frame — backend strips it for non-visual questions
             let frame: string | undefined;
             try { frame = await captureFrame(); } catch {}
             const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
@@ -611,10 +609,15 @@ export default function HomeScreen() {
             const currentDemoMode = useSettingsStore.getState().demoMode;
             const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
 
+            // Always add to conversation so context is preserved even if interrupted
             addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
-            addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() }); // Bug 14
+            addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() });
 
-            // Bug 11: Check audio_base64 before playing
+            // If user interrupted while we were processing, skip TTS.
+            // Like a real conversation — the text is in history for context,
+            // but we don't speak a stale answer. User's next words take priority.
+            if (jobControllerRef.current?.wasInterrupted) return;
+
             if (result.audio_base64) {
               await playAudio(result.audio_base64);
             }

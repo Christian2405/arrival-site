@@ -10,9 +10,9 @@ export interface JobModeCallbacks {
 }
 
 export interface JobModeConfig {
-  cooldownAfterSpeaking: number;   // ms after AI speaks (default: 2000)
-  cooldownAfterDismiss: number;    // ms after user dismisses (default: 5000)
-  maxAlertsPerMinute: number;      // Rate limit (default: 4)
+  cooldownAfterSpeaking: number;
+  cooldownAfterDismiss: number;
+  maxAlertsPerMinute: number;
 }
 
 export default class JobModeController {
@@ -27,8 +27,7 @@ export default class JobModeController {
   private dismissed: boolean = false;
   private dismissTime: number = 0;
   private operationLock: boolean = false;
-  private interrupted: boolean = false;                                     // Interrupt flag
-  private pendingSpeech: string | null = null;                              // Queued speech during processing
+  private _interrupted: boolean = false;
   private pendingCriticalAlert: { message: string; severity: string } | null = null;
   private dismissTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingTimeouts: ReturnType<typeof setTimeout>[] = [];
@@ -58,6 +57,11 @@ export default class JobModeController {
         await this.handleUserSpeech(audioBase64);
       },
     });
+  }
+
+  /** Public getter so callbacks (home.tsx) can check if interrupted before playing TTS */
+  get wasInterrupted(): boolean {
+    return this._interrupted;
   }
 
   private pruneAlertTimestamps() {
@@ -112,9 +116,10 @@ export default class JobModeController {
       this.aiSpeaking = false;
       this.lastSpeakTime = Date.now();
 
-      if (this.interrupted) {
-        // Interrupted — resume immediately
-        this.interrupted = false;
+      if (this._interrupted) {
+        // Interrupted — stop everything, go straight back to listening.
+        // No queue. The user's next utterance is a fresh conversational turn.
+        this._interrupted = false;
         this.operationLock = false;
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
@@ -136,11 +141,10 @@ export default class JobModeController {
   async handleUserSpeech(audioBase64: string) {
     this.pruneAlertTimestamps();
 
-    // If locked (processing another voice or alert), QUEUE instead of dropping
-    if (this.operationLock) {
-      this.pendingSpeech = audioBase64;
-      return;
-    }
+    // If already processing something, just drop it.
+    // This is how real conversations work — you don't queue sentences.
+    // The user will speak again once the mic is back on.
+    if (this.operationLock) return;
     this.operationLock = true;
 
     await this.vad.pause();
@@ -155,22 +159,20 @@ export default class JobModeController {
       this.aiSpeaking = false;
       this.lastSpeakTime = Date.now();
 
-      if (this.interrupted) {
-        // Interrupted — resume immediately, process queued speech
-        this.interrupted = false;
+      if (this._interrupted) {
+        // Interrupted — go straight back to listening.
+        // The conversation history has the text of whatever was said,
+        // so context is preserved even though we stopped the audio.
+        this._interrupted = false;
         this.operationLock = false;
         this.callbacks.onStateChange('monitoring');
         this.vad.resume();
-        this.processQueuedSpeech();
       } else {
         this.scheduleTimeout(() => {
           this.callbacks.onStateChange('monitoring');
           this.vad.resume();
           this.operationLock = false;
-          // Process queued speech or pending critical alert
-          if (this.pendingSpeech) {
-            this.processQueuedSpeech();
-          } else if (this.pendingCriticalAlert) {
+          if (this.pendingCriticalAlert) {
             const alert = this.pendingCriticalAlert;
             this.pendingCriticalAlert = null;
             this.handleFrameAlert(alert.message, alert.severity);
@@ -180,23 +182,14 @@ export default class JobModeController {
     }
   }
 
-  private processQueuedSpeech() {
-    if (this.pendingSpeech) {
-      const speech = this.pendingSpeech;
-      this.pendingSpeech = null;
-      // Process the queued speech after a tiny delay
-      setTimeout(() => this.handleUserSpeech(speech), 50);
-    }
-  }
-
   /**
-   * Interrupt the AI — called when user taps the screen during speaking.
-   * Sets a flag that the finally block in handleUserSpeech/handleFrameAlert
-   * checks to resume immediately instead of waiting.
+   * Interrupt — user tapped the screen while AI is speaking/processing.
+   * Like a real conversation: AI shuts up, listens for what's next.
+   * No queuing. The conversation history has context so nothing is lost.
    */
   interrupt() {
-    this.interrupted = true;
-    // Tell home.tsx to stop audio playback
+    this._interrupted = true;
+    // Stop audio playback immediately
     this.callbacks.onInterrupt?.();
   }
 
@@ -227,8 +220,7 @@ export default class JobModeController {
     this.alertTimestamps = [];
     this.lastSpeakTime = 0;
     this.operationLock = false;
-    this.interrupted = false;
-    this.pendingSpeech = null;
+    this._interrupted = false;
     this.pendingCriticalAlert = null;
   }
 }
