@@ -310,22 +310,41 @@ FORMAT — JSON:
 
     text = response.content[0].text.strip()
 
-    # "OK" means nothing notable
-    if text == "OK" or text.lower().startswith("ok"):
+    # "OK" or any variation means nothing notable
+    text_lower = text.lower().strip('"\'., ')
+    if (
+        text_lower.startswith("ok")
+        or text_lower.startswith("nothing")
+        or text_lower.startswith("everything look")
+        or text_lower.startswith("all good")
+        or text_lower.startswith("looks normal")
+        or text_lower.startswith("no issues")
+        or text_lower.startswith("can't see")
+        or text_lower.startswith("hard to tell")
+        or len(text_lower) < 5
+    ):
         return {"alert": False, "message": None, "severity": None}
 
-    # Try to parse JSON response
+    # Try to parse JSON response — ONLY valid JSON triggers an alert
     try:
         data = json.loads(text)
+        msg = data.get("message", "")
+        # Double-check the message itself isn't an "OK" variant
+        if not msg or msg.lower().strip().startswith("ok") or msg.lower().strip().startswith("nothing"):
+            return {"alert": False, "message": None, "severity": None}
         return {
             "alert": True,
-            "message": data.get("message", text),
+            "message": msg,
             "severity": data.get("severity", "warning"),
         }
     except json.JSONDecodeError:
-        # Claude responded with plain text instead of JSON — treat as warning
-        return {
-            "alert": True,
-            "message": text,
-            "severity": "warning",
-        }
+        # Non-JSON response = model didn't follow alert format = probably nothing noteworthy.
+        # Only treat as alert if it's very short (likely a direct observation, not rambling).
+        if len(text) < 80 and not any(w in text_lower for w in ["ok", "nothing", "normal", "fine", "good", "clear"]):
+            logger.info(f"[frame] Non-JSON alert: {text[:60]}")
+            return {
+                "alert": True,
+                "message": text,
+                "severity": "warning",
+            }
+        return {"alert": False, "message": None, "severity": None}
