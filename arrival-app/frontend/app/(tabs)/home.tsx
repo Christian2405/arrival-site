@@ -71,8 +71,7 @@ export default function HomeScreen() {
   const chatSlide = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
-  // Keyboard height — tracked manually for instant (no-animation) positioning
-  const keyboardAnim = useRef(new Animated.Value(0)).current;
+  // Keyboard height
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // PTT frame capture ref
@@ -113,18 +112,12 @@ export default function HomeScreen() {
     return () => sub.remove();
   }, [fetchUsage, demoMode]);
 
-  // Keyboard height listener — instant repositioning instead of slow KAV animation
+  // Keyboard height listener
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-      Animated.spring(keyboardAnim, { toValue: e.endCoordinates.height, useNativeDriver: false, damping: 20, stiffness: 150 }).start();
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-      Animated.spring(keyboardAnim, { toValue: 0, useNativeDriver: false, damping: 20, stiffness: 150 }).start();
-    });
+    const showSub = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
@@ -714,7 +707,7 @@ export default function HomeScreen() {
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
 
       {/* Main content */}
-      <Animated.View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardAnim : 0 }}>
+      <View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardHeight : 0 }}>
         <View style={[styles.content, { paddingTop: insets.top }]}>
 
           {/* TOP BAR: Hamburger + Mode Selector + New Chat */}
@@ -1016,7 +1009,7 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
-      </Animated.View>
+      </View>
 
       {/* DRAWER OVERLAY */}
       {drawerOpen && (
