@@ -461,7 +461,19 @@ export default function HomeScreen() {
     setInputText('');
     setIsProcessing(true);
 
-    const imageForThisMessage = pendingImage;
+    // Auto-capture camera frame if user asks a visual question and no image is attached
+    let imageForThisMessage = pendingImage;
+    if (!imageForThisMessage) {
+      const visualKeywords = ['see', 'look', 'show', 'what is this', 'what\'s this', 'what is that', 'what\'s that', 'check this', 'wrong here', 'wrong with', 'identify', 'read this', 'read that', 'model number', 'what brand', 'what model', 'point'];
+      const textLower = text.toLowerCase();
+      const isVisualQuery = visualKeywords.some(kw => textLower.includes(kw));
+      if (isVisualQuery && permission?.granted) {
+        try {
+          const autoFrame = await captureFrame();
+          if (autoFrame) imageForThisMessage = autoFrame;
+        } catch {}
+      }
+    }
     setPendingImage(undefined);
 
     // Add user message (visible as bubble in Text Mode)
@@ -562,9 +574,9 @@ export default function HomeScreen() {
 
     const controller = new JobModeController(
       {
-        cooldownAfterSpeaking: 5000,   // Don't pop chips right after AI speaks
-        cooldownAfterDismiss: 8000,    // Long cooldown after user dismisses
-        maxAlertsPerMinute: 3,         // Max 3 proactive alerts per minute
+        cooldownAfterSpeaking: 2000,   // 2s after AI speaks before next alert
+        cooldownAfterDismiss: 5000,    // 5s after user dismisses
+        maxAlertsPerMinute: 4,         // Max 4 proactive alerts per minute
       },
       {
         onAlert: async (message, severity) => {
