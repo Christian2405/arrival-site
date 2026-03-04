@@ -1702,24 +1702,50 @@ FUJITSU_MINI_SPLIT_CODES = {
 # ---------------------------------------------------------------------------
 
 BRAND_ALIASES = {
+    # Rheem — STT often garbles this as "ream", "reem", "ream", "re em"
     "rheem": "rheem",
+    "reem": "rheem",
+    "ream": "rheem",
+    "re em": "rheem",
     "ruud": "rheem",  # Same manufacturer
+    "rude": "rheem",  # STT misspelling of Ruud
+    # Carrier — STT is usually fine but "bryant" can become "brian"
     "carrier": "carrier",
     "bryant": "carrier",  # Same parent company
+    "brian t": "carrier",  # STT misspelling of Bryant
     "payne": "carrier",  # Same parent company
+    "pain": "carrier",  # STT misspelling of Payne
+    # Goodman
     "goodman": "goodman",
     "amana": "goodman",  # Same manufacturer
+    # Lennox — STT may say "lenox" or "lennocks"
     "lennox": "lennox",
+    "lenox": "lennox",
+    "lennocks": "lennox",
+    # Trane — STT may say "train"
     "trane": "trane",
+    "train": "trane",
     "american standard": "trane",  # Same manufacturer
+    # Rinnai — STT may say "rin eye", "rennai"
     "rinnai": "rinnai",
+    "rin eye": "rinnai",
+    "rennai": "rinnai",
+    "rinai": "rinnai",
+    # AO Smith
     "ao smith": "ao_smith",
     "a.o. smith": "ao_smith",
     "a o smith": "ao_smith",
     "aosmith": "ao_smith",
+    # Daikin — STT may say "dakin" or "dykin"
     "daikin": "daikin",
+    "dakin": "daikin",
+    "dykin": "daikin",
+    # Mitsubishi — STT is usually close enough
     "mitsubishi": "mitsubishi",
+    # Fujitsu — STT may say "fu jitsu"
     "fujitsu": "fujitsu",
+    "fu jitsu": "fujitsu",
+    # Bradford White
     "bradford white": "bradford_white",
     "bradford": "bradford_white",
 }
@@ -1833,10 +1859,28 @@ def _extract_equipment_type(text: str) -> str | None:
     return None
 
 
+# Number words → digits for STT transcripts ("three blinks" → "3 blinks")
+_NUMBER_WORDS = {
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+    "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+}
+
+
+def _normalize_number_words(text: str) -> str:
+    """Convert spoken number words to digits so regex patterns can match."""
+    result = text
+    for word, digit in _NUMBER_WORDS.items():
+        result = re.sub(rf"\b{word}\b", digit, result, flags=re.I)
+    return result
+
+
 def _extract_code(text: str) -> str | None:
     """Try to extract an error/fault code from the query text."""
+    # First, convert number words to digits ("three blinks" → "3 blinks")
+    normalized = _normalize_number_words(text)
     for pattern in _CODE_PATTERNS:
-        match = pattern.search(text)
+        match = pattern.search(normalized)
         if match:
             return match.group(1).upper().lstrip("0") or "0"  # Normalize: strip leading zeros
     return None
@@ -1903,11 +1947,16 @@ def format_error_code_context(result: dict) -> str:
     brand_display = result["brand"].replace("_", " ").title()
     causes_list = "\n".join(f"  {i+1}. {c}" for i, c in enumerate(result["causes"]))
 
-    return f"""## VERIFIED Error Code — Use This Exact Information
+    return f"""## ✅ VERIFIED Error Code — Use This EXACT Information
 **{brand_display} {result['equipment'].title()} — Code {result['code']}**
 Meaning: {result['meaning']}
 Common causes (ranked by likelihood):
 {causes_list}
 Recommended action: {result['action']}
 
-IMPORTANT: This error code data comes from the manufacturer's official documentation. Use this EXACT meaning and cause ranking in your response. Do NOT substitute a different meaning — this is the verified correct definition for this code. Lead with the meaning, then walk through the causes and diagnostic steps."""
+CRITICAL: This error code data is FROM THE MANUFACTURER'S DOCUMENTATION and is VERIFIED CORRECT.
+- Use this EXACT meaning and cause ranking. Do NOT substitute your own interpretation.
+- Do NOT add causes that aren't listed here.
+- Do NOT change the order of causes.
+- Lead with the meaning in plain language, then give the #1 cause and diagnostic step.
+- If the user asks follow-up questions, stay within this diagnostic framework."""

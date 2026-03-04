@@ -23,8 +23,8 @@ DEMO_RESPONSES = [
     },
     {
         "keywords": ["wire", "wiring", "terminal", "connect", "gauge"],
-        "response": "For that unit, you'll want 14 AWG THHN for the line voltage side and 18 AWG thermostat wire for the control side. Make sure you're using copper, not aluminum. The terminal block should be torqued to 35 inch-pounds — over-tightening is a common cause of terminal failures in the field.",
-        "source": "NEC Article 310.15, Carrier Installation Guide",
+        "response": "For a 40 amp circuit, you need 8 AWG copper THHN. If the run is over 50 feet, bump up to 6 gauge for voltage drop. For the thermostat side, 18 AWG is fine. Make sure your connections are torqued to spec — loose terminals are a leading cause of electrical fires.",
+        "source": "NEC Article 310.15, Table 310.16",
         "confidence": "high",
     },
     {
