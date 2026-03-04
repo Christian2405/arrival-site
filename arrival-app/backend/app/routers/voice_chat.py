@@ -111,6 +111,7 @@ class VoiceChatResponse(BaseModel):
     transcript: str
     response: str
     audio_base64: str
+    audio_chunks: list[str] | None = None  # Split TTS for faster first-sentence playback
     source: str | None = None
     confidence: str | None = None
 
@@ -283,7 +284,7 @@ async def voice_chat(
 
         # Per-mode response tuning
         if request.mode == "job":
-            voice_max_tokens = 200
+            voice_max_tokens = 250
 
             # Get job equipment context if set
             job_ctx = get_job_context(user_id)
@@ -324,7 +325,7 @@ async def voice_chat(
                 "speed": 1.15,
             }
         else:
-            voice_max_tokens = 150
+            voice_max_tokens = 200
             voice_prompt_prefix = (
                 "Keep it to 1-3 sentences. This is spoken aloud — make it sound natural, not written.\n\n"
 
@@ -353,7 +354,7 @@ async def voice_chat(
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default
 
-        # 3. Call Claude chat — use fast voice model (Haiku) for low latency
+        # 3. Call Claude chat — Sonnet for intelligence, prompts enforce brevity
         chat_result = await chat_with_claude(
             message=transcript,
             image_base64=request.image_base64,
@@ -364,12 +365,32 @@ async def voice_chat(
             model=config.ANTHROPIC_VOICE_MODEL,
         )
 
-        # 4. Convert AI response to speech (TTS)
-        audio_base64 = await text_to_speech(
-            chat_result["response"],
-            voice_id=tts_voice_id,
-            voice_settings=tts_voice_settings,
-        )
+        # 4. Convert AI response to speech — split into sentences for parallel TTS
+        ai_response = chat_result["response"]
+        sentences = re_module.split(r'(?<=[.!?])\s+', ai_response, maxsplit=1)
+
+        if len(sentences) > 1 and len(sentences[0]) > 10:
+            # TTS first sentence and rest in parallel for faster perceived latency
+            tts_tasks = [
+                text_to_speech(sentences[0], voice_id=tts_voice_id, voice_settings=tts_voice_settings),
+                text_to_speech(sentences[1], voice_id=tts_voice_id, voice_settings=tts_voice_settings),
+            ]
+            audio_results = await asyncio.gather(*tts_tasks)
+            audio_chunks = list(audio_results)
+            # Concatenate for backward compatibility (audio_base64 = full audio)
+            full_audio_bytes = b""
+            for chunk in audio_chunks:
+                full_audio_bytes += b64_module.b64decode(chunk)
+            audio_base64 = b64_module.b64encode(full_audio_bytes).decode("utf-8")
+            logger.info(f"[voice-chat] Parallel TTS: {len(sentences[0])} + {len(sentences[1])} chars")
+        else:
+            # Single sentence — just TTS it directly
+            audio_base64 = await text_to_speech(
+                ai_response,
+                voice_id=tts_voice_id,
+                voice_settings=tts_voice_settings,
+            )
+            audio_chunks = None
 
         total_elapsed = time.monotonic() - t0
         logger.info(f"[voice-chat] Total pipeline: {total_elapsed:.2f}s")
@@ -390,6 +411,7 @@ async def voice_chat(
             transcript=transcript,
             response=chat_result["response"],
             audio_base64=audio_base64,
+            audio_chunks=audio_chunks,
             source=chat_result.get("source"),
             confidence=chat_result.get("confidence"),
         )

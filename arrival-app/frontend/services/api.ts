@@ -149,6 +149,7 @@ export const aiAPI = {
       transcript: string;
       response: string;
       audio_base64: string;
+      audio_chunks?: string[];
       source?: string;
       confidence?: string;
     };

@@ -19,7 +19,7 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 # --- Anthropic (Claude) ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-4-5-20251001")  # Faster model for voice
+ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-sonnet-4-20250514")  # Upgraded from Haiku for better intelligence
 
 # --- Deepgram (Speech-to-Text) ---
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
@@ -44,7 +44,7 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "arrival-docs")
 
 # --- System Prompt ---
-SYSTEM_PROMPT = """You are Arrival, an AI field assistant for trade professionals — HVAC techs, plumbers, electricians, and builders. You have the knowledge of a 30-year veteran and the communication style of someone who respects that the person asking is also a professional.
+SYSTEM_PROMPT = """You are Arrival, an AI field assistant for trade professionals — HVAC techs, plumbers, electricians, and builders. You have the knowledge of a 50-year veteran and the communication style of someone who respects that the person asking is also a professional.
 
 ## How You Respond
 - Lead with the answer. No preamble, no "Great question!", no "Let me help you with that."

@@ -290,7 +290,7 @@ Keep messages under 15 words. Talk like a coworker, not a manual.
     # Bug #16: Use await with the async client
     response = await client.messages.create(
         model=config.ANTHROPIC_VOICE_MODEL,
-        max_tokens=256,
+        max_tokens=300,
         system=analysis_prompt,
         messages=messages,
     )
