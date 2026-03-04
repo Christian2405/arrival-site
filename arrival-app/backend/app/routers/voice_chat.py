@@ -318,11 +318,11 @@ async def voice_chat(
 
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
-                "stability": 0.6,
-                "similarity_boost": 0.75,
+                "stability": 0.7,
+                "similarity_boost": 0.8,
                 "style": 0.0,
-                "use_speaker_boost": False,
-                "speed": 1.15,
+                "use_speaker_boost": True,
+                "speed": 1.0,
             }
         else:
             voice_max_tokens = 200
@@ -365,29 +365,12 @@ async def voice_chat(
             model=config.ANTHROPIC_VOICE_MODEL,
         )
 
-        # 4. Convert AI response to speech — split into sentences for parallel TTS
-        ai_response = chat_result["response"]
-        sentences = re_module.split(r'(?<=[.!?])\s+', ai_response, maxsplit=1)
-
-        if len(sentences) > 1 and len(sentences[0]) > 10:
-            # TTS first sentence and rest in parallel for faster perceived latency
-            tts_tasks = [
-                text_to_speech(sentences[0], voice_id=tts_voice_id, voice_settings=tts_voice_settings),
-                text_to_speech(sentences[1], voice_id=tts_voice_id, voice_settings=tts_voice_settings),
-            ]
-            audio_results = await asyncio.gather(*tts_tasks)
-            audio_chunks = list(audio_results)
-            # Use first chunk as backward-compatible audio_base64 (can't concat MP3s)
-            audio_base64 = audio_chunks[0]
-            logger.info(f"[voice-chat] Parallel TTS: {len(sentences[0])} + {len(sentences[1])} chars")
-        else:
-            # Single sentence — just TTS it directly
-            audio_base64 = await text_to_speech(
-                ai_response,
-                voice_id=tts_voice_id,
-                voice_settings=tts_voice_settings,
-            )
-            audio_chunks = None
+        # 4. Convert AI response to speech (single TTS call — reliable, no cutoffs)
+        audio_base64 = await text_to_speech(
+            chat_result["response"],
+            voice_id=tts_voice_id,
+            voice_settings=tts_voice_settings,
+        )
 
         total_elapsed = time.monotonic() - t0
         logger.info(f"[voice-chat] Total pipeline: {total_elapsed:.2f}s")
@@ -408,7 +391,6 @@ async def voice_chat(
             transcript=transcript,
             response=chat_result["response"],
             audio_base64=audio_base64,
-            audio_chunks=audio_chunks,
             source=chat_result.get("source"),
             confidence=chat_result.get("confidence"),
         )

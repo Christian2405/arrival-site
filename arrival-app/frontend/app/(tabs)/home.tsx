@@ -384,13 +384,7 @@ export default function HomeScreen() {
         // Optimistic usage increment
         if (!currentDemoMode) incrementQueryCount();
 
-        if (result.audio_chunks && result.audio_chunks.length > 0) {
-          // Play chunks sequentially for faster first-sentence playback
-          setVoiceState('speaking');
-          for (const chunk of result.audio_chunks) {
-            await playAudio(chunk);
-          }
-        } else if (result.audio_base64) {
+        if (result.audio_base64) {
           setVoiceState('speaking');
           await playAudio(result.audio_base64);
         }
@@ -624,12 +618,7 @@ export default function HomeScreen() {
             // but we don't speak a stale answer. User's next words take priority.
             if (jobControllerRef.current?.wasInterrupted) return;
 
-            if (result.audio_chunks && result.audio_chunks.length > 0) {
-              for (const chunk of result.audio_chunks) {
-                if (jobControllerRef.current?.wasInterrupted) return;
-                await playAudio(chunk);
-              }
-            } else if (result.audio_base64) {
+            if (result.audio_base64) {
               await playAudio(result.audio_base64);
             }
           } catch (e) {

@@ -42,11 +42,11 @@ async def text_to_speech(
     url = f"{ELEVENLABS_URL}/{voice_id or config.ELEVENLABS_VOICE_ID}"
 
     default_voice_settings = {
-        "stability": 0.5,
-        "similarity_boost": 0.75,
+        "stability": 0.7,
+        "similarity_boost": 0.8,
         "style": 0.0,
         "use_speaker_boost": True,
-        "speed": 1.15,
+        "speed": 1.0,
     }
 
     client = _get_client()
