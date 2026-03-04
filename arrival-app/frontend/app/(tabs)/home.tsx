@@ -698,8 +698,10 @@ export default function HomeScreen() {
   // --- RENDER ---
   return (
     <View style={styles.container}>
-      {/* Camera background - always mounted (needed for photo capture) */}
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+      {/* Camera background - only mount when permission is granted */}
+      {permission?.granted && (
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+      )}
 
       {/* Text mode: solid light background covering camera */}
       {interactionMode === 'text' && (
@@ -1150,7 +1152,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: Colors.backgroundDark,
   },
   content: {
     flex: 1,

@@ -275,9 +275,13 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.glassBg,
     borderBottomLeftRadius: 4,
-    ...Shadow.subtle,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   alertHeader: {
     flexDirection: 'row',
