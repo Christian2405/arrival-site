@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   bubble: {
-    maxWidth: '78%',
+    maxWidth: '92%',
     paddingHorizontal: Spacing.base,
     paddingVertical: 10,
     borderRadius: Radius.lg,
@@ -273,6 +273,7 @@ const styles = StyleSheet.create({
   userBubble: {
     backgroundColor: Colors.accent,
     borderBottomRightRadius: 4,
+    maxWidth: '80%',
   },
   assistantBubble: {
     backgroundColor: Colors.glassBg,
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: FontSize.base,
-    lineHeight: 21,
+    lineHeight: 22,
     letterSpacing: -0.2,
   },
   userText: {

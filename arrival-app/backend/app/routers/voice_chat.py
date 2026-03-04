@@ -377,11 +377,8 @@ async def voice_chat(
             ]
             audio_results = await asyncio.gather(*tts_tasks)
             audio_chunks = list(audio_results)
-            # Concatenate for backward compatibility (audio_base64 = full audio)
-            full_audio_bytes = b""
-            for chunk in audio_chunks:
-                full_audio_bytes += b64_module.b64decode(chunk)
-            audio_base64 = b64_module.b64encode(full_audio_bytes).decode("utf-8")
+            # Use first chunk as backward-compatible audio_base64 (can't concat MP3s)
+            audio_base64 = audio_chunks[0]
             logger.info(f"[voice-chat] Parallel TTS: {len(sentences[0])} + {len(sentences[1])} chars")
         else:
             # Single sentence — just TTS it directly
