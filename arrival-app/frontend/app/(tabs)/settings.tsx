@@ -16,14 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
-import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize } from '../../constants/Colors';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUsageStore, queryDisplayText, documentDisplayText } from '../../store/usageStore';
 
 const WEBSITE_URL = 'https://arrivalcompany.com';
-
-type IoniconsName = keyof typeof Ionicons.glyphMap;
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -43,7 +41,6 @@ export default function SettingsScreen() {
   const { profile, subscription, signOut } = useAuthStore();
   const { fetchUsage, isLoaded: usageLoaded } = useUsageStore();
 
-  // Fetch usage on mount
   useEffect(() => {
     fetchUsage();
   }, [fetchUsage]);
@@ -55,7 +52,7 @@ export default function SettingsScreen() {
   const plan = subscription?.plan;
   const planLabel = plan
     ? plan.charAt(0).toUpperCase() + plan.slice(1)
-    : '';
+    : 'Free';
 
   // Permission states
   const [micPermission, setMicPermission] = useState<boolean | null>(null);
@@ -72,7 +69,6 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  // Check permissions on mount and when app returns from settings
   useEffect(() => {
     checkPermissions();
     const sub = AppState.addEventListener('change', (state) => {
@@ -85,7 +81,6 @@ export default function SettingsScreen() {
     const currentlyGranted = type === 'mic' ? micPermission : cameraPermission;
 
     if (currentlyGranted) {
-      // Can't revoke from app — send to device settings
       Alert.alert(
         `Disable ${type === 'mic' ? 'Microphone' : 'Camera'}`,
         'To revoke access, open your device settings for Arrival.',
@@ -95,7 +90,6 @@ export default function SettingsScreen() {
         ]
       );
     } else {
-      // Request permission
       if (type === 'mic') {
         const { status } = await Audio.requestPermissionsAsync();
         if (status === 'granted') {
@@ -173,512 +167,419 @@ export default function SettingsScreen() {
     ? `${profile.first_name?.charAt(0) || ''}${profile.last_name?.charAt(0) || ''}`
     : 'A';
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header with back button */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/home')}>
-          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
+  // Simple row component
+  const Row = ({ icon, label, right, hint, onPress }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    right?: React.ReactNode;
+    hint?: string;
+    onPress?: () => void;
+  }) => {
+    const content = (
+      <View style={st.row}>
+        <Ionicons name={icon} size={20} color={Colors.textMuted} style={{ width: 28 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={st.rowLabel}>{label}</Text>
+          {hint && <Text style={st.rowHint}>{hint}</Text>}
+        </View>
+        {right}
+      </View>
+    );
+    if (onPress) {
+      return (
+        <TouchableOpacity activeOpacity={0.5} onPress={onPress}>
+          {content}
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={{ width: IconSize.lg }} />
+      );
+    }
+    return content;
+  };
+
+  const Seg = ({ options, value, onChange }: {
+    options: { label: string; value: string }[];
+    value: string;
+    onChange: (v: any) => void;
+  }) => (
+    <View style={st.seg}>
+      {options.map((o) => (
+        <TouchableOpacity
+          key={o.value}
+          style={[st.segItem, value === o.value && st.segItemActive]}
+          onPress={() => onChange(o.value)}
+        >
+          <Text style={[st.segText, value === o.value && st.segTextActive]}>{o.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={st.container}>
+      {/* Header */}
+      <View style={st.header}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/home')} hitSlop={12}>
+          <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
+        </TouchableOpacity>
+        <Text style={st.headerTitle}>Settings</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+        {/* Profile */}
+        <View style={st.profile}>
+          <View style={st.avatar}>
+            <Text style={st.avatarText}>{initials}</Text>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{displayName}</Text>
-            <Text style={styles.profileEmail}>{displayEmail}</Text>
-          </View>
-          <View style={styles.planBadge}>
-            <Text style={styles.planBadgeText}>{planLabel}</Text>
+          <Text style={st.profileName}>{displayName}</Text>
+          <Text style={st.profileEmail}>{displayEmail}</Text>
+          <View style={st.planPill}>
+            <Text style={st.planPillText}>{planLabel} Plan</Text>
           </View>
         </View>
 
-        {/* Usage — only show when signed in */}
+        {/* Usage */}
         {profile && (
-          <>
-            <Text style={styles.sectionLabel}>Usage</Text>
-            <View style={styles.card}>
-              <View style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons name="chatbubble-outline" size={IconSize.md} color={Colors.textDark} />
-                  <Text style={styles.rowLabel}>Queries</Text>
-                </View>
-                <Text style={styles.usageValue}>{usageLoaded ? queryDisplayText() : '...'}</Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons name="document-outline" size={IconSize.md} color={Colors.textDark} />
-                  <Text style={styles.rowLabel}>Documents</Text>
-                </View>
-                <Text style={styles.usageValue}>{usageLoaded ? documentDisplayText() : '...'}</Text>
-              </View>
+          <View style={st.usageRow}>
+            <View style={st.usageStat}>
+              <Text style={st.usageNumber}>{usageLoaded ? queryDisplayText() : '—'}</Text>
+              <Text style={st.usageLabel}>Queries</Text>
             </View>
-          </>
+            <View style={st.usageDivider} />
+            <View style={st.usageStat}>
+              <Text style={st.usageNumber}>{usageLoaded ? documentDisplayText() : '—'}</Text>
+              <Text style={st.usageLabel}>Documents</Text>
+            </View>
+          </View>
         )}
 
-        {/* Voice & Input */}
-        <Text style={styles.sectionLabel}>Voice & Input</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="volume-high-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Voice Output</Text>
-            </View>
-            <Switch
-              value={voiceOutput}
-              onValueChange={setVoiceOutput}
-              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
-              thumbColor={Colors.card}
-              ios_backgroundColor={Colors.switchTrack}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="speedometer-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Voice Speed</Text>
-            </View>
-            <View style={styles.segmentedControl}>
-              {(['slow', 'normal', 'fast'] as const).map((speed) => (
-                <TouchableOpacity
-                  key={speed}
-                  style={[styles.segment, voiceSpeed === speed && styles.segmentActive]}
-                  onPress={() => setVoiceSpeed(speed)}
-                >
-                  <Text
-                    style={[styles.segmentText, voiceSpeed === speed && styles.segmentTextActive]}
-                  >
-                    {speed.charAt(0).toUpperCase() + speed.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="text-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Text Size</Text>
-            </View>
-            <View style={styles.segmentedControl}>
-              {([
-                { label: 'S', value: 'small' },
-                { label: 'M', value: 'medium' },
-                { label: 'L', value: 'large' },
-              ] as const).map((size) => (
-                <TouchableOpacity
-                  key={size.value}
-                  style={[styles.segment, textSize === size.value && styles.segmentActive]}
-                  onPress={() => setTextSize(size.value as any)}
-                >
-                  <Text
-                    style={[styles.segmentText, textSize === size.value && styles.segmentTextActive]}
-                  >
-                    {size.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Measurement */}
-        <Text style={styles.sectionLabel}>Measurement</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="swap-horizontal-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Units</Text>
-            </View>
-            <View style={styles.segmentedControl}>
-              {(['imperial', 'metric'] as const).map((unit) => (
-                <TouchableOpacity
-                  key={unit}
-                  style={[styles.segment, units === unit && styles.segmentActive]}
-                  onPress={() => setUnits(unit)}
-                >
-                  <Text style={[styles.segmentText, units === unit && styles.segmentTextActive]}>
-                    {unit.charAt(0).toUpperCase() + unit.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+        {/* Voice */}
+        <Text style={st.section}>VOICE & INPUT</Text>
+        <View style={st.group}>
+          <Row
+            icon="volume-high-outline"
+            label="Voice Output"
+            right={
+              <Switch
+                value={voiceOutput}
+                onValueChange={setVoiceOutput}
+                trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
+                thumbColor="#FFF"
+              />
+            }
+          />
+          <View style={st.sep} />
+          <Row
+            icon="speedometer-outline"
+            label="Voice Speed"
+            right={
+              <Seg
+                options={[{ label: 'Slow', value: 'slow' }, { label: 'Normal', value: 'normal' }, { label: 'Fast', value: 'fast' }]}
+                value={voiceSpeed}
+                onChange={setVoiceSpeed}
+              />
+            }
+          />
+          <View style={st.sep} />
+          <Row
+            icon="text-outline"
+            label="Text Size"
+            right={
+              <Seg
+                options={[{ label: 'S', value: 'small' }, { label: 'M', value: 'medium' }, { label: 'L', value: 'large' }]}
+                value={textSize}
+                onChange={setTextSize}
+              />
+            }
+          />
+          <View style={st.sep} />
+          <Row
+            icon="swap-horizontal-outline"
+            label="Units"
+            right={
+              <Seg
+                options={[{ label: 'Imperial', value: 'imperial' }, { label: 'Metric', value: 'metric' }]}
+                value={units}
+                onChange={setUnits}
+              />
+            }
+          />
         </View>
 
         {/* App */}
-        <Text style={styles.sectionLabel}>App</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="flask-outline" size={IconSize.md} color={Colors.textDark} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Demo Mode</Text>
-                <Text style={styles.rowHint}>Uses sample responses</Text>
-              </View>
-            </View>
-            <Switch
-              value={demoMode}
-              onValueChange={setDemoMode}
-              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
-              thumbColor={Colors.card}
-              ios_backgroundColor={Colors.switchTrack}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={0.6}
+        <Text style={st.section}>APP</Text>
+        <View style={st.group}>
+          <Row
+            icon="flask-outline"
+            label="Demo Mode"
+            hint="Uses sample responses"
+            right={
+              <Switch
+                value={demoMode}
+                onValueChange={setDemoMode}
+                trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
+                thumbColor="#FFF"
+              />
+            }
+          />
+          <View style={st.sep} />
+          <Row
+            icon="notifications-outline"
+            label="Notifications"
+            right={<Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />}
             onPress={() => Linking.openSettings().catch(() => {})}
-          >
-            <View style={styles.rowLeft}>
-              <Ionicons name="notifications-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Notifications</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="moon-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Dark Mode</Text>
-            </View>
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>Coming Soon</Text>
-            </View>
-          </View>
+          />
         </View>
 
         {/* Permissions */}
-        <Text style={styles.sectionLabel}>Permissions</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="mic-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Microphone</Text>
-            </View>
-            <Switch
-              value={micPermission === true}
-              onValueChange={() => handlePermissionToggle('mic')}
-              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
-              thumbColor={Colors.card}
-              ios_backgroundColor={Colors.switchTrack}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="camera-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Camera</Text>
-            </View>
-            <Switch
-              value={cameraPermission === true}
-              onValueChange={() => handlePermissionToggle('camera')}
-              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
-              thumbColor={Colors.card}
-              ios_backgroundColor={Colors.switchTrack}
-            />
-          </View>
+        <Text style={st.section}>PERMISSIONS</Text>
+        <View style={st.group}>
+          <Row
+            icon="mic-outline"
+            label="Microphone"
+            right={
+              <Switch
+                value={micPermission === true}
+                onValueChange={() => handlePermissionToggle('mic')}
+                trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
+                thumbColor="#FFF"
+              />
+            }
+          />
+          <View style={st.sep} />
+          <Row
+            icon="camera-outline"
+            label="Camera"
+            right={
+              <Switch
+                value={cameraPermission === true}
+                onValueChange={() => handlePermissionToggle('camera')}
+                trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
+                thumbColor="#FFF"
+              />
+            }
+          />
         </View>
 
         {/* Account */}
-        <Text style={styles.sectionLabel}>Account</Text>
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={0.6}
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`).catch(() => Alert.alert('Error', 'Could not open link'))}
-          >
-            <View style={styles.rowLeft}>
-              <Ionicons name="card-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Subscription</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={styles.planBadgeSmall}>
-                <Text style={styles.planBadgeSmallText}>{planLabel}</Text>
+        <Text style={st.section}>ACCOUNT</Text>
+        <View style={st.group}>
+          <Row
+            icon="card-outline"
+            label="Subscription"
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={st.rowDetail}>{planLabel}</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />
               </View>
-              <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={0.6}
-            onPress={() => Linking.openURL(`mailto:support@arrivalcompany.com?subject=Help%20Request`).catch(() => Alert.alert('Error', 'Could not open link'))}
-          >
-            <View style={styles.rowLeft}>
-              <Ionicons name="help-circle-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Help & Support</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={0.6}
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/terms`).catch(() => Alert.alert('Error', 'Could not open link'))}
-          >
-            <View style={styles.rowLeft}>
-              <Ionicons name="document-text-outline" size={IconSize.md} color={Colors.textDark} />
-              <Text style={styles.rowLabel}>Terms & Privacy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
-          </TouchableOpacity>
+            }
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`).catch(() => {})}
+          />
+          <View style={st.sep} />
+          <Row
+            icon="help-circle-outline"
+            label="Help & Support"
+            right={<Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />}
+            onPress={() => Linking.openURL(`mailto:support@arrivalcompany.com?subject=Help%20Request`).catch(() => {})}
+          />
+          <View style={st.sep} />
+          <Row
+            icon="document-text-outline"
+            label="Terms & Privacy"
+            right={<Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/terms`).catch(() => {})}
+          />
         </View>
 
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.6}>
-          <Text style={styles.signOutText}>Sign Out</Text>
+        {/* Actions */}
+        <TouchableOpacity style={st.actionBtn} onPress={handleSignOut} activeOpacity={0.5}>
+          <Text style={st.actionText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.signOutButton, { marginTop: 8 }]} onPress={handleDeleteAccount} activeOpacity={0.6}>
-          <Text style={[styles.signOutText, { fontSize: FontSize.sm, color: Colors.textMuted }]}>Delete Account</Text>
+        <TouchableOpacity style={[st.actionBtn, { marginTop: 4 }]} onPress={handleDeleteAccount} activeOpacity={0.5}>
+          <Text style={[st.actionText, { color: Colors.textFaint, fontSize: 14 }]}>Delete Account</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Arrival v1.0.0</Text>
+        <Text style={st.version}>Arrival v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   headerTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     color: Colors.textDark,
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 50,
-  },
 
-  // Profile Card
-  profileCard: {
-    flexDirection: 'row',
+  // Profile — centered card
+  profile: {
     alignItems: 'center',
-    marginHorizontal: Spacing.base,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: Colors.borderWarm,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.tradeGeneral,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.textDark,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
   },
   avatarText: {
-    color: Colors.card,
-    fontSize: FontSize.lg,
+    color: '#FFF',
+    fontSize: 22,
     fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  profileInfo: {
-    flex: 1,
-    marginLeft: 14,
   },
   profileName: {
-    fontSize: FontSize.lg,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.textDark,
     letterSpacing: -0.3,
   },
   profileEmail: {
-    fontSize: FontSize.sm,
+    fontSize: 14,
     color: Colors.textMuted,
-    marginTop: 1,
-    letterSpacing: -0.1,
+    marginTop: 2,
   },
-  planBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.border,
+  planPill: {
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: Colors.backgroundWarm,
   },
-  planBadgeText: {
-    fontSize: FontSize.xs,
+  planPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+
+  // Usage stats
+  usageRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  usageStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  usageNumber: {
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.textDark,
-    letterSpacing: 0.3,
+  },
+  usageLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  usageDivider: {
+    width: 1,
+    backgroundColor: Colors.borderWarm,
   },
 
-  // Section
-  sectionLabel: {
-    fontSize: FontSize.xs,
+  // Section headers
+  section: {
+    fontSize: 12,
     fontWeight: '600',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
     paddingHorizontal: 20,
-    marginTop: 22,
-    marginBottom: 10,
+    marginTop: 24,
+    marginBottom: 6,
   },
 
-  // Card
-  card: {
+  // Grouped rows
+  group: {
+    marginHorizontal: 16,
     backgroundColor: Colors.card,
-    marginHorizontal: Spacing.base,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.borderWarm,
+    borderRadius: 12,
   },
-
-  // Row
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 14,
-    minHeight: 54,
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flex: 1,
-    marginRight: Spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
   },
   rowLabel: {
-    fontSize: FontSize.base,
-    fontWeight: '500',
+    fontSize: 16,
     color: Colors.textDark,
     letterSpacing: -0.2,
   },
   rowHint: {
-    fontSize: FontSize.xs,
+    fontSize: 12,
     color: Colors.textMuted,
     marginTop: 1,
   },
-  divider: {
+  rowDetail: {
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+  sep: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.borderWarm,
-    marginLeft: 48,
+    marginLeft: 42,
   },
 
-  // Usage value
-  usageValue: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textMuted,
-    letterSpacing: -0.2,
-  },
-
-  // Segmented Control
-  segmentedControl: {
+  // Segmented control
+  seg: {
     flexDirection: 'row',
     backgroundColor: Colors.backgroundWarm,
-    borderRadius: Radius.sm,
+    borderRadius: 8,
     padding: 2,
   },
-  segment: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-  },
-  segmentActive: {
-    backgroundColor: Colors.tradeGeneral,
-  },
-  segmentText: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textMuted,
-  },
-  segmentTextActive: {
-    color: Colors.card,
-  },
-
-  // Coming soon
-  comingSoonBadge: {
-    backgroundColor: Colors.backgroundWarm,
+  segItem: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  comingSoonText: {
-    fontSize: FontSize.xs,
+  segItemActive: {
+    backgroundColor: Colors.textDark,
+  },
+  segText: {
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textMuted,
-    letterSpacing: 0.2,
+  },
+  segTextActive: {
+    color: '#FFF',
   },
 
-  // Plan badge (small, in row)
-  planBadgeSmall: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.backgroundWarm,
-  },
-  planBadgeSmallText: {
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.textDark,
-  },
-
-  // Sign out
-  signOutButton: {
+  // Actions
+  actionBtn: {
     alignItems: 'center',
-    paddingVertical: Spacing.base,
-    marginTop: Spacing.xl,
-    marginHorizontal: Spacing.base,
+    paddingVertical: 14,
+    marginTop: 28,
+    marginHorizontal: 16,
   },
-  signOutText: {
-    fontSize: FontSize.base,
-    fontWeight: '600',
-    color: Colors.textMuted,
-    letterSpacing: -0.2,
+  actionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.errorMuted,
   },
 
-  // Version
-  versionText: {
-    fontSize: FontSize.xs,
+  version: {
+    fontSize: 12,
     color: Colors.textFaint,
     textAlign: 'center',
-    marginTop: Spacing.xs,
+    marginTop: 8,
   },
 });

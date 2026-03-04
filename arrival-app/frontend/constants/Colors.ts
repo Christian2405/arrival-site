@@ -1,6 +1,6 @@
 export const Colors = {
   // Arrival brand — warm off-white background
-  background: '#FFFFF5',
+  background: '#F3F0EB',
   backgroundDark: '#1C1C1E',
   backgroundWarm: '#F3F0EB',
   card: '#FFFFFF',
