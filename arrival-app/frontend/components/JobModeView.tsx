@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
 import { jobContextAPI, JobContext } from '../services/api';
 
 export type JobAIState = 'monitoring' | 'listening' | 'processing' | 'speaking';
@@ -268,15 +268,15 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
       {/* Equipment context bar */}
       {jobContext && !showEquipmentPicker ? (
         <TouchableOpacity style={styles.contextBar} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
-          <Ionicons name="build-outline" size={14} color={Colors.accent} />
+          <Ionicons name="build-outline" size={IconSize.sm} color={Colors.accent} />
           <Text style={styles.contextText} numberOfLines={1}>{equipLabel}</Text>
           <TouchableOpacity onPress={handleClearContext} hitSlop={8} style={styles.contextClear}>
-            <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.4)" />
+            <Ionicons name="close-circle" size={IconSize.sm} color="rgba(255,255,255,0.4)" />
           </TouchableOpacity>
         </TouchableOpacity>
       ) : !showEquipmentPicker ? (
         <TouchableOpacity style={styles.setContextBtn} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
-          <Ionicons name="build-outline" size={14} color="rgba(255,255,255,0.5)" />
+          <Ionicons name="build-outline" size={IconSize.sm} color="rgba(255,255,255,0.5)" />
           <Text style={styles.setContextText}>Set equipment</Text>
         </TouchableOpacity>
       ) : null}
@@ -294,7 +294,7 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
                 onPress={() => setSelectedEquipment(opt.key)}
                 activeOpacity={0.7}
               >
-                <Ionicons name={opt.icon} size={14} color={selectedEquipment === opt.key ? '#FFF' : 'rgba(255,255,255,0.6)'} />
+                <Ionicons name={opt.icon} size={IconSize.sm} color={selectedEquipment === opt.key ? '#FFF' : 'rgba(255,255,255,0.6)'} />
                 <Text style={[styles.chipText, selectedEquipment === opt.key && styles.chipTextSelected]}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
@@ -378,7 +378,7 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
           {textCardMessage && (
             <Animated.View style={[styles.textCard, { opacity: textCardOpacity }]}>
               <TouchableOpacity style={styles.textCardClose} onPress={dismissTextCard} hitSlop={8}>
-                <Ionicons name="close" size={14} color="rgba(255,255,255,0.5)" />
+                <Ionicons name="close" size={IconSize.sm} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
               <Text style={styles.textCardMessage}>{textCardMessage}</Text>
             </Animated.View>
@@ -394,7 +394,7 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
                   onPress={() => handleQuickAction(action.key)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name={action.icon as any} size={15} color="#FFF" />
+                  <Ionicons name={action.icon as any} size={IconSize.sm} color="#FFF" />
                   <Text style={styles.quickActionLabel}>{action.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -404,7 +404,7 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
           {/* Pause button */}
           {onPause && (
             <TouchableOpacity style={styles.pauseButton} onPress={onPause} activeOpacity={0.7}>
-              <Ionicons name={isPaused ? 'play' : 'pause'} size={18} color="rgba(255,255,255,0.8)" />
+              <Ionicons name={isPaused ? 'play' : 'pause'} size={IconSize.md} color="rgba(255,255,255,0.8)" />
               <Text style={styles.pauseText}>{isPaused ? 'Resume' : 'Pause'}</Text>
             </TouchableOpacity>
           )}
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   },
   liveText: {
     color: '#FF3B30',
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '700',
     letterSpacing: 2,
   },
@@ -460,28 +460,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stateLabel: {
-    fontSize: 18,
+    fontSize: FontSize.lg,
     fontWeight: '600',
-    marginTop: 24,
+    marginTop: Spacing.lg,
   },
   subtitle: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 14,
+    fontSize: FontSize.sm,
     marginTop: 6,
   },
   pauseButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 32,
+    marginTop: Spacing.xl,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   pauseText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontWeight: '500',
   },
 
@@ -489,17 +489,17 @@ const styles = StyleSheet.create({
   contextBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 20,
-    marginBottom: 16,
+    borderRadius: Radius.full,
+    marginBottom: Spacing.base,
     maxWidth: '80%',
   },
   contextText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '500',
     flex: 1,
     textTransform: 'capitalize',
@@ -511,17 +511,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.base,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
     borderStyle: 'dashed',
-    marginBottom: 16,
+    marginBottom: Spacing.base,
   },
   setContextText: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
+    fontSize: FontSize.sm,
   },
 
   // Equipment picker
@@ -533,31 +533,31 @@ const styles = StyleSheet.create({
   },
   pickerTitle: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: FontSize.lg,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: Spacing.base,
     textAlign: 'center',
   },
   pickerSubtitle: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: FontSize.sm,
+    marginTop: Spacing.base,
+    marginBottom: Spacing.sm,
   },
   chipRow: {
     flexGrow: 0,
   },
   chipRowContent: {
-    gap: 8,
-    paddingVertical: 4,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -568,44 +568,44 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '500',
   },
   chipTextSelected: {
     color: '#FFF',
   },
   modelInput: {
-    marginTop: 12,
-    paddingHorizontal: 14,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.base,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     color: '#FFF',
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   pickerActions: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 24,
+    gap: Spacing.base,
+    marginTop: Spacing.lg,
   },
   pickerCancel: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   pickerCancelText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontWeight: '500',
   },
   pickerConfirm: {
-    paddingHorizontal: 32,
+    paddingHorizontal: Spacing.xl,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: Colors.accent,
   },
   pickerConfirmDisabled: {
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
   },
   pickerConfirmText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontWeight: '600',
   },
 
@@ -622,24 +622,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 24,
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
     paddingHorizontal: 20,
   },
   quickActionChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.base,
     paddingVertical: 10,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
   quickActionLabel: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
@@ -647,23 +647,23 @@ const styles = StyleSheet.create({
   // Text card (shown when "Show in text" is tapped)
   textCard: {
     marginTop: 20,
-    marginHorizontal: 24,
+    marginHorizontal: Spacing.lg,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: Radius.lg,
+    padding: Spacing.base,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
     maxWidth: '85%',
   },
   textCardClose: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    padding: 4,
+    top: Spacing.sm,
+    right: Spacing.sm,
+    padding: Spacing.xs,
   },
   textCardMessage: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
     letterSpacing: -0.2,
     paddingRight: 20,

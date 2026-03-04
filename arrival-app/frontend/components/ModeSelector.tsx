@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
 
 interface ModeSelectorProps {
   currentMode: 'default' | 'text' | 'job';
   onModeChange: (mode: 'default' | 'text' | 'job') => void;
   jobModeAllowed: boolean;
   voiceAllowed: boolean;
+  variant?: 'dark' | 'light';
 }
 
 const modes = [
@@ -16,12 +17,20 @@ const modes = [
   { key: 'job' as const, label: 'Job', icon: 'radio' as const },
 ];
 
-export default function ModeSelector({ currentMode, onModeChange, jobModeAllowed, voiceAllowed }: ModeSelectorProps) {
+export default function ModeSelector({ currentMode, onModeChange, jobModeAllowed, voiceAllowed, variant = 'dark' }: ModeSelectorProps) {
+  const isLight = variant === 'light';
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLight && styles.containerLight]}>
       {modes.map((mode) => {
         const isActive = currentMode === mode.key;
         const isLocked = (mode.key === 'job' && !jobModeAllowed) || (mode.key === 'default' && !voiceAllowed);
+
+        const iconColor = isLocked
+          ? (isLight ? Colors.textFaint : 'rgba(255,255,255,0.3)')
+          : isActive
+            ? '#FFF'
+            : (isLight ? Colors.textMuted : 'rgba(255,255,255,0.6)');
 
         return (
           <TouchableOpacity
@@ -34,10 +43,14 @@ export default function ModeSelector({ currentMode, onModeChange, jobModeAllowed
           >
             <Ionicons
               name={isLocked ? 'lock-closed' : mode.icon}
-              size={14}
-              color={isActive ? '#FFF' : 'rgba(255,255,255,0.6)'}
+              size={IconSize.sm}
+              color={iconColor}
             />
-            <Text style={[styles.label, isActive && styles.labelActive]}>
+            <Text style={[
+              styles.label,
+              isActive && styles.labelActive,
+              !isActive && isLight && styles.labelLight,
+            ]}>
               {mode.label}
             </Text>
             {mode.key === 'job' && isActive && (
@@ -54,25 +67,31 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 24,
+    borderRadius: Radius.full,
     padding: 2,
     gap: 2,
+  },
+  containerLight: {
+    backgroundColor: Colors.backgroundWarm,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 5,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+    gap: Spacing.xs,
   },
   pillActive: {
     backgroundColor: Colors.accent,
   },
   label: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.6)',
+  },
+  labelLight: {
+    color: Colors.textMuted,
   },
   labelActive: {
     color: '#FFF',

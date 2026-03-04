@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { useSavedAnswersStore, SavedAnswer } from '../../store/savedAnswersStore';
 
 export default function SavedAnswersScreen() {
@@ -81,7 +81,7 @@ export default function SavedAnswersScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
+          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Saved Answers</Text>
         <View style={styles.headerRight}>
@@ -273,23 +273,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
   },
   backBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 28,
+    fontSize: FontSize.xl,
     fontWeight: '800',
     color: Colors.textDark,
     letterSpacing: -0.5,
-    marginLeft: 4,
+    marginLeft: Spacing.xs,
   },
   headerRight: {
     width: 44,
@@ -297,38 +297,34 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: Radius.md,
   },
   countText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
   },
 
   // Search
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSize.base,
     color: Colors.textDark,
     paddingVertical: 0,
     letterSpacing: -0.2,
@@ -350,38 +346,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: FontSize.xl,
     fontWeight: '700',
     color: Colors.textDark,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 32,
+    marginBottom: Spacing.xl,
   },
 
   // Steps card
   stepsCard: {
     backgroundColor: Colors.card,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 20,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   step: {
     flexDirection: 'row',
@@ -391,14 +379,14 @@ const styles = StyleSheet.create({
   stepNumber: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.textDark,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
   },
   stepNumberText: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -407,14 +395,14 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   stepTitle: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '600',
     color: Colors.textDark,
     letterSpacing: -0.2,
     marginBottom: 2,
   },
   stepHint: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     color: Colors.textMuted,
     lineHeight: 18,
   },
@@ -423,24 +411,20 @@ const styles = StyleSheet.create({
     height: 12,
     backgroundColor: Colors.borderWarm,
     marginLeft: 14,
-    marginVertical: 4,
+    marginVertical: Spacing.xs,
   },
 
   // List
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.lg,
     gap: 10,
   },
   answerCard: {
     backgroundColor: Colors.card,
-    borderRadius: 14,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: Radius.lg,
+    padding: Spacing.base,
+    ...Shadow.medium,
   },
   answerTop: {
     flexDirection: 'row',
@@ -451,7 +435,7 @@ const styles = StyleSheet.create({
   answerTopLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.sm,
   },
   answerTopRight: {
     flexDirection: 'row',
@@ -459,21 +443,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   answerTradeBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   answerTradeText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   answerDate: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
   },
   answerQuestion: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '600',
     color: Colors.textDark,
     marginBottom: 6,
@@ -485,12 +469,12 @@ const styles = StyleSheet.create({
   },
   answerBodyExpanded: {
     backgroundColor: 'rgba(0,0,0,0.015)',
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
     marginHorizontal: -4,
   },
   answerPreview: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: Colors.textMuted,
     lineHeight: 20,
   },
@@ -498,13 +482,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 10,
-    gap: 4,
-    paddingTop: 8,
+    gap: Spacing.xs,
+    paddingTop: Spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.borderWarm,
   },
   sourceText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
     fontStyle: 'italic',
     flex: 1,
@@ -512,12 +496,12 @@ const styles = StyleSheet.create({
   readMoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
     justifyContent: 'center',
   },
   readMore: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.accent,
     fontWeight: '600',
   },
@@ -532,14 +516,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   confidenceText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
     fontWeight: '600',
   },
   deleteBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',

@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { useAuthStore } from '../../store/authStore';
 import { useDocumentsStore, Document, MANUAL_CATEGORIES } from '../../store/documentsStore';
 import { documentsAPI } from '../../services/api';
@@ -187,7 +187,7 @@ export default function ManualsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
+          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Manuals</Text>
         <View style={styles.headerRight}>
@@ -284,16 +284,16 @@ export default function ManualsScreen() {
               <Text style={styles.categoryGuideTitle}>Supported document types</Text>
               <View style={styles.categoryGrid}>
                 {[
-                  { icon: 'build-outline', label: 'Equipment\nManuals', color: Colors.accent },
-                  { icon: 'document-text-outline', label: 'Spec\nSheets', color: '#5B9BD5' },
-                  { icon: 'flash-outline', label: 'Wiring\nDiagrams', color: '#E8A84C' },
-                  { icon: 'construct-outline', label: 'Maintenance\nGuides', color: '#FF6B6B' },
-                  { icon: 'clipboard-outline', label: 'Company\nSOPs', color: '#E8A84C' },
-                  { icon: 'list-outline', label: 'Parts\nLists', color: '#FF9500' },
+                  { icon: 'build-outline', label: 'Equipment\nManuals' },
+                  { icon: 'document-text-outline', label: 'Spec\nSheets' },
+                  { icon: 'flash-outline', label: 'Wiring\nDiagrams' },
+                  { icon: 'construct-outline', label: 'Maintenance\nGuides' },
+                  { icon: 'clipboard-outline', label: 'Company\nSOPs' },
+                  { icon: 'list-outline', label: 'Parts\nLists' },
                 ].map((item, i) => (
                   <View key={i} style={styles.categoryGuideItem}>
-                    <View style={[styles.categoryGuideIcon, { backgroundColor: item.color + '12' }]}>
-                      <Ionicons name={item.icon as any} size={20} color={item.color} />
+                    <View style={styles.categoryGuideIcon}>
+                      <Ionicons name={item.icon as any} size={IconSize.md} color={Colors.textMuted} />
                     </View>
                     <Text style={styles.categoryGuideLabel}>{item.label}</Text>
                   </View>
@@ -321,8 +321,8 @@ export default function ManualsScreen() {
                 onPress={() => toggleCategory(section.title)}
                 activeOpacity={0.7}
               >
-                <View style={[styles.sectionIconWrap, { backgroundColor: config.color + '12' }]}>
-                  <Ionicons name={config.icon as any} size={16} color={config.color} />
+                <View style={styles.sectionIconWrap}>
+                  <Ionicons name={config.icon as any} size={IconSize.sm} color={Colors.textMuted} />
                 </View>
                 <Text style={styles.sectionTitle}>{config.label}</Text>
                 <View style={styles.sectionCountBadge}>
@@ -374,69 +374,65 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
   },
   backBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 28,
+    fontSize: FontSize.xl,
     fontWeight: '800',
     color: Colors.textDark,
     letterSpacing: -0.5,
-    marginLeft: 4,
+    marginLeft: Spacing.xs,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.sm,
   },
   uploadBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   countBadge: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: Radius.md,
   },
   countText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
   },
 
   // Toggle chips
   toggleContainer: {
-    paddingBottom: 8,
+    paddingBottom: Spacing.sm,
   },
   toggleScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: Spacing.base,
+    gap: Spacing.sm,
   },
   toggleChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.borderWarm,
@@ -446,7 +442,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.textDark,
   },
   toggleChipText: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.textMuted,
   },
@@ -456,26 +452,22 @@ const styles = StyleSheet.create({
 
   // Search
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSize.base,
     color: Colors.textDark,
     paddingVertical: 0,
     letterSpacing: -0.2,
@@ -498,7 +490,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
     paddingTop: 60,
-    paddingBottom: 32,
+    paddingBottom: Spacing.xl,
   },
   emptyIconWrap: {
     width: 80,
@@ -508,21 +500,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: FontSize.xl,
     fontWeight: '700',
     color: Colors.textDark,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -530,30 +518,26 @@ const styles = StyleSheet.create({
 
   // Category guide (empty state)
   categoryGuide: {
-    marginHorizontal: 16,
+    marginHorizontal: Spacing.base,
     backgroundColor: Colors.card,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   categoryGuideTitle: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '700',
     color: Colors.textMuted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    marginBottom: 16,
+    marginBottom: Spacing.base,
     textAlign: 'center',
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: Spacing.md,
   },
   categoryGuideItem: {
     width: '30%',
@@ -562,13 +546,14 @@ const styles = StyleSheet.create({
   categoryGuideIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 6,
   },
   categoryGuideLabel: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '600',
     color: Colors.textMuted,
     textAlign: 'center',
@@ -580,21 +565,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 4,
-    marginTop: 8,
-    marginBottom: 4,
-    gap: 8,
+    paddingHorizontal: Spacing.xs,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    gap: Spacing.sm,
   },
   sectionIconWrap: {
     width: 28,
     height: 28,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sectionTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '700',
     color: Colors.textDark,
     letterSpacing: -0.2,
@@ -603,49 +589,45 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.backgroundWarm,
     paddingHorizontal: 7,
     paddingVertical: 1,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: Colors.borderWarm,
   },
   sectionCountText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     color: Colors.textMuted,
   },
 
   // List
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    paddingTop: 4,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.xs,
   },
   manualCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     padding: 14,
     marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    ...Shadow.medium,
   },
   manualIcon: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   manualInfo: {
     flex: 1,
   },
   manualTitle: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '600',
     color: Colors.textDark,
     marginBottom: 5,
@@ -658,21 +640,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   metaText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textFaint,
   },
   metaDot: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textFaint,
   },
   teamTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing.xs,
     marginTop: 5,
   },
   teamTagText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '600',
     color: Colors.textMuted,
   },

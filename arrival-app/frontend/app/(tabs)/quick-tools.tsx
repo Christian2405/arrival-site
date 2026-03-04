@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 
 // ─── Wire Gauge Table (NEC Table 310.16, copper, 75°C, single-phase) ────────
 const WIRE_GAUGE_TABLE = [
@@ -135,7 +136,7 @@ function InputField({
           style={[s.fieldInput, unit ? { paddingRight: 44 } : undefined]}
           keyboardType={keyboardType}
           placeholder={placeholder}
-          placeholderTextColor="#C7C2BC"
+          placeholderTextColor={Colors.textFaint}
           value={value}
           onChangeText={onChangeText}
         />
@@ -150,7 +151,7 @@ function InputField({
 function ResetButton({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity style={s.resetBtn} onPress={onPress} activeOpacity={0.6}>
-      <Ionicons name="refresh-outline" size={14} color="#A09A93" />
+      <Ionicons name="refresh-outline" size={14} color={Colors.textMuted} />
       <Text style={s.resetText}>Reset</Text>
     </TouchableOpacity>
   );
@@ -196,7 +197,7 @@ function WireGaugeCalc() {
         </View>
       ) : amps ? (
         <View style={s.warningCard}>
-          <Ionicons name="alert-circle-outline" size={18} color="#2A2622" />
+          <Ionicons name="alert-circle-outline" size={IconSize.md} color={Colors.textDark} />
           <Text style={s.warningText}>Load exceeds standard table. Consult an engineer.</Text>
         </View>
       ) : (
@@ -277,7 +278,7 @@ function VoltageDropCalc() {
             </View>
             <View style={s.resultDetailItem}>
               <Text style={s.resultDetailLabel}>NEC Limit (3%)</Text>
-              <Text style={[s.resultDetailValue, { color: pct > 3 ? '#C75450' : '#2A2622' }]}>
+              <Text style={[s.resultDetailValue, { color: pct > 3 ? Colors.errorMuted : Colors.textDark }]}>
                 {pct <= 3 ? '✓ Within limit' : '⚠ Exceeds'}
               </Text>
             </View>
@@ -411,7 +412,7 @@ function PipeSizingCalc() {
         </View>
       ) : flow && flow >= 300 ? (
         <View style={s.warningCard}>
-          <Ionicons name="alert-circle-outline" size={18} color="#2A2622" />
+          <Ionicons name="alert-circle-outline" size={IconSize.md} color={Colors.textDark} />
           <Text style={s.warningText}>Flow exceeds standard table. Consult a plumbing engineer.</Text>
         </View>
       ) : (
@@ -485,7 +486,11 @@ export default function QuickToolsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(tabs)/home')}>
+          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Quick Tools</Text>
+        <View style={{ width: IconSize.lg }} />
       </View>
 
       <ScrollView
@@ -509,7 +514,7 @@ export default function QuickToolsScreen() {
             >
               <View style={styles.toolCardTop}>
                 <View style={styles.toolIcon}>
-                  <Ionicons name={tool.icon} size={22} color="#2A2622" />
+                  <Ionicons name={tool.icon} size={22} color={Colors.textDark} />
                 </View>
               </View>
               <Text style={styles.toolName}>{tool.name}</Text>
@@ -524,7 +529,7 @@ export default function QuickToolsScreen() {
         {/* AI Tip */}
         <View style={styles.tipCard}>
           <View style={styles.tipIconWrap}>
-            <Ionicons name="sparkles" size={18} color="#2A2622" />
+            <Ionicons name="sparkles" size={IconSize.md} color={Colors.textDark} />
           </View>
           <View style={styles.tipContent}>
             <Text style={styles.tipTitle}>Ask the AI instead</Text>
@@ -552,7 +557,7 @@ export default function QuickToolsScreen() {
               <View style={s.modalHeaderLeft}>
                 {activeToolData && (
                   <View style={s.modalIcon}>
-                    <Ionicons name={activeToolData.icon} size={20} color="#2A2622" />
+                    <Ionicons name={activeToolData.icon} size={IconSize.md} color={Colors.textDark} />
                   </View>
                 )}
                 <View>
@@ -561,7 +566,7 @@ export default function QuickToolsScreen() {
                 </View>
               </View>
               <TouchableOpacity onPress={() => setActiveTool(null)} style={s.closeBtn} activeOpacity={0.6}>
-                <Ionicons name="close" size={20} color="#2A2622" />
+                <Ionicons name="close" size={IconSize.md} color={Colors.textDark} />
               </TouchableOpacity>
             </View>
 
@@ -587,53 +592,66 @@ export default function QuickToolsScreen() {
 // ─── Grid/Page Styles ────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F0EB' },
-  header: { paddingHorizontal: 20, paddingVertical: 12 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#2A2622', letterSpacing: -0.5 },
+  container: { flex: 1, backgroundColor: Colors.backgroundWarm },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.textDark, letterSpacing: -0.5 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
-  subtitle: { fontSize: 15, color: '#A09A93', marginBottom: 20, paddingHorizontal: 4, letterSpacing: -0.2 },
+  scrollContent: { paddingHorizontal: Spacing.base, paddingBottom: 40 },
+  subtitle: { fontSize: FontSize.base, color: Colors.textMuted, marginBottom: 20, paddingHorizontal: Spacing.xs, letterSpacing: -0.2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   toolCard: {
-    width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
+    width: '48%', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.base,
+    ...Shadow.medium,
   },
   toolCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-  toolIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#F3F0EB', justifyContent: 'center', alignItems: 'center' },
-  toolName: { fontSize: 15, fontWeight: '700', color: '#2A2622', marginBottom: 3, letterSpacing: -0.2 },
-  toolDescription: { fontSize: 12, color: '#A09A93', lineHeight: 17, marginBottom: 10 },
-  toolCategoryBadge: { alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, backgroundColor: '#F3F0EB' },
-  toolCategoryText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, color: '#A09A93' },
+  toolIcon: { width: 44, height: 44, borderRadius: Radius.md, backgroundColor: Colors.backgroundWarm, justifyContent: 'center', alignItems: 'center' },
+  toolName: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textDark, marginBottom: 3, letterSpacing: -0.2 },
+  toolDescription: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 17, marginBottom: 10 },
+  toolCategoryBadge: { alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radius.sm, backgroundColor: Colors.backgroundWarm },
+  toolCategoryText: { fontSize: FontSize.xs, fontWeight: '700', letterSpacing: 0.3, color: Colors.textMuted },
   tipCard: {
-    flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, marginTop: 20, gap: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+    flexDirection: 'row', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.base, marginTop: 20, gap: 14,
+    ...Shadow.subtle,
   },
-  tipIconWrap: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F3F0EB', justifyContent: 'center', alignItems: 'center' },
+  tipIconWrap: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: Colors.backgroundWarm, justifyContent: 'center', alignItems: 'center' },
   tipContent: { flex: 1 },
-  tipTitle: { fontSize: 14, fontWeight: '700', color: '#2A2622', marginBottom: 4, letterSpacing: -0.2 },
-  tipText: { fontSize: 13, color: '#A09A93', lineHeight: 19 },
+  tipTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textDark, marginBottom: Spacing.xs, letterSpacing: -0.2 },
+  tipText: { fontSize: FontSize.sm, color: Colors.textMuted, lineHeight: 19 },
 });
 
 // ─── Calculator / Modal Styles ───────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  modalWrap: { flex: 1, backgroundColor: '#F3F0EB' },
+  modalWrap: { flex: 1, backgroundColor: Colors.backgroundWarm },
   modalSafe: { flex: 1 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    backgroundColor: Colors.card,
+    ...Shadow.subtle,
   },
-  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   modalIcon: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: '#F3F0EB',
+    width: 40, height: 40, borderRadius: Radius.md, backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center', alignItems: 'center',
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#2A2622', letterSpacing: -0.3 },
-  modalCategory: { fontSize: 12, color: '#A09A93', marginTop: 1 },
+  modalTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.textDark, letterSpacing: -0.3 },
+  modalCategory: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 1 },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F0EB',
+    width: 36, height: 36, borderRadius: Radius.full, backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center', alignItems: 'center',
   },
   modalScroll: { flex: 1 },
@@ -642,124 +660,124 @@ const s = StyleSheet.create({
   // Calculator common
   calcBody: {},
   calcDescription: {
-    fontSize: 14, color: '#A09A93', lineHeight: 20, marginBottom: 20, letterSpacing: -0.1,
+    fontSize: FontSize.sm, color: Colors.textMuted, lineHeight: 20, marginBottom: 20, letterSpacing: -0.1,
   },
 
   // Field components
-  fieldGroup: { marginBottom: 16 },
+  fieldGroup: { marginBottom: Spacing.base },
   fieldLabel: {
-    fontSize: 13, fontWeight: '600', color: '#2A2622', marginBottom: 8, letterSpacing: -0.1,
+    fontSize: FontSize.sm, fontWeight: '600', color: Colors.textDark, marginBottom: Spacing.sm, letterSpacing: -0.1,
   },
   fieldInputWrap: { position: 'relative' },
   fieldInput: {
-    backgroundColor: '#FFFFFF', borderRadius: 12, height: 52, paddingHorizontal: 16,
-    fontSize: 17, color: '#2A2622', letterSpacing: -0.2,
-    borderWidth: 1, borderColor: '#EBE7E2',
+    backgroundColor: Colors.card, borderRadius: Radius.md, height: 52, paddingHorizontal: Spacing.base,
+    fontSize: FontSize.lg, color: Colors.textDark, letterSpacing: -0.2,
+    borderWidth: 1, borderColor: Colors.borderWarm,
   },
   fieldUnit: {
-    position: 'absolute', right: 16, top: 0, bottom: 0,
-    fontSize: 14, fontWeight: '600', color: '#A09A93', lineHeight: 52,
+    position: 'absolute', right: Spacing.base, top: 0, bottom: 0,
+    fontSize: FontSize.sm, fontWeight: '600', color: Colors.textMuted, lineHeight: 52,
   },
-  fieldRow: { flexDirection: 'row', gap: 12 },
+  fieldRow: { flexDirection: 'row', gap: Spacing.md },
 
   // Wire gauge selector
-  gaugeScroll: { marginTop: 4, marginBottom: 0 },
-  gaugeScrollContent: { gap: 8, paddingRight: 16 },
+  gaugeScroll: { marginTop: Spacing.xs, marginBottom: 0 },
+  gaugeScrollContent: { gap: Spacing.sm, paddingRight: Spacing.base },
   gaugePill: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EBE7E2',
+    paddingHorizontal: Spacing.base, paddingVertical: 10, borderRadius: Radius.md,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.borderWarm,
   },
-  gaugePillActive: { backgroundColor: '#2A2622', borderColor: '#2A2622' },
-  gaugePillText: { fontSize: 14, fontWeight: '600', color: '#2A2622' },
-  gaugePillTextActive: { color: '#FFFFFF' },
+  gaugePillActive: { backgroundColor: Colors.textDark, borderColor: Colors.textDark },
+  gaugePillText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textDark },
+  gaugePillTextActive: { color: Colors.card },
 
   // Results
   resultCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, marginTop: 4, marginBottom: 4,
-    borderLeftWidth: 3, borderLeftColor: '#2A2622',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    backgroundColor: Colors.card, borderRadius: Radius.lg, padding: 20, marginTop: Spacing.xs, marginBottom: Spacing.xs,
+    borderLeftWidth: 3, borderLeftColor: Colors.textDark,
+    ...Shadow.medium,
   },
   resultLabel: {
-    fontSize: 11, fontWeight: '700', color: '#A09A93', letterSpacing: 0.8,
+    fontSize: FontSize.xs, fontWeight: '700', color: Colors.textMuted, letterSpacing: 0.8,
     textTransform: 'uppercase', marginBottom: 6,
   },
   resultBig: {
-    fontSize: 32, fontWeight: '800', color: '#2A2622', letterSpacing: -0.5, marginBottom: 2,
+    fontSize: 32, fontWeight: '800', color: Colors.textDark, letterSpacing: -0.5, marginBottom: 2,
   },
   resultDivider: {
-    height: 1, backgroundColor: '#EBE7E2', marginVertical: 14,
+    height: 1, backgroundColor: Colors.borderWarm, marginVertical: 14,
   },
-  resultDetails: { flexDirection: 'row', gap: 24 },
+  resultDetails: { flexDirection: 'row', gap: Spacing.lg },
   resultDetailItem: { flex: 1 },
-  resultDetailLabel: { fontSize: 11, fontWeight: '600', color: '#A09A93', marginBottom: 2, letterSpacing: 0.2 },
-  resultDetailValue: { fontSize: 16, fontWeight: '700', color: '#2A2622' },
+  resultDetailLabel: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: 2, letterSpacing: 0.2 },
+  resultDetailValue: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textDark },
 
   // Ohm's law results
   ohmsRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F0EB',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.backgroundWarm,
   },
-  ohmsLabel: { fontSize: 14, color: '#A09A93' },
-  ohmsValueWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  ohmsValue: { fontSize: 22, fontWeight: '700', color: '#2A2622' },
-  ohmsUnit: { fontSize: 13, fontWeight: '600', color: '#A09A93' },
+  ohmsLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
+  ohmsValueWrap: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.xs },
+  ohmsValue: { fontSize: 22, fontWeight: '700', color: Colors.textDark },
+  ohmsUnit: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textMuted },
 
   // Warning / Hint cards
   warningCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginTop: 4,
-    borderWidth: 1, borderColor: '#EBE7E2',
+    backgroundColor: Colors.card, borderRadius: Radius.md, padding: Spacing.base, marginTop: Spacing.xs,
+    borderWidth: 1, borderColor: Colors.borderWarm,
   },
-  warningText: { flex: 1, fontSize: 14, color: '#2A2622', lineHeight: 20 },
+  warningText: { flex: 1, fontSize: FontSize.sm, color: Colors.textDark, lineHeight: 20 },
   hintCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginTop: 4,
-    borderWidth: 1, borderColor: '#EBE7E2', borderStyle: 'dashed',
+    backgroundColor: Colors.card, borderRadius: Radius.md, padding: Spacing.base, marginTop: Spacing.xs,
+    borderWidth: 1, borderColor: Colors.borderWarm, borderStyle: 'dashed',
   },
-  hintText: { fontSize: 14, color: '#A09A93', textAlign: 'center', lineHeight: 20 },
+  hintText: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
 
   // Reset button
   resetBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-    marginTop: 16,
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EBE7E2',
+    alignSelf: 'center', paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm, borderRadius: Radius.full,
+    marginTop: Spacing.base,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.borderWarm,
   },
-  resetText: { fontSize: 13, fontWeight: '600', color: '#A09A93' },
+  resetText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textMuted },
 
   disclaimer: {
-    fontSize: 11, color: '#C7C2BC', marginTop: 20, lineHeight: 16, textAlign: 'center',
+    fontSize: FontSize.xs, color: Colors.textFaint, marginTop: 20, lineHeight: 16, textAlign: 'center',
   },
 
-  // P/T Chart — refrigerant selector
-  refSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  // P/T Chart -- refrigerant selector
+  refSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.base },
   refPill: {
-    paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10,
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EBE7E2',
+    paddingHorizontal: 18, paddingVertical: 11, borderRadius: Radius.md,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.borderWarm,
   },
-  refPillActive: { backgroundColor: '#2A2622', borderColor: '#2A2622' },
-  refPillText: { fontSize: 14, fontWeight: '600', color: '#2A2622' },
-  refPillTextActive: { color: '#FFFFFF' },
+  refPillActive: { backgroundColor: Colors.textDark, borderColor: Colors.textDark },
+  refPillText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textDark },
+  refPillTextActive: { color: Colors.card },
 
   // P/T Table
   ptTable: {
-    backgroundColor: '#FFFFFF', borderRadius: 14, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+    backgroundColor: Colors.card, borderRadius: Radius.lg, overflow: 'hidden',
+    ...Shadow.subtle,
   },
   ptHeader: {
-    flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 20,
-    backgroundColor: '#2A2622',
+    flexDirection: 'row', paddingVertical: Spacing.md, paddingHorizontal: 20,
+    backgroundColor: Colors.textDark,
   },
   ptHeaderCell: {
-    flex: 1, fontSize: 12, fontWeight: '700', color: '#FFFFFF',
+    flex: 1, fontSize: FontSize.xs, fontWeight: '700', color: Colors.card,
     letterSpacing: 0.3, textTransform: 'uppercase',
   },
   ptScroll: { maxHeight: 380 },
   ptRow: {
-    flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 20,
-    borderBottomWidth: 1, borderBottomColor: '#F3F0EB',
+    flexDirection: 'row', paddingVertical: Spacing.md, paddingHorizontal: 20,
+    borderBottomWidth: 1, borderBottomColor: Colors.backgroundWarm,
   },
   ptRowAlt: { backgroundColor: '#FAFAF7' },
   ptCell: {
-    flex: 1, fontSize: 15, color: '#2A2622', fontVariant: ['tabular-nums'],
+    flex: 1, fontSize: FontSize.base, color: Colors.textDark, fontVariant: ['tabular-nums'],
   },
 });

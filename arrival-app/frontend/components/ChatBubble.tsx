@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../constants/Colors';
 import { Message } from '../store/conversationStore';
 
 interface ChatBubbleProps {
@@ -94,7 +94,7 @@ export default function ChatBubble({ message, onSave, onFeedback, userQuestion }
       {/* Alert header */}
       {isAlert && alertConfig && (
         <View style={[styles.alertHeader, { borderBottomColor: alertConfig.border + '30' }]}>
-          <Ionicons name={alertConfig.icon} size={14} color={alertConfig.accent} />
+          <Ionicons name={alertConfig.icon} size={IconSize.sm} color={alertConfig.accent} />
           <Text style={[styles.alertLabel, { color: alertConfig.accent }]}>
             {alertConfig.label}
           </Text>
@@ -157,10 +157,10 @@ export default function ChatBubble({ message, onSave, onFeedback, userQuestion }
             ) : (
               <>
                 <TouchableOpacity onPress={handleThumbsUp} style={styles.feedbackBtn} hitSlop={8}>
-                  <Ionicons name="thumbs-up-outline" size={14} color={Colors.textSecondary} />
+                  <Ionicons name="thumbs-up-outline" size={IconSize.sm} color={Colors.textSecondary} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleThumbsDown} style={styles.feedbackBtn} hitSlop={8}>
-                  <Ionicons name="thumbs-down-outline" size={14} color={Colors.textSecondary} />
+                  <Ionicons name="thumbs-down-outline" size={IconSize.sm} color={Colors.textSecondary} />
                 </TouchableOpacity>
               </>
             )
@@ -172,7 +172,7 @@ export default function ChatBubble({ message, onSave, onFeedback, userQuestion }
               style={[styles.feedbackBtn, { marginLeft: 'auto' }]}
               hitSlop={8}
             >
-              <Ionicons name="bookmark-outline" size={14} color={Colors.textSecondary} />
+              <Ionicons name="bookmark-outline" size={IconSize.sm} color={Colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -224,7 +224,7 @@ export default function ChatBubble({ message, onSave, onFeedback, userQuestion }
         >
           <Ionicons
             name={isAlert && alertConfig ? alertConfig.icon : 'sparkles'}
-            size={14}
+            size={IconSize.sm}
             color={isAlert && alertConfig ? alertConfig.accent : Colors.accent}
           />
         </View>
@@ -244,8 +244,8 @@ export default function ChatBubble({ message, onSave, onFeedback, userQuestion }
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    marginVertical: 4,
-    paddingHorizontal: 14,
+    marginVertical: Spacing.xs,
+    paddingHorizontal: Spacing.base,
     alignItems: 'flex-end',
   },
   userContainer: {
@@ -257,48 +257,44 @@ const styles = StyleSheet.create({
   avatar: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.accentMuted,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: Spacing.sm,
     marginBottom: 2,
   },
   bubble: {
     maxWidth: '78%',
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.base,
     paddingVertical: 10,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
   },
   userBubble: {
     backgroundColor: Colors.accent,
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.card,
     borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Shadow.subtle,
   },
   alertHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Spacing.xs,
     marginBottom: 6,
     paddingBottom: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   alertLabel: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     letterSpacing: 0.8,
   },
   text: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     lineHeight: 21,
     letterSpacing: -0.2,
   },
@@ -312,10 +308,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
-    gap: 4,
+    gap: Spacing.xs,
   },
   sourceText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textSecondary,
     fontStyle: 'italic',
     flex: 1,
@@ -326,7 +322,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   confidenceLabel: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textSecondary,
     textTransform: 'capitalize',
   },
@@ -334,57 +330,57 @@ const styles = StyleSheet.create({
   feedbackRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    gap: 12,
+    marginTop: Spacing.sm,
+    gap: Spacing.md,
   },
   feedbackBtn: {
-    padding: 4,
+    padding: Spacing.xs,
     opacity: 0.7,
   },
   feedbackDone: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing.xs,
   },
   feedbackDoneText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textSecondary,
   },
   feedbackInputContainer: {
-    marginTop: 8,
+    marginTop: Spacing.sm,
     backgroundColor: 'rgba(0,0,0,0.04)',
-    borderRadius: 10,
-    padding: 8,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
   },
   feedbackInput: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     color: Colors.text,
     minHeight: 36,
     maxHeight: 80,
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
   },
   feedbackInputActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 4,
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
   },
   feedbackSkipBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
   },
   feedbackSkipText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textSecondary,
   },
   feedbackSendBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
     backgroundColor: Colors.accent,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   feedbackSendText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '600',
     color: '#FFF',
   },
@@ -392,7 +388,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
-    gap: 4,
+    gap: Spacing.xs,
   },
   savedText: {
     fontSize: 10,

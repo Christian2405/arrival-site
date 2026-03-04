@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { useConversationStore, Conversation } from '../../store/conversationStore';
 
 function formatTimeAgo(date: Date | string): string {
@@ -33,7 +33,7 @@ function formatTimeAgo(date: Date | string): string {
 }
 
 function getTradeBadgeColor(_trade: string): string {
-  return '#2A2622';
+  return Colors.textDark;
 }
 
 export default function HistoryScreen() {
@@ -92,27 +92,30 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(tabs)/home')}>
+          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>History</Text>
         <TouchableOpacity style={styles.newChatBtn} onPress={startNewChat} activeOpacity={0.7}>
-          <Ionicons name="add" size={20} color="#2A2622" />
+          <Ionicons name="add" size={IconSize.md} color={Colors.textDark} />
         </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color="#A09A93" />
+          <Ionicons name="search" size={IconSize.sm} color={Colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search conversations..."
-            placeholderTextColor="#C7C2BC"
+            placeholderTextColor={Colors.textFaint}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={16} color="#C7C2BC" />
+              <Ionicons name="close-circle" size={IconSize.sm} color={Colors.textFaint} />
             </TouchableOpacity>
           )}
         </View>
@@ -122,7 +125,7 @@ export default function HistoryScreen() {
       {filteredConversations.length === 0 && searchQuery.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="chatbubbles-outline" size={40} color="#C7C2BC" />
+            <Ionicons name="chatbubbles-outline" size={40} color={Colors.textFaint} />
           </View>
           <Text style={styles.emptyTitle}>No conversations yet</Text>
           <Text style={styles.emptySubtitle}>
@@ -134,7 +137,7 @@ export default function HistoryScreen() {
         </View>
       ) : filteredConversations.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="search-outline" size={36} color="#C7C2BC" />
+          <Ionicons name="search-outline" size={36} color={Colors.textFaint} />
           <Text style={styles.emptyTitle}>No results</Text>
           <Text style={styles.emptySubtitle}>
             Try a different search term
@@ -156,74 +159,70 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
+    flex: 1,
+    fontSize: FontSize.xl,
     fontWeight: '800',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: -0.5,
+    marginLeft: Spacing.xs,
   },
   newChatBtn: {
     width: 38,
     height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.full,
+    backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: '#2A2622',
+    fontSize: FontSize.base,
+    color: Colors.textDark,
     paddingVertical: 0,
     letterSpacing: -0.2,
   },
   list: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    paddingTop: 4,
-    gap: 8,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.xs,
+    gap: Spacing.sm,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.lg,
+    padding: Spacing.base,
+    ...Shadow.medium,
   },
   cardTop: {
     flexDirection: 'row',
@@ -232,21 +231,21 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: FontSize.base,
     fontWeight: '600',
-    color: '#2A2622',
+    color: Colors.textDark,
     flex: 1,
-    marginRight: 12,
+    marginRight: Spacing.md,
     letterSpacing: -0.2,
   },
   cardTime: {
-    fontSize: 12,
-    color: '#C7C2BC',
+    fontSize: FontSize.xs,
+    color: Colors.textFaint,
     fontWeight: '500',
   },
   cardPreview: {
-    fontSize: 14,
-    color: '#A09A93',
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
     lineHeight: 20,
     marginBottom: 10,
   },
@@ -258,9 +257,9 @@ const styles = StyleSheet.create({
   tradeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
     gap: 5,
   },
   tradeDot: {
@@ -269,13 +268,13 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
   },
   tradeBadgeText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   messageCount: {
-    fontSize: 12,
-    color: '#C7C2BC',
+    fontSize: FontSize.xs,
+    color: Colors.textFaint,
     fontWeight: '500',
   },
   emptyState: {
@@ -289,44 +288,36 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: FontSize.xl,
     fontWeight: '700',
-    color: '#2A2622',
-    marginBottom: 8,
+    color: Colors.textDark,
+    marginBottom: Spacing.sm,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 15,
-    color: '#A09A93',
+    fontSize: FontSize.base,
+    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
   },
   startChatBtn: {
-    backgroundColor: '#2A2622',
+    backgroundColor: Colors.textDark,
     paddingHorizontal: 28,
     paddingVertical: 15,
-    borderRadius: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: Radius.lg,
+    ...Shadow.medium,
   },
   startChatBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: Colors.card,
+    fontSize: FontSize.base,
     fontWeight: '600',
     letterSpacing: -0.2,
   },

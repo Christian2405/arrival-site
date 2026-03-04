@@ -60,3 +60,31 @@ export const Colors = {
   glassLight: 'rgba(255, 255, 255, 0.15)',
   glassDark: 'rgba(0, 0, 0, 0.45)',
 };
+
+// ── Design Tokens ──────────────────────────────────────────────
+// Constrained scales to keep the whole app visually consistent.
+
+export const Spacing = { xs: 4, sm: 8, md: 12, base: 16, lg: 24, xl: 32 } as const;
+
+export const Radius = { sm: 8, md: 12, lg: 16, full: 24 } as const;
+
+export const FontSize = { xs: 12, sm: 14, base: 16, lg: 18, xl: 24 } as const;
+
+export const IconSize = { sm: 16, md: 20, lg: 24 } as const;
+
+export const Shadow = {
+  subtle: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  medium: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+} as const;

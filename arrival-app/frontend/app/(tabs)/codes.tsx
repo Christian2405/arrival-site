@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { useAuthStore } from '../../store/authStore';
 import { useDocumentsStore, Document, CODE_CATEGORIES } from '../../store/documentsStore';
 import { getTierLimits } from '../../constants/Tiers';
@@ -156,7 +156,7 @@ export default function CodesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textDark} />
+          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Error Codes</Text>
         <View style={styles.headerRight}>
@@ -240,13 +240,12 @@ export default function CodesScreen() {
                 onPress={() => loadBrandCodes(brand.id)}
                 activeOpacity={0.7}
               >
-                <View style={[styles.brandIconWrap, selectedBrand === brand.id && styles.brandIconWrapActive]}>
-                  <Ionicons
-                    name={getBrandIcon(brand.id) as any}
-                    size={20}
-                    color={selectedBrand === brand.id ? '#FFF' : Colors.accent}
-                  />
-                </View>
+                <Ionicons
+                  name={getBrandIcon(brand.id) as any}
+                  size={IconSize.md}
+                  color={selectedBrand === brand.id ? '#FFF' : Colors.textMuted}
+                  style={{ marginBottom: Spacing.sm }}
+                />
                 <Text style={[styles.brandName, selectedBrand === brand.id && styles.brandNameActive]}>{brand.name}</Text>
                 <Text style={[styles.brandCount, selectedBrand === brand.id && styles.brandCountActive]}>
                   {brand.code_count} codes
@@ -390,23 +389,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
   },
   backBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 28,
+    fontSize: FontSize.xl,
     fontWeight: '800',
     color: Colors.textDark,
     letterSpacing: -0.5,
-    marginLeft: 4,
+    marginLeft: Spacing.xs,
   },
   headerRight: {
     width: 44,
@@ -414,31 +413,31 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: Radius.md,
   },
   countText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
   },
 
   // Toggle chips
   toggleContainer: {
-    paddingBottom: 8,
+    paddingBottom: Spacing.sm,
   },
   toggleScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: Spacing.base,
+    gap: Spacing.sm,
   },
   toggleChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.borderWarm,
@@ -448,7 +447,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.textDark,
   },
   toggleChipText: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.textMuted,
   },
@@ -458,26 +457,22 @@ const styles = StyleSheet.create({
 
   // Search
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     height: 42,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSize.base,
     color: Colors.textDark,
     paddingVertical: 0,
     letterSpacing: -0.2,
@@ -488,37 +483,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginBottom: 16,
+    marginBottom: Spacing.base,
   },
   brandCard: {
     width: '31%',
     backgroundColor: Colors.card,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     padding: 14,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   brandCardActive: {
     backgroundColor: Colors.textDark,
   },
-  brandIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(212, 132, 42, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  brandIconWrapActive: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
   brandName: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     color: Colors.textDark,
     textAlign: 'center',
@@ -528,7 +507,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   brandCount: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
   },
   brandCountActive: {
@@ -541,13 +520,9 @@ const styles = StyleSheet.create({
   },
   codeItem: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.subtle,
   },
   codeHeader: {
     flexDirection: 'row',
@@ -557,21 +532,21 @@ const styles = StyleSheet.create({
   },
   codeBadge: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
     minWidth: 44,
     alignItems: 'center',
   },
   codeBadgeText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '800',
     color: '#FFF',
     letterSpacing: 0.3,
   },
   codeMeaning: {
     flex: 1,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontWeight: '500',
     color: Colors.textDark,
     letterSpacing: -0.2,
@@ -581,14 +556,14 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.borderWarm,
-    paddingTop: 12,
-    gap: 12,
+    paddingTop: Spacing.md,
+    gap: Spacing.md,
   },
   codeDetailBlock: {
     gap: 6,
   },
   codeDetailLabel: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     color: Colors.textMuted,
     letterSpacing: 0.8,
@@ -596,23 +571,23 @@ const styles = StyleSheet.create({
   },
   causeRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing.sm,
     alignItems: 'flex-start',
   },
   causeNumber: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     color: Colors.accent,
     width: 16,
   },
   causeText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: Colors.text,
     lineHeight: 20,
   },
   fixText: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: Colors.text,
     lineHeight: 20,
   },
@@ -620,19 +595,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(212, 132, 42, 0.08)',
-    borderRadius: 8,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },
   askArrivalText: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.accent,
   },
   noCodesText: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: Colors.textMuted,
     textAlign: 'center',
     paddingVertical: 20,
@@ -661,16 +636,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
+    ...Shadow.subtle,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: FontSize.xl,
     fontWeight: '700',
     color: Colors.textDark,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -678,37 +654,33 @@ const styles = StyleSheet.create({
 
   // Document list
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    paddingTop: 4,
-    gap: 8,
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.xs,
+    gap: Spacing.sm,
   },
   docCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    ...Shadow.medium,
   },
   docIcon: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     backgroundColor: Colors.backgroundWarm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   docInfo: {
     flex: 1,
   },
   docTitle: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '600',
     color: Colors.textDark,
     marginBottom: 5,
@@ -722,22 +694,22 @@ const styles = StyleSheet.create({
   },
   categoryBadge: {
     backgroundColor: Colors.backgroundWarm,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
   },
   categoryText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     color: Colors.textMuted,
     letterSpacing: 0.2,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textFaint,
   },
   metaDot: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textFaint,
   },
 });

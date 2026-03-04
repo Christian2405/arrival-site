@@ -11,7 +11,7 @@ import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
 import { useConversationStore, Message } from '../../store/conversationStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -83,7 +83,7 @@ export default function HomeScreen() {
 
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [convsExpanded, setConvsExpanded] = useState(false);
+  const [convsExpanded, setConvsExpanded] = useState(true);
   const drawerAnim = useRef(new Animated.Value(0)).current;
 
   // Stores
@@ -120,6 +120,16 @@ export default function HomeScreen() {
     const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
+
+  // Re-check camera permission when app returns to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && !permission?.granted) {
+        requestPermission();
+      }
+    });
+    return () => sub.remove();
+  }, [permission?.granted]);
 
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => { aiAPI.warmup(); }, []);
@@ -688,11 +698,17 @@ export default function HomeScreen() {
   // --- RENDER ---
   return (
     <View style={styles.container}>
-      {/* Camera background - always visible */}
+      {/* Camera background - always mounted (needed for photo capture) */}
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
 
-      {/* Dark overlay */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
+      {/* Text mode: solid light background covering camera */}
+      {interactionMode === 'text' && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
+      )}
+      {/* Voice/Job mode: dark overlay on camera */}
+      {interactionMode !== 'text' && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+      )}
 
       {/* Main content */}
       <View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardHeight : 0 }}>
@@ -700,8 +716,8 @@ export default function HomeScreen() {
 
           {/* TOP BAR: Hamburger + Mode Selector + New Chat */}
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={toggleDrawer} style={styles.iconBtn}>
-              <Ionicons name="menu" size={24} color="#FFF" />
+            <TouchableOpacity onPress={toggleDrawer} style={[styles.iconBtn, interactionMode === 'text' && styles.iconBtnLight]}>
+              <Ionicons name="menu" size={IconSize.lg} color={interactionMode === 'text' ? Colors.textDark : '#FFF'} />
             </TouchableOpacity>
 
             <ModeSelector
@@ -709,12 +725,13 @@ export default function HomeScreen() {
               onModeChange={handleModeChange}
               jobModeAllowed={tierLimits.jobMode}
               voiceAllowed={tierLimits.voiceOutput}
+              variant={interactionMode === 'text' ? 'light' : 'dark'}
             />
 
             {messages.length > 0 ? (
-              <TouchableOpacity onPress={() => createNewConversation()} style={styles.newSessionBtn}>
-                <Ionicons name="refresh" size={14} color="#FFF" />
-                <Text style={styles.newSessionText}>New</Text>
+              <TouchableOpacity onPress={() => createNewConversation()} style={[styles.newSessionBtn, interactionMode === 'text' && styles.iconBtnLight]}>
+                <Ionicons name="refresh" size={FontSize.sm} color={interactionMode === 'text' ? Colors.textDark : '#FFF'} />
+                <Text style={[styles.newSessionText, interactionMode === 'text' && { color: Colors.textDark }]}>New</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.iconBtn} />
@@ -820,7 +837,7 @@ export default function HomeScreen() {
                   </Animated.View>
                 ) : (
                   <View style={styles.emptyState}>
-                    <ArrivalLogo width={48} color="#FFF" />
+                    <ArrivalLogo width={48} color={Colors.textDark} />
                     <Text style={styles.emptyTitle}>Arrival AI</Text>
                     <Text style={styles.emptySubtitle}>Type a question to get started</Text>
                   </View>
@@ -841,7 +858,7 @@ export default function HomeScreen() {
                     </View>
                     <Text style={styles.imagePreviewText}>Photo attached</Text>
                     <TouchableOpacity onPress={() => setPendingImage(undefined)} style={styles.imagePreviewRemove}>
-                      <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.5)" />
+                      <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -869,8 +886,8 @@ export default function HomeScreen() {
                     >
                       <Ionicons
                         name="image-outline"
-                        size={20}
-                        color={pendingImage ? Colors.accent : 'rgba(255,255,255,0.5)'}
+                        size={IconSize.md}
+                        color={pendingImage ? Colors.accent : Colors.textMuted}
                       />
                     </TouchableOpacity>
 
@@ -896,8 +913,8 @@ export default function HomeScreen() {
                     >
                       <Ionicons
                         name="camera-outline"
-                        size={20}
-                        color={pendingImage ? Colors.accent : 'rgba(255,255,255,0.5)'}
+                        size={IconSize.md}
+                        color={pendingImage ? Colors.accent : Colors.textMuted}
                       />
                     </TouchableOpacity>
 
@@ -906,7 +923,7 @@ export default function HomeScreen() {
                       value={inputText}
                       onChangeText={setInputText}
                       placeholder="Ask anything..."
-                      placeholderTextColor="rgba(255,255,255,0.35)"
+                      placeholderTextColor={Colors.textFaint}
                       editable={!isProcessing}
                       multiline={true}
                       returnKeyType="default"
@@ -1018,6 +1035,16 @@ export default function HomeScreen() {
             <ArrivalLogo width={110} color={Colors.text} />
           </View>
 
+          {/* New Chat button */}
+          <TouchableOpacity
+            style={styles.drawerNewChat}
+            onPress={() => { createNewConversation(); toggleDrawer(); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={IconSize.lg} color={Colors.accent} />
+            <Text style={styles.drawerNewChatText}>New Chat</Text>
+          </TouchableOpacity>
+
           {/* Navigation links */}
           <View style={styles.drawerNav}>
             {([
@@ -1025,6 +1052,8 @@ export default function HomeScreen() {
               { icon: 'document-text-outline' as const, label: 'Manuals', route: '/manuals' },
               { icon: 'code-slash-outline' as const, label: 'Error Codes', route: '/codes' },
               { icon: 'calculator-outline' as const, label: 'Quick Tools', route: '/quick-tools' },
+              { icon: 'time-outline' as const, label: 'History', route: '/(tabs)/history' },
+              { icon: 'settings-outline' as const, label: 'Settings', route: '/(tabs)/settings' },
             ]).map((item) => (
               <TouchableOpacity
                 key={item.route}
@@ -1100,14 +1129,17 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* Camera permission request */}
-      {!permission?.granted && (
+      {/* Camera permission request — only shown in voice/job mode */}
+      {!permission?.granted && interactionMode !== 'text' && (
         <View style={[StyleSheet.absoluteFill, styles.permissionOverlay]}>
           <Ionicons name="camera-outline" size={48} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.permissionTitle}>Camera Access Needed</Text>
-          <Text style={styles.permissionSubtitle}>Arrival needs camera access for visual analysis</Text>
+          <Text style={styles.permissionTitle}>Camera Access</Text>
+          <Text style={styles.permissionSubtitle}>Required for voice and job mode</Text>
           <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
             <Text style={styles.permissionBtnText}>Grant Access</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => Linking.openSettings()}>
+            <Text style={styles.permissionLink}>Open Settings Instead</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1129,29 +1161,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
   },
   iconBtn: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: Radius.full,
     backgroundColor: Colors.glassDark,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconBtnLight: {
+    backgroundColor: Colors.backgroundWarm,
   },
   newSessionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.glassDark,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+    gap: Spacing.xs,
   },
   newSessionText: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
   },
 
@@ -1159,14 +1194,14 @@ const styles = StyleSheet.create({
   demoBadge: {
     alignSelf: 'center',
     backgroundColor: Colors.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
+    marginTop: Spacing.xs,
   },
   demoBadgeText: {
     color: '#FFF',
-    fontSize: 10,
+    fontSize: FontSize.xs,
     fontWeight: '700',
     letterSpacing: 1.5,
   },
@@ -1211,17 +1246,17 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   emptyTitle: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 26,
+    color: Colors.textDark,
+    fontSize: FontSize.xl,
     fontWeight: '700',
     letterSpacing: -0.5,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: Spacing.base,
   },
   emptySubtitle: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 15,
-    marginTop: 8,
+    color: Colors.textMuted,
+    fontSize: FontSize.base,
+    marginTop: Spacing.sm,
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 22,
@@ -1229,22 +1264,22 @@ const styles = StyleSheet.create({
   collapseBar: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   collapseHandle: {
     width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: Colors.textFaint,
   },
   processingRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
   },
   processingText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
+    color: Colors.textMuted,
+    fontSize: FontSize.sm,
     fontStyle: 'italic',
   },
 
@@ -1252,15 +1287,16 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 22,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.full,
     paddingLeft: 6,
     paddingRight: 5,
     paddingVertical: 5,
     minHeight: 44,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: Colors.borderWarm,
+    ...Shadow.subtle,
   },
   inputIconBtn: {
     width: 34,
@@ -1275,22 +1311,22 @@ const styles = StyleSheet.create({
     right: 2,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Spacing.xs,
     backgroundColor: Colors.accent,
   },
   textInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: FontSize.base,
+    color: Colors.textDark,
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     maxHeight: 100,
     lineHeight: 20,
   },
   sendBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1300,9 +1336,9 @@ const styles = StyleSheet.create({
   imagePreviewStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
-    marginHorizontal: 12,
+    backgroundColor: Colors.backgroundWarm,
+    borderRadius: Radius.sm,
+    marginHorizontal: Spacing.md,
     marginBottom: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1311,18 +1347,18 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: 'rgba(212,132,42,0.2)',
+    backgroundColor: Colors.accentMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   imagePreviewText: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
+    marginLeft: Spacing.sm,
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
   },
   imagePreviewRemove: {
-    padding: 4,
+    padding: Spacing.xs,
   },
 
   // --- Drawer ---
@@ -1331,13 +1367,9 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: '#FFFFF5',
+    backgroundColor: Colors.background,
     zIndex: 11,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 20,
+    ...Shadow.medium,
   },
   drawerContent: {
     flex: 1,
@@ -1345,41 +1377,58 @@ const styles = StyleSheet.create({
   },
   drawerLogoSection: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: Spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EBE7E2',
+    borderBottomColor: Colors.borderWarm,
+  },
+  drawerNewChat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.base,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: Radius.md,
+    marginHorizontal: Spacing.base,
+  },
+  drawerNewChatText: {
+    fontSize: FontSize.base,
+    fontWeight: '600',
+    color: Colors.accent,
+    letterSpacing: -0.2,
   },
   drawerProfile: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
+    paddingVertical: Spacing.base,
+    gap: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#EBE7E2',
-    marginBottom: 8,
+    borderTopColor: Colors.borderWarm,
+    marginBottom: Spacing.sm,
   },
   drawerAvatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#2A2622',
+    backgroundColor: Colors.buttonDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   drawerAvatarText: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '700',
     color: '#FFF',
   },
   drawerName: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: Colors.text,
   },
   drawerPlan: {
-    fontSize: 12,
-    color: '#A09A93',
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
     marginTop: 1,
   },
   drawerSectionHeader: {
@@ -1387,13 +1436,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: Spacing.base,
+    paddingBottom: Spacing.sm,
   },
   drawerSectionTitle: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '700',
-    color: '#A09A93',
+    color: Colors.textMuted,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
@@ -1405,20 +1454,20 @@ const styles = StyleSheet.create({
   },
   drawerConvText: {
     flex: 1,
-    fontSize: 14,
-    color: '#1A1A1A',
+    fontSize: FontSize.sm,
+    color: Colors.text,
   },
   drawerNav: {
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.sm,
     paddingHorizontal: 20,
     gap: 2,
   },
   drawerNavIcon: {
     width: 32,
     height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(212, 132, 42, 0.08)',
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.accentMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1426,13 +1475,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    gap: 12,
+    gap: Spacing.md,
   },
   drawerNavText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '500',
-    color: '#1A1A1A',
+    color: Colors.text,
   },
 
   // --- Permission overlay ---
@@ -1445,15 +1494,15 @@ const styles = StyleSheet.create({
   },
   permissionTitle: {
     color: '#FFF',
-    fontSize: 22,
+    fontSize: FontSize.xl,
     fontWeight: '700',
     marginTop: 20,
     textAlign: 'center',
   },
   permissionSubtitle: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 15,
-    marginTop: 8,
+    fontSize: FontSize.base,
+    marginTop: Spacing.sm,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -1461,17 +1510,18 @@ const styles = StyleSheet.create({
     marginTop: 28,
     backgroundColor: Colors.accent,
     paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 14,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingVertical: Spacing.sm + 6,
+    borderRadius: Radius.lg,
+    ...Shadow.medium,
   },
   permissionBtnText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: FontSize.base,
     fontWeight: '600',
+  },
+  permissionLink: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: FontSize.sm,
+    marginTop: Spacing.base,
   },
 });

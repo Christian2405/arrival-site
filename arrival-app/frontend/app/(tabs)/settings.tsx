@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUsageStore, queryDisplayText, documentDisplayText } from '../../store/usageStore';
@@ -175,6 +175,15 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header with back button */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/home')}>
+          <Ionicons name="chevron-back" size={IconSize.lg} color={Colors.textDark} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <View style={{ width: IconSize.lg }} />
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -201,7 +210,7 @@ export default function SettingsScreen() {
             <View style={styles.card}>
               <View style={styles.row}>
                 <View style={styles.rowLeft}>
-                  <Ionicons name="chatbubble-outline" size={18} color="#2A2622" />
+                  <Ionicons name="chatbubble-outline" size={IconSize.md} color={Colors.textDark} />
                   <Text style={styles.rowLabel}>Queries</Text>
                 </View>
                 <Text style={styles.usageValue}>{usageLoaded ? queryDisplayText() : '...'}</Text>
@@ -211,7 +220,7 @@ export default function SettingsScreen() {
 
               <View style={styles.row}>
                 <View style={styles.rowLeft}>
-                  <Ionicons name="document-outline" size={18} color="#2A2622" />
+                  <Ionicons name="document-outline" size={IconSize.md} color={Colors.textDark} />
                   <Text style={styles.rowLabel}>Documents</Text>
                 </View>
                 <Text style={styles.usageValue}>{usageLoaded ? documentDisplayText() : '...'}</Text>
@@ -225,15 +234,15 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="volume-high-outline" size={18} color="#2A2622" />
+              <Ionicons name="volume-high-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Voice Output</Text>
             </View>
             <Switch
               value={voiceOutput}
               onValueChange={setVoiceOutput}
-              trackColor={{ false: '#DDD9D5', true: '#2A2622' }}
-              thumbColor="#FFF"
-              ios_backgroundColor="#DDD9D5"
+              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
+              thumbColor={Colors.card}
+              ios_backgroundColor={Colors.switchTrack}
             />
           </View>
 
@@ -241,7 +250,7 @@ export default function SettingsScreen() {
 
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="speedometer-outline" size={18} color="#2A2622" />
+              <Ionicons name="speedometer-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Voice Speed</Text>
             </View>
             <View style={styles.segmentedControl}>
@@ -265,7 +274,7 @@ export default function SettingsScreen() {
 
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="text-outline" size={18} color="#2A2622" />
+              <Ionicons name="text-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Text Size</Text>
             </View>
             <View style={styles.segmentedControl}>
@@ -295,7 +304,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="swap-horizontal-outline" size={18} color="#2A2622" />
+              <Ionicons name="swap-horizontal-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Units</Text>
             </View>
             <View style={styles.segmentedControl}>
@@ -319,7 +328,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="flask-outline" size={18} color="#2A2622" />
+              <Ionicons name="flask-outline" size={IconSize.md} color={Colors.textDark} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowLabel}>Demo Mode</Text>
                 <Text style={styles.rowHint}>Uses sample responses</Text>
@@ -328,9 +337,9 @@ export default function SettingsScreen() {
             <Switch
               value={demoMode}
               onValueChange={setDemoMode}
-              trackColor={{ false: '#DDD9D5', true: '#2A2622' }}
-              thumbColor="#FFF"
-              ios_backgroundColor="#DDD9D5"
+              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
+              thumbColor={Colors.card}
+              ios_backgroundColor={Colors.switchTrack}
             />
           </View>
 
@@ -342,17 +351,17 @@ export default function SettingsScreen() {
             onPress={() => Linking.openSettings().catch(() => {})}
           >
             <View style={styles.rowLeft}>
-              <Ionicons name="notifications-outline" size={18} color="#2A2622" />
+              <Ionicons name="notifications-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Notifications</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
+            <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
           </TouchableOpacity>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="moon-outline" size={18} color="#2A2622" />
+              <Ionicons name="moon-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Dark Mode</Text>
             </View>
             <View style={styles.comingSoonBadge}>
@@ -366,15 +375,15 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="mic-outline" size={18} color="#2A2622" />
+              <Ionicons name="mic-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Microphone</Text>
             </View>
             <Switch
               value={micPermission === true}
               onValueChange={() => handlePermissionToggle('mic')}
-              trackColor={{ false: '#DDD9D5', true: '#2A2622' }}
-              thumbColor="#FFF"
-              ios_backgroundColor="#DDD9D5"
+              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
+              thumbColor={Colors.card}
+              ios_backgroundColor={Colors.switchTrack}
             />
           </View>
 
@@ -382,15 +391,15 @@ export default function SettingsScreen() {
 
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="camera-outline" size={18} color="#2A2622" />
+              <Ionicons name="camera-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Camera</Text>
             </View>
             <Switch
               value={cameraPermission === true}
               onValueChange={() => handlePermissionToggle('camera')}
-              trackColor={{ false: '#DDD9D5', true: '#2A2622' }}
-              thumbColor="#FFF"
-              ios_backgroundColor="#DDD9D5"
+              trackColor={{ false: Colors.switchTrack, true: Colors.textDark }}
+              thumbColor={Colors.card}
+              ios_backgroundColor={Colors.switchTrack}
             />
           </View>
         </View>
@@ -404,14 +413,14 @@ export default function SettingsScreen() {
             onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`).catch(() => Alert.alert('Error', 'Could not open link'))}
           >
             <View style={styles.rowLeft}>
-              <Ionicons name="card-outline" size={18} color="#2A2622" />
+              <Ionicons name="card-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Subscription</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={styles.planBadgeSmall}>
                 <Text style={styles.planBadgeSmallText}>{planLabel}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
+              <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
             </View>
           </TouchableOpacity>
 
@@ -423,10 +432,10 @@ export default function SettingsScreen() {
             onPress={() => Linking.openURL(`mailto:support@arrivalcompany.com?subject=Help%20Request`).catch(() => Alert.alert('Error', 'Could not open link'))}
           >
             <View style={styles.rowLeft}>
-              <Ionicons name="help-circle-outline" size={18} color="#2A2622" />
+              <Ionicons name="help-circle-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Help & Support</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
+            <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
           </TouchableOpacity>
 
           <View style={styles.divider} />
@@ -437,10 +446,10 @@ export default function SettingsScreen() {
             onPress={() => Linking.openURL(`${WEBSITE_URL}/terms`).catch(() => Alert.alert('Error', 'Could not open link'))}
           >
             <View style={styles.rowLeft}>
-              <Ionicons name="document-text-outline" size={18} color="#2A2622" />
+              <Ionicons name="document-text-outline" size={IconSize.md} color={Colors.textDark} />
               <Text style={styles.rowLabel}>Terms & Privacy</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#C7C2BC" />
+            <Ionicons name="chevron-forward" size={IconSize.sm} color={Colors.textFaint} />
           </TouchableOpacity>
         </View>
 
@@ -449,7 +458,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.signOutButton, { marginTop: 8 }]} onPress={handleDeleteAccount} activeOpacity={0.6}>
-          <Text style={[styles.signOutText, { fontSize: 13, color: '#A09A93' }]}>Delete Account</Text>
+          <Text style={[styles.signOutText, { fontSize: FontSize.sm, color: Colors.textMuted }]}>Delete Account</Text>
         </TouchableOpacity>
 
         <Text style={styles.versionText}>Arrival v1.0.0</Text>
@@ -461,7 +470,19 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+  },
+  headerTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.textDark,
   },
   scroll: {
     flex: 1,
@@ -474,29 +495,25 @@ const styles = StyleSheet.create({
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.lg,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    ...Shadow.medium,
   },
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#2A2622',
+    borderRadius: Radius.full,
+    backgroundColor: Colors.textDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: Colors.card,
+    fontSize: FontSize.lg,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -505,35 +522,35 @@ const styles = StyleSheet.create({
     marginLeft: 14,
   },
   profileName: {
-    fontSize: 17,
+    fontSize: FontSize.lg,
     fontWeight: '700',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: -0.3,
   },
   profileEmail: {
-    fontSize: 13,
-    color: '#A09A93',
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
     marginTop: 1,
     letterSpacing: -0.1,
   },
   planBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: '#F3F0EB',
+    borderRadius: Radius.full,
+    backgroundColor: Colors.backgroundWarm,
   },
   planBadgeText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: 0.3,
   },
 
   // Section
   sectionLabel: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '600',
-    color: '#A09A93',
+    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     paddingHorizontal: 20,
@@ -543,22 +560,18 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: Colors.card,
+    marginHorizontal: Spacing.base,
+    borderRadius: Radius.lg,
+    ...Shadow.medium,
   },
 
-  // Row — no icon backgrounds, just inline icons
+  // Row
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.base,
     paddingVertical: 14,
     minHeight: 54,
   },
@@ -567,108 +580,104 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     flex: 1,
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   rowLabel: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '500',
-    color: '#2A2622',
+    color: Colors.textDark,
     letterSpacing: -0.2,
   },
   rowHint: {
-    fontSize: 12,
-    color: '#A09A93',
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
     marginTop: 1,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#EBE7E2',
+    backgroundColor: Colors.borderWarm,
     marginLeft: 48,
   },
 
   // Usage value
   usageValue: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontWeight: '600',
-    color: '#A09A93',
+    color: Colors.textMuted,
     letterSpacing: -0.2,
   },
 
   // Segmented Control
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: '#F3F0EB',
-    borderRadius: 8,
+    backgroundColor: Colors.backgroundWarm,
+    borderRadius: Radius.sm,
     padding: 2,
   },
   segment: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   segmentActive: {
-    backgroundColor: '#2A2622',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
+    backgroundColor: Colors.textDark,
+    ...Shadow.subtle,
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
-    color: '#A09A93',
+    color: Colors.textMuted,
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    color: Colors.card,
   },
 
   // Coming soon
   comingSoonBadge: {
-    backgroundColor: '#F3F0EB',
+    backgroundColor: Colors.backgroundWarm,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   comingSoonText: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '600',
-    color: '#A09A93',
+    color: Colors.textMuted,
     letterSpacing: 0.2,
   },
 
   // Plan badge (small, in row)
   planBadgeSmall: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: '#F3F0EB',
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.backgroundWarm,
   },
   planBadgeSmallText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '700',
-    color: '#2A2622',
+    color: Colors.textDark,
   },
 
   // Sign out
   signOutButton: {
     alignItems: 'center',
-    paddingVertical: 16,
-    marginTop: 32,
-    marginHorizontal: 16,
+    paddingVertical: Spacing.base,
+    marginTop: Spacing.xl,
+    marginHorizontal: Spacing.base,
   },
   signOutText: {
-    fontSize: 15,
+    fontSize: FontSize.base,
     fontWeight: '600',
-    color: '#C75450',
+    color: Colors.errorMuted,
     letterSpacing: -0.2,
   },
 
   // Version
   versionText: {
-    fontSize: 12,
-    color: '#C7C2BC',
+    fontSize: FontSize.xs,
+    color: Colors.textFaint,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/Colors';
+import { Colors, FontSize } from '../constants/Colors';
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 16,
+    fontSize: FontSize.base,
     fontWeight: '500',
     marginTop: 20,
   },
