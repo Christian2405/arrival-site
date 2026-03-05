@@ -183,14 +183,11 @@ export default class StreamingAudioPlayer {
     const segment = this.segments[this.currentSegmentIndex];
 
     try {
-      // Set audio mode for playback (loudspeaker, not earpiece)
-      if (!this.audioModeSet) {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-        });
-        this.audioModeSet = true;
-      }
+      // NOTE: Do NOT change audio mode here. The StreamingJobModeController
+      // keeps the recorder active for voice interrupt, which means
+      // allowsRecordingIOS stays true and audio routes through the earpiece.
+      // Changing it here would kill the active recording.
+      // For loudspeaker playback, the recorder would need to be paused first.
 
       const { sound } = await Audio.Sound.createAsync({ uri: segment.uri });
       segment.sound = sound;
