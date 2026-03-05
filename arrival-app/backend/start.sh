@@ -27,7 +27,12 @@ from livekit.plugins import deepgram, anthropic, elevenlabs
 sys.stdout.write('OK\n')
 " 2>&1; then
     echo "[start.sh] ✓ All imports OK — starting LiveKit agent"
-    python -m livekit_agent.agent start 2>&1 &
+    # Pass credentials explicitly in case env var inheritance fails
+    python -m livekit_agent.agent start \
+        --url "${LIVEKIT_URL}" \
+        --api-key "${LIVEKIT_API_KEY}" \
+        --api-secret "${LIVEKIT_API_SECRET}" \
+        --log-level INFO 2>&1 &
     AGENT_PID=$!
     echo "[start.sh] LiveKit agent PID: $AGENT_PID"
 
