@@ -255,8 +255,12 @@ async def voice_session(
         on_error=on_dg_error,
     )
 
+    audio_chunk_count = 0
+    audio_byte_total = 0
+
     try:
         await session.deepgram.connect()
+        logger.info(f"[voice-ws] Deepgram connected, sending ready state")
         await session.send_json({"type": "state", "state": "ready"})
 
         # Main receive loop
@@ -270,6 +274,10 @@ async def voice_session(
                 # Binary frame = audio chunk → strip WAV header, forward raw PCM to Deepgram
                 raw_pcm = _strip_wav_header(msg["bytes"])
                 if raw_pcm:
+                    audio_chunk_count += 1
+                    audio_byte_total += len(raw_pcm)
+                    if audio_chunk_count == 1:
+                        logger.info(f"[voice-ws] First binary audio chunk: {len(msg['bytes'])}B raw → {len(raw_pcm)}B PCM")
                     await session.deepgram.send_audio(raw_pcm)
 
             elif "text" in msg:
@@ -277,7 +285,24 @@ async def voice_session(
                     data = json.loads(msg["text"])
                     event_type = data.get("type", "")
 
-                    if event_type == "config":
+                    if event_type == "audio":
+                        # JSON-encoded audio (base64) — React Native compatibility
+                        audio_b64 = data.get("data", "")
+                        if audio_b64:
+                            audio_bytes = base64.b64decode(audio_b64)
+                            raw_pcm = _strip_wav_header(audio_bytes)
+                            if raw_pcm:
+                                audio_chunk_count += 1
+                                audio_byte_total += len(raw_pcm)
+                                if audio_chunk_count == 1:
+                                    logger.info(
+                                        f"[voice-ws] First JSON audio chunk: {len(audio_bytes)}B wav → {len(raw_pcm)}B PCM"
+                                    )
+                                elif audio_chunk_count % 50 == 0:
+                                    logger.info(f"[voice-ws] Audio: {audio_chunk_count} chunks, {audio_byte_total/1024:.0f}KB total")
+                                await session.deepgram.send_audio(raw_pcm)
+
+                    elif event_type == "config":
                         # Session configuration
                         session.conversation_history = data.get("conversation_history", [])
                         session.current_image = data.get("image_base64")
@@ -475,6 +500,13 @@ async def _handle_utterance(session: VoiceSession, transcript: str, gen: int) ->
                 logger.warning("[voice-ws] TTS timeout — closing")
 
         await el_session.close()
+
+        # Always send audio_end and ready state to prevent client getting stuck
+        if session.generation == gen:
+            if not audio_sent:
+                # TTS never produced audio — still need to signal completion
+                await session.send_json({"type": "audio_end"})
+            await session.send_json({"type": "state", "state": "ready"})
 
         # Update conversation history
         if full_response and session.generation == gen:

@@ -113,10 +113,8 @@ export default class StreamingJobModeController {
     // --- StreamingAudioRecorder ---
     this.recorder = new StreamingAudioRecorder({
       onAudioChunk: (base64Data) => {
-        // Convert base64 to binary and send to server
-        // The server expects raw binary frames for audio
-        const binary = base64ToArrayBuffer(base64Data);
-        this.client.sendAudio(binary);
+        // Send base64 audio directly as JSON — more reliable than binary frames in React Native
+        this.client.sendAudio(base64Data);
       },
       onMetering: (_dB) => {
         // Could use this for UI visualization
@@ -297,15 +295,4 @@ export default class StreamingJobModeController {
     this.setState('monitoring');
     this.callbacks.onTurnComplete?.();
   }
-}
-
-// --- Utility ---
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
 }

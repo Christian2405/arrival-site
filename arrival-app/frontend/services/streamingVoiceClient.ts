@@ -161,13 +161,12 @@ export default class StreamingVoiceClient {
   }
 
   /**
-   * Send raw PCM audio data to the server (forwarded to Deepgram).
-   * Call this with 200ms chunks of 16kHz 16-bit mono PCM.
+   * Send audio data to the server as base64 JSON (forwarded to Deepgram).
+   * Uses JSON instead of binary frames for React Native WebSocket compatibility.
+   * Call this with base64-encoded WAV chunks from the recorder.
    */
-  sendAudio(pcmData: ArrayBuffer): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(pcmData);
-    }
+  sendAudio(base64Data: string): void {
+    this.sendJSON({ type: 'audio', data: base64Data });
   }
 
   /**
