@@ -45,13 +45,37 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, anthropic, elevenlabs, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from livekit.plugins import deepgram, anthropic, elevenlabs
+
+# Optional ML plugins — may fail to import if deps are missing
+try:
+    from livekit.plugins import silero
+except ImportError:
+    silero = None
+    print("[arrival-agent] WARNING: Silero plugin not available")
+
+try:
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+except ImportError:
+    try:
+        from livekit.plugins.turn_detector import MultilingualModel
+    except ImportError:
+        MultilingualModel = None
+        print("[arrival-agent] WARNING: MultilingualModel not available")
 
 from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
 
 logger = logging.getLogger(__name__)
+
+# Startup banner — visible in Render logs for diagnostics
+logger.info("[arrival-agent] ============================")
+logger.info("[arrival-agent] LiveKit Voice Agent Loading")
+logger.info(f"[arrival-agent] LIVEKIT_URL: {config.LIVEKIT_URL[:40] if config.LIVEKIT_URL else '(NOT SET)'}")
+logger.info(f"[arrival-agent] DEEPGRAM: {'set' if config.DEEPGRAM_API_KEY else 'NOT SET'}")
+logger.info(f"[arrival-agent] ANTHROPIC: {'set' if config.ANTHROPIC_API_KEY else 'NOT SET'}")
+logger.info(f"[arrival-agent] ELEVENLABS: {'set' if config.ELEVENLABS_API_KEY else 'NOT SET'}")
+logger.info("[arrival-agent] ============================")
 
 # ---------------------------------------------------------------------------
 # Voice prompts
@@ -138,7 +162,9 @@ server = AgentServer()
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     """Called when a participant joins a LiveKit room that needs an agent."""
+    logger.info(f"[arrival-agent] ★ Entrypoint called — room={ctx.room.name}")
     await ctx.connect()
+    logger.info(f"[arrival-agent] Connected to room: {ctx.room.name}")
 
     # Parse metadata for user info
     room_name = ctx.room.name or ""
@@ -160,9 +186,30 @@ async def entrypoint(ctx: JobContext):
     # Select prompt based on mode
     prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
 
+    # Load ML models with fallback — these download on first use and may fail
+    # on memory-constrained environments (Render free tier = 512MB)
+    vad = None
+    turn_det = None
+    if silero is not None:
+        try:
+            vad = silero.VAD.load()
+            logger.info("[arrival-agent] ✓ Silero VAD loaded")
+        except Exception as e:
+            logger.warning(f"[arrival-agent] Silero VAD failed: {e} — running without VAD")
+    else:
+        logger.info("[arrival-agent] Silero not available — skipping VAD")
+
+    if MultilingualModel is not None:
+        try:
+            turn_det = MultilingualModel()
+            logger.info("[arrival-agent] ✓ Turn detector loaded")
+        except Exception as e:
+            logger.warning(f"[arrival-agent] Turn detector failed: {e} — using default")
+    else:
+        logger.info("[arrival-agent] MultilingualModel not available — skipping turn detection")
+
     # Create the voice pipeline — optimized for speed
-    session = AgentSession(
-        vad=silero.VAD.load(),
+    session_kwargs = dict(
         stt=deepgram.STT(
             model="nova-2",
             language="en",
@@ -177,8 +224,13 @@ async def entrypoint(ctx: JobContext):
             model="eleven_flash_v2_5",
             api_key=config.ELEVENLABS_API_KEY,
         ),
-        turn_detection=MultilingualModel(),
     )
+    if vad is not None:
+        session_kwargs["vad"] = vad
+    if turn_det is not None:
+        session_kwargs["turn_detection"] = turn_det
+
+    session = AgentSession(**session_kwargs)
 
     # Create agent with error code lookup tool
     agent = ArrivalAgent(
