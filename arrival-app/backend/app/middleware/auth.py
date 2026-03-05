@@ -91,6 +91,43 @@ async def _get_signing_key(token: str):
     return config.SUPABASE_JWT_SECRET, ["HS256"]
 
 
+async def decode_jwt_token(token: str) -> dict:
+    """
+    Validate a JWT token string and return the payload.
+    Used by WebSocket auth where there's no HTTP Request object.
+    Returns the raw JWT payload dict.
+    """
+    if not config.SUPABASE_JWT_SECRET:
+        if config.DEBUG:
+            return {"sub": "dev-user", "email": "dev@arrival.ai"}
+        raise ValueError("JWT secret not configured")
+
+    try:
+        signing_key, algorithms = await _get_signing_key(token)
+        payload = jwt.decode(
+            token,
+            signing_key,
+            algorithms=algorithms,
+            audience="authenticated",
+        )
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise ValueError("Token expired")
+    except jwt.InvalidTokenError:
+        _clear_jwks_cache()
+        try:
+            signing_key, algorithms = await _get_signing_key(token)
+            payload = jwt.decode(
+                token,
+                signing_key,
+                algorithms=algorithms,
+                audience="authenticated",
+            )
+            return payload
+        except Exception:
+            raise ValueError("Invalid token")
+
+
 async def get_current_user(request: Request) -> dict:
     """
     Validate the Authorization header and return the user payload.

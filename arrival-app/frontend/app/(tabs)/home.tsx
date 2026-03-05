@@ -25,6 +25,7 @@ import ModeSelector from '../../components/ModeSelector';
 import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIndicator';
 import JobModeView, { JobAIState } from '../../components/JobModeView';
 import JobModeController from '../../services/jobModeController';
+import StreamingJobModeController from '../../services/streamingJobModeController';
 
 // Collision-safe ID generator
 function generateId(): string {
@@ -61,8 +62,10 @@ export default function HomeScreen() {
   const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
   const [jobPaused, setJobPaused] = useState(false);
   const jobControllerRef = useRef<JobModeController | null>(null);
+  const streamingControllerRef = useRef<StreamingJobModeController | null>(null);
   const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string; ts: number } | null>(null);
   const jobAlertHistoryRef = useRef<string[]>([]);
+  const [interimTranscript, setInterimTranscript] = useState<string>('');
 
   // Text Mode state
   const [inputText, setInputText] = useState('');
@@ -93,7 +96,7 @@ export default function HomeScreen() {
   } = useConversationStore();
   const messages = currentConversation?.messages || [];
 
-  const { demoMode, voiceOutput, interactionMode, setInteractionMode } = useSettingsStore();
+  const { demoMode, voiceOutput, interactionMode, setInteractionMode, useStreamingVoice } = useSettingsStore();
   const { saveAnswer } = useSavedAnswersStore();
   const { profile, subscription } = useAuthStore();
 
@@ -547,121 +550,211 @@ export default function HomeScreen() {
     setIsProcessing(false);
     setVoiceState('idle');
 
-    // Clean up Job Mode
-    if (interactionMode === 'job' && jobControllerRef.current) {
-      jobControllerRef.current.stop();
-      jobControllerRef.current = null;
+    // Clean up Job Mode (both controllers)
+    if (interactionMode === 'job') {
+      if (jobControllerRef.current) {
+        jobControllerRef.current.stop();
+        jobControllerRef.current = null;
+      }
+      if (streamingControllerRef.current) {
+        streamingControllerRef.current.stop();
+        streamingControllerRef.current = null;
+      }
     }
 
     // Bug fix: Reset jobPaused so re-entering job mode doesn't have stale pause state
     setJobPaused(false);
     setJobAIState('monitoring');
     setLastJobAlert(null);
+    setInterimTranscript('');
     jobAlertHistoryRef.current = [];
 
     setInteractionMode(newMode);
   }, [interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
 
   // --- JOB MODE EFFECT ---
+  // Branches on useStreamingVoice: streaming pipeline (WebSocket) vs REST pipeline
   useEffect(() => {
     if (interactionMode !== 'job' || !permission?.granted) {
       if (jobControllerRef.current) {
         jobControllerRef.current.stop();
         jobControllerRef.current = null;
       }
+      if (streamingControllerRef.current) {
+        streamingControllerRef.current.stop();
+        streamingControllerRef.current = null;
+      }
       return;
     }
 
-    const controller = new JobModeController(
-      {
-        cooldownAfterSpeaking: 2000,   // 2s after AI speaks before next alert
-        cooldownAfterDismiss: 5000,    // 5s after user dismisses
-        maxAlertsPerMinute: 4,         // Max 4 proactive alerts per minute
-      },
-      {
-        onAlert: async (message, severity) => {
-          // Track alert for session memory + quick action chips
-          jobAlertHistoryRef.current.push(message);
-          setLastJobAlert({ message, severity, ts: Date.now() });
+    const isStreaming = useSettingsStore.getState().useStreamingVoice;
 
-          addMessage({
-            id: generateId(), role: 'assistant', content: message,
-            alertType: severity === 'critical' ? 'critical' : 'warning',
-            source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
-          });
-          try {
-            // Bug 5: Read demoMode from store at call time
-            const currentDemoMode = useSettingsStore.getState().demoMode;
-            const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
-            // Bug 11: Check audio_base64 before playing
-            if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
-          } catch (e) {
-            console.log('Job Mode TTS error:', e);
-          }
-        },
-        onVoiceResponse: async (audioBase64) => {
-          try {
-            // Capture frame — backend strips it for non-visual questions
-            let frame: string | undefined;
-            try { frame = await captureFrame(); } catch {}
-            const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
-            // Job mode: only 6 recent messages (3 exchanges) — less input tokens = faster Claude response
-            const history = currentMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
-            const currentDemoMode = useSettingsStore.getState().demoMode;
-            const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
+    if (isStreaming) {
+      // --- STREAMING PIPELINE (WebSocket) ---
+      const responseTextRef = { current: '' };
 
-            // Always add to conversation so context is preserved even if interrupted
-            addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
-            addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() });
-
-            // If user interrupted while we were processing, skip TTS.
-            // Like a real conversation — the text is in history for context,
-            // but we don't speak a stale answer. User's next words take priority.
-            if (jobControllerRef.current?.wasInterrupted) return;
-
-            if (result.audio_base64) {
-              await playAudio(result.audio_base64);
+      const controller = new StreamingJobModeController(
+        {
+          onAlert: async (message, severity) => {
+            jobAlertHistoryRef.current.push(message);
+            setLastJobAlert({ message, severity, ts: Date.now() });
+            addMessage({
+              id: generateId(), role: 'assistant', content: message,
+              alertType: severity === 'critical' ? 'critical' : 'warning',
+              source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
+            });
+            // Frame alerts still use REST TTS (short one-off utterances)
+            try {
+              const currentDemoMode = useSettingsStore.getState().demoMode;
+              const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
+              if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
+            } catch (e) {
+              console.log('Job Mode TTS error:', e);
             }
-          } catch (e: any) {
-            console.error('[JobMode] voice response failed:', e);
-            // Surface the error so the user knows something went wrong
+          },
+          onTranscriptInterim: (text) => {
+            setInterimTranscript(text);
+          },
+          onTranscriptFinal: (text) => {
+            setInterimTranscript('');
+            addMessage({ id: generateId(), role: 'user', content: text, displayMode: 'job', timestamp: new Date() });
+          },
+          onResponseText: (text, done) => {
+            responseTextRef.current = text;
+            if (done && text) {
+              addMessage({ id: generateId(), role: 'assistant', content: text, displayMode: 'job', timestamp: new Date() });
+            }
+          },
+          onStateChange: (state) => {
+            // Map streaming states to JobAIState for the UI
+            const mapped = state === 'connecting' ? 'monitoring' : state;
+            setJobAIState(mapped as JobAIState);
+          },
+          onInterrupt: () => { /* audio stop handled by streaming controller */ },
+          onError: (msg) => {
+            console.error('[StreamingJobMode] Error:', msg);
             addMessage({
               id: generateId(), role: 'assistant',
-              content: 'Sorry, I didn\'t catch that. Try again.',
+              content: 'Connection issue. Try again.',
               displayMode: 'job', timestamp: new Date(),
             });
-          }
+          },
+          onTurnComplete: () => {
+            responseTextRef.current = '';
+          },
         },
-        onStateChange: setJobAIState,
-        onInterrupt: () => { stopAudio(); },
-      },
-      { minInterval: 3000, maxInterval: 10000, changeThreshold: 0.10, captureInterval: 3000 },
-      { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1200, meteringInterval: 100 },
-    );
+        { minInterval: 3000, maxInterval: 10000, changeThreshold: 0.10, captureInterval: 3000 },
+      );
 
-    // Wire up the frame batcher to call analyzeFrame with session memory
-    controller.frameBatcher['config'].onAnalyze = async (frame: string) => {
-      try {
-        const recentAlerts = jobAlertHistoryRef.current.slice(-5);
-        const result = await aiAPI.analyzeFrame(frame, recentAlerts);
-        if (result.alert && result.message) {
-          await controller.handleFrameAlert(result.message, result.severity || 'warning');
+      // Wire up frame batcher (same as REST controller)
+      controller.frameBatcher['config'].onAnalyze = async (frame: string) => {
+        try {
+          const recentAlerts = jobAlertHistoryRef.current.slice(-5);
+          const result = await aiAPI.analyzeFrame(frame, recentAlerts);
+          if (result.alert && result.message) {
+            await controller.handleFrameAlert(result.message, result.severity || 'warning');
+          }
+        } catch (e) {
+          console.log('Job Mode frame error:', e);
         }
-      } catch (e) {
-        console.log('Job Mode frame error:', e);
-      }
-    };
+      };
 
-    controller.start(captureFrame).catch(e => console.error('Job Mode start failed:', e));
-    jobControllerRef.current = controller;
+      const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+      const history = currentMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
 
-    return () => {
-      controller.stop();
-      jobControllerRef.current = null;
-      // Clear alert state when leaving Job Mode
-      setLastJobAlert(null);
-      jobAlertHistoryRef.current = [];
-    };
+      controller.start(captureFrame, history).catch(e => {
+        console.error('Streaming Job Mode start failed:', e);
+        // Fallback: disable streaming and retry with REST
+        useSettingsStore.getState().setUseStreamingVoice(false);
+      });
+      streamingControllerRef.current = controller;
+
+      return () => {
+        controller.stop();
+        streamingControllerRef.current = null;
+        setLastJobAlert(null);
+        setInterimTranscript('');
+        jobAlertHistoryRef.current = [];
+      };
+    } else {
+      // --- REST PIPELINE (original — unchanged) ---
+      const controller = new JobModeController(
+        {
+          cooldownAfterSpeaking: 2000,
+          cooldownAfterDismiss: 5000,
+          maxAlertsPerMinute: 4,
+        },
+        {
+          onAlert: async (message, severity) => {
+            jobAlertHistoryRef.current.push(message);
+            setLastJobAlert({ message, severity, ts: Date.now() });
+            addMessage({
+              id: generateId(), role: 'assistant', content: message,
+              alertType: severity === 'critical' ? 'critical' : 'warning',
+              source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
+            });
+            try {
+              const currentDemoMode = useSettingsStore.getState().demoMode;
+              const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
+              if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
+            } catch (e) {
+              console.log('Job Mode TTS error:', e);
+            }
+          },
+          onVoiceResponse: async (audioBase64) => {
+            try {
+              let frame: string | undefined;
+              try { frame = await captureFrame(); } catch {}
+              const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
+              const history = currentMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
+              const currentDemoMode = useSettingsStore.getState().demoMode;
+              const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
+
+              addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
+              addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() });
+
+              if (jobControllerRef.current?.wasInterrupted) return;
+              if (result.audio_base64) {
+                await playAudio(result.audio_base64);
+              }
+            } catch (e: any) {
+              console.error('[JobMode] voice response failed:', e);
+              addMessage({
+                id: generateId(), role: 'assistant',
+                content: 'Sorry, I didn\'t catch that. Try again.',
+                displayMode: 'job', timestamp: new Date(),
+              });
+            }
+          },
+          onStateChange: setJobAIState,
+          onInterrupt: () => { stopAudio(); },
+        },
+        { minInterval: 3000, maxInterval: 10000, changeThreshold: 0.10, captureInterval: 3000 },
+        { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1200, meteringInterval: 100 },
+      );
+
+      controller.frameBatcher['config'].onAnalyze = async (frame: string) => {
+        try {
+          const recentAlerts = jobAlertHistoryRef.current.slice(-5);
+          const result = await aiAPI.analyzeFrame(frame, recentAlerts);
+          if (result.alert && result.message) {
+            await controller.handleFrameAlert(result.message, result.severity || 'warning');
+          }
+        } catch (e) {
+          console.log('Job Mode frame error:', e);
+        }
+      };
+
+      controller.start(captureFrame).catch(e => console.error('Job Mode start failed:', e));
+      jobControllerRef.current = controller;
+
+      return () => {
+        controller.stop();
+        jobControllerRef.current = null;
+        setLastJobAlert(null);
+        jobAlertHistoryRef.current = [];
+      };
+    }
   }, [interactionMode, permission?.granted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- TEXT MODE: Chat show/hide effects ---
@@ -955,19 +1048,35 @@ export default function HomeScreen() {
               <JobModeView
                 aiState={jobAIState}
                 onPause={() => {
-                  if (!jobControllerRef.current) return;
-                  if (jobPaused) {
-                    jobControllerRef.current.vad.resume();
+                  // Handle pause for both streaming and REST controllers
+                  if (streamingControllerRef.current) {
+                    if (jobPaused) {
+                      // Resume is not directly supported — reconnect would be needed
+                      // For now, just toggle the pause state
+                    } else {
+                      streamingControllerRef.current.stop();
+                      streamingControllerRef.current = null;
+                    }
+                  } else if (jobControllerRef.current) {
+                    if (jobPaused) {
+                      jobControllerRef.current.vad.resume();
+                    } else {
+                      jobControllerRef.current.vad.pause();
+                      jobControllerRef.current.dismiss();
+                    }
                   } else {
-                    jobControllerRef.current.vad.pause();
-                    jobControllerRef.current.dismiss();
+                    return;
                   }
                   setJobPaused(!jobPaused);
                 }}
                 isPaused={jobPaused}
                 lastAlert={lastJobAlert}
                 onInterrupt={() => {
-                  jobControllerRef.current?.interrupt();
+                  if (streamingControllerRef.current) {
+                    streamingControllerRef.current.interrupt();
+                  } else {
+                    jobControllerRef.current?.interrupt();
+                  }
                 }}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView

@@ -7,6 +7,7 @@ Bug #16: Uses AsyncAnthropic client to avoid blocking the event loop.
 import json
 import logging
 import time
+from typing import AsyncGenerator
 import anthropic
 
 from app import config
@@ -147,6 +148,104 @@ When you use information from these documents, cite the filename as your source.
         "source": source,
         "confidence": confidence,
     }
+
+
+async def stream_chat_with_claude(
+    message: str,
+    image_base64: str | None = None,
+    conversation_history: list[dict] | None = None,
+    user_memories: list[str] | None = None,
+    rag_context: list[dict] | None = None,
+    max_tokens: int = 1024,
+    system_prompt_prefix: str = "",
+    model: str | None = None,
+) -> AsyncGenerator[str, None]:
+    """
+    Streaming version of chat_with_claude.
+    Yields text delta strings as they arrive from Claude.
+    Same prompt construction logic as chat_with_claude.
+    """
+    if not config.ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY not set. Add it to your .env file.")
+
+    client = _get_client()
+
+    # Build messages array from history (same as chat_with_claude)
+    messages = []
+    if conversation_history:
+        for msg in conversation_history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+
+    # Build current message content
+    content_parts = []
+    if image_base64:
+        if image_base64.startswith("iVBOR"):
+            media_type = "image/png"
+        elif image_base64.startswith("UklGR"):
+            media_type = "image/webp"
+        elif image_base64.startswith("R0lGOD"):
+            media_type = "image/gif"
+        else:
+            media_type = "image/jpeg"
+        content_parts.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": image_base64,
+            },
+        })
+    content_parts.append({"type": "text", "text": message})
+    messages.append({"role": "user", "content": content_parts})
+
+    # Build enhanced system prompt (same as chat_with_claude)
+    system_prompt = config.SYSTEM_PROMPT
+    if system_prompt_prefix:
+        system_prompt = system_prompt_prefix + "\n\n" + system_prompt
+    if user_memories:
+        memory_block = "\n".join(f"- {m}" for m in user_memories)
+        system_prompt += f"""
+
+## User Context (from previous conversations)
+{memory_block}
+
+Use this context to personalize your response. Reference their equipment, trade, or past issues when relevant."""
+    if rag_context:
+        context_block = ""
+        for ctx in rag_context:
+            score_pct = f"{ctx['score']:.0%}" if ctx.get('score') else ""
+            context_block += f"\n### From: {ctx['filename']}"
+            if score_pct:
+                context_block += f" (relevance: {score_pct})"
+            context_block += f"\n{ctx['text']}\n"
+        system_prompt += f"""
+
+## Relevant Documents
+The following excerpts are from the user's uploaded documents. Reference them when answering.
+{context_block}
+When you use information from these documents, cite the filename as your source."""
+
+    use_model = model or config.ANTHROPIC_MODEL
+    t0 = time.monotonic()
+    total_chars = 0
+
+    async with client.messages.stream(
+        model=use_model,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=messages,
+    ) as stream:
+        async for text in stream.text_stream:
+            total_chars += len(text)
+            yield text
+
+    elapsed = time.monotonic() - t0
+    logger.info(
+        f"[claude-stream] {use_model} → {total_chars} chars in {elapsed:.2f}s"
+    )
 
 
 def _score_confidence(

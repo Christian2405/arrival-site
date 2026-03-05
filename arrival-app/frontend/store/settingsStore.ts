@@ -9,6 +9,7 @@ interface SettingsState {
   voiceSpeed: 'slow' | 'normal' | 'fast';
   units: 'imperial' | 'metric';
   textSize: 'small' | 'medium' | 'large';
+  useStreamingVoice: boolean; // Streaming pipeline toggle (WebSocket vs REST)
 
   setVoiceOutput: (value: boolean) => void;
   setDemoMode: (value: boolean) => void;
@@ -17,6 +18,7 @@ interface SettingsState {
   setVoiceSpeed: (value: 'slow' | 'normal' | 'fast') => void;
   setUnits: (value: 'imperial' | 'metric') => void;
   setTextSize: (value: 'small' | 'medium' | 'large') => void;
+  setUseStreamingVoice: (value: boolean) => void;
   loadSettings: () => Promise<void>;
 }
 
@@ -28,6 +30,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   voiceSpeed: 'normal',
   units: 'imperial',
   textSize: 'medium',
+  useStreamingVoice: true, // Default ON — new streaming pipeline
 
   setVoiceOutput: (value) => {
     set({ voiceOutput: value });
@@ -59,6 +62,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ textSize: value });
     AsyncStorage.setItem('text_size', value).catch(console.error);
   },
+  setUseStreamingVoice: (value) => {
+    set({ useStreamingVoice: value });
+    AsyncStorage.setItem('use_streaming_voice', value.toString()).catch(console.error);
+  },
   loadSettings: async () => {
     try {
       // One-time migration: force demo mode OFF now that real API keys are set
@@ -75,6 +82,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const voiceSpeed = await AsyncStorage.getItem('voice_speed');
       const units = await AsyncStorage.getItem('units');
       const textSize = await AsyncStorage.getItem('text_size');
+      const useStreamingVoice = await AsyncStorage.getItem('use_streaming_voice');
 
       set({
         voiceOutput: voiceOutput !== 'false',
@@ -84,6 +92,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',
+        useStreamingVoice: useStreamingVoice !== 'false', // Default true
       });
     } catch (error) {
       console.error('Error loading settings:', error);
