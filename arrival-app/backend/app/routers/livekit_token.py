@@ -32,6 +32,20 @@ class TokenResponse(BaseModel):
     room_name: str
 
 
+@router.get("/livekit-status")
+async def livekit_status():
+    """Diagnostic: check LiveKit config is loaded (no auth required)."""
+    key = config.LIVEKIT_API_KEY or ""
+    secret = config.LIVEKIT_API_SECRET or ""
+    url = config.LIVEKIT_URL or ""
+    return {
+        "configured": bool(key and secret and url),
+        "key_prefix": key[:5] + "***" if len(key) >= 5 else "NOT_SET",
+        "url": url,
+        "secret_len": len(secret),
+    }
+
+
 @router.post("/livekit-token", response_model=TokenResponse)
 async def create_livekit_token(req: TokenRequest, request: Request):
     """Generate a LiveKit room token for the authenticated user."""
@@ -41,7 +55,11 @@ async def create_livekit_token(req: TokenRequest, request: Request):
         raise HTTPException(status_code=401, detail="Missing auth token")
 
     jwt_token = auth_header.replace("Bearer ", "")
-    payload = await decode_jwt_token(jwt_token)
+    try:
+        payload = await decode_jwt_token(jwt_token)
+    except (ValueError, Exception) as e:
+        logger.warning(f"[livekit-token] JWT validation failed: {e}")
+        raise HTTPException(status_code=401, detail=str(e))
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -55,6 +73,8 @@ async def create_livekit_token(req: TokenRequest, request: Request):
             status_code=503,
             detail="LiveKit not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET.",
         )
+
+    logger.info(f"[livekit-token] Config: key={config.LIVEKIT_API_KEY[:5]}*** url={config.LIVEKIT_URL}")
 
     # --- Room name encodes mode + user for the agent to parse ---
     short_id = user_id[:8].replace("-", "")
