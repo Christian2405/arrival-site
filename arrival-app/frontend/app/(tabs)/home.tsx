@@ -562,8 +562,9 @@ export default function HomeScreen() {
     setIsProcessing(false);
     setVoiceState('idle');
 
-    // Clean up Job Mode (both controllers)
+    // Clean up Job Mode (LiveKit + both controllers)
     if (interactionMode === 'job') {
+      setLivekitActive(false);  // Kill LiveKit room immediately
       if (jobControllerRef.current) {
         jobControllerRef.current.stop();
         jobControllerRef.current = null;
