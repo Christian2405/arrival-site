@@ -1126,14 +1126,9 @@ export default function HomeScreen() {
                     setJobAIState(stateMap[state] || 'monitoring');
                   }}
                   onError={(msg: string) => {
-                    console.error('[LiveKit] Error:', msg);
-                    // Don't permanently disable LiveKit — just show the error
-                    // The user can toggle away from job mode and back to retry
-                    addMessage({
-                      id: generateId(), role: 'assistant',
-                      content: `Voice agent connection issue: ${msg}. Switch modes and back to retry.`,
-                      displayMode: 'job', timestamp: new Date(),
-                    });
+                    // Just log — error is shown inline in LiveKitVoiceRoom with retry button.
+                    // Don't add to conversation (it persists and clutters the chat).
+                    console.warn('[LiveKit] Error:', msg);
                   }}
                 />
               )}

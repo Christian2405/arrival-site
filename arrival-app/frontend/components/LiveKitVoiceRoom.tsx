@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import {
   LiveKitRoom,
   AudioSession,
@@ -63,12 +63,24 @@ export default function LiveKitVoiceRoom({
   const audioSessionStarted = useRef(false);
   const retryCount = useRef(0);
   const unmounted = useRef(false);
+  const setupRef = useRef<((attempt: number) => void) | null>(null);
 
   // Update parent when state changes
   const updateState = useCallback((state: AgentVoiceState) => {
     setAgentState(state);
     onStateChange?.(state);
   }, [onStateChange]);
+
+  // Retry function — can be called from error UI or from RoomContent on disconnect
+  const retry = useCallback(() => {
+    setError(null);
+    setSession(null);
+    retryCount.current = 0;
+    // Trigger re-setup by bumping a counter
+    setRetryTrigger(prev => prev + 1);
+  }, []);
+
+  const [retryTrigger, setRetryTrigger] = useState(0);
 
   // Start audio session and get token (with retry)
   useEffect(() => {
@@ -94,6 +106,7 @@ export default function LiveKitVoiceRoom({
         }
 
         updateState('connecting');
+        setError(null);
         if (attempt > 0) {
           setStatusMsg(`Retrying connection (${attempt}/${MAX_RETRIES})...`);
         } else {
@@ -123,23 +136,29 @@ export default function LiveKitVoiceRoom({
             if (!cancelled) setup(attempt + 1);
           }, delay);
         } else {
-          // All retries exhausted
-          const msg = `Failed after ${MAX_RETRIES} attempts: ${e.message || 'Unknown error'}`;
-          console.error(`[LiveKitVoice] ${msg}`);
-          setError(msg);
+          // All retries exhausted — show error with retry button
+          const shortMsg = e.message?.includes('cold start')
+            ? 'Server is starting up. Tap to retry.'
+            : e.message?.includes('Not authenticated')
+            ? 'Please sign in and try again.'
+            : 'Connection failed. Tap to retry.';
+          console.error(`[LiveKitVoice] All retries exhausted: ${e.message}`);
+          setError(shortMsg);
           updateState('error');
-          onError?.(msg);
+          // Notify parent but DON'T add to conversation — error is shown inline
+          onError?.(shortMsg);
         }
       }
     };
 
+    setupRef.current = setup;
     setup(0);
 
     return () => {
       cancelled = true;
       unmounted.current = true;
     };
-  }, [active, mode]);
+  }, [active, mode, retryTrigger]);
 
   // Cleanup audio session on unmount
   useEffect(() => {
@@ -157,9 +176,12 @@ export default function LiveKitVoiceRoom({
 
   if (error) {
     return (
-      <View style={styles.container}>
+      <TouchableOpacity style={styles.errorContainer} onPress={retry} activeOpacity={0.7}>
         <Text style={styles.errorText}>{error}</Text>
-      </View>
+        <View style={styles.retryBadge}>
+          <Text style={styles.retryText}>Retry</Text>
+        </View>
+      </TouchableOpacity>
     );
   }
 
@@ -187,7 +209,7 @@ export default function LiveKitVoiceRoom({
         onStateChange={updateState}
         onAgentTranscript={onAgentTranscript}
         onUserTranscript={onUserTranscript}
-        onError={onError}
+        onRetry={retry}
         unmountedRef={unmounted}
       />
     </LiveKitRoom>
@@ -203,19 +225,20 @@ function RoomContent({
   onStateChange,
   onAgentTranscript,
   onUserTranscript,
-  onError,
+  onRetry,
   unmountedRef,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onAgentTranscript?: (text: string, isFinal: boolean) => void;
   onUserTranscript?: (text: string, isFinal: boolean) => void;
-  onError?: (message: string) => void;
+  onRetry: () => void;
   unmountedRef: React.MutableRefObject<boolean>;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
   const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
+  const [roomError, setRoomError] = useState<string | null>(null);
 
   // Map connection state to agent state
   useEffect(() => {
@@ -224,15 +247,18 @@ function RoomContent({
     switch (connectionState) {
       case ConnectionState.Connecting:
         hasStartedConnecting.current = true;
+        setRoomError(null);
         onStateChange('connecting');
         break;
       case ConnectionState.Connected:
         wasConnected.current = true;
+        setRoomError(null);
         console.log('[LiveKitVoice] Connected to LiveKit room');
         onStateChange('idle');
         break;
       case ConnectionState.Reconnecting:
         console.log('[LiveKitVoice] Reconnecting...');
+        setRoomError(null);
         onStateChange('connecting');
         break;
       case ConnectionState.Disconnected:
@@ -244,11 +270,11 @@ function RoomContent({
         if (wasConnected.current) {
           console.warn('[LiveKitVoice] Disconnected after being connected');
           onStateChange('error');
-          onError?.('Voice connection lost. Switch modes and back to reconnect.');
+          setRoomError('Voice connection lost. Tap to reconnect.');
         } else {
           console.warn('[LiveKitVoice] Failed to connect to LiveKit room');
           onStateChange('error');
-          onError?.('Could not connect to voice server. Check your internet connection.');
+          setRoomError('Could not connect. Tap to retry.');
         }
         break;
     }
@@ -265,8 +291,21 @@ function RoomContent({
     });
   }, [participants]);
 
-  // Check if agent is in the room
-  const agentConnected = participants.some(p => p.identity?.startsWith('agent-'));
+  // Check if agent is in the room — accept any non-local participant as the agent
+  // LiveKit Agents SDK may use different identity formats (agent-xxx, or custom)
+  const agentConnected = participants.some(p => !p.isLocal);
+
+  // Room-level error with retry
+  if (roomError) {
+    return (
+      <TouchableOpacity style={styles.errorContainer} onPress={onRetry} activeOpacity={0.7}>
+        <Text style={styles.errorText}>{roomError}</Text>
+        <View style={styles.retryBadge}>
+          <Text style={styles.retryText}>Retry</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   // Show minimal status
   if (connectionState === ConnectionState.Connecting) {
@@ -310,6 +349,13 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 8,
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    gap: 10,
+  },
   statusText: {
     color: '#9CA3AF',
     fontSize: 13,
@@ -319,5 +365,16 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 13,
     fontWeight: '500',
+  },
+  retryBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  retryText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
