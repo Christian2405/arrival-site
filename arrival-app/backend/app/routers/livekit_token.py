@@ -41,6 +41,7 @@ async def livekit_status():
     return {
         "configured": bool(key and secret and url),
         "key_prefix": key[:5] + "***" if len(key) >= 5 else "NOT_SET",
+        "key_len": len(key),
         "url": url,
         "secret_len": len(secret),
     }
