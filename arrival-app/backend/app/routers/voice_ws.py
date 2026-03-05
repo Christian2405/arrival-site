@@ -51,6 +51,25 @@ def _wants_visual(transcript: str) -> bool:
     return any(kw in lower for kw in _VISUAL_KEYWORDS)
 
 
+def _strip_wav_header(data: bytes) -> bytes:
+    """
+    Strip WAV/RIFF header from audio data to get raw PCM bytes.
+    The frontend sends complete WAV files (expo-av records to .wav),
+    but Deepgram expects raw linear16 PCM when encoding=linear16.
+    """
+    if len(data) < 44:
+        return data
+    # Look for the "data" chunk marker — PCM samples start right after it + 4-byte size
+    pos = data.find(b'data')
+    if pos >= 0 and pos + 8 <= len(data):
+        return data[pos + 8:]
+    # Fallback: if it starts with RIFF header, skip standard 44-byte header
+    if data[:4] == b'RIFF' and data[8:12] == b'WAVE':
+        return data[44:]
+    # Not a WAV file — return as-is (already raw PCM)
+    return data
+
+
 def _split_at_boundary(text: str) -> tuple[str, str]:
     """Split text at the last sentence boundary. Returns (to_send, remainder)."""
     # Find the last sentence boundary
@@ -248,8 +267,10 @@ async def voice_session(
                 break
 
             if "bytes" in msg:
-                # Binary frame = audio chunk → forward to Deepgram
-                await session.deepgram.send_audio(msg["bytes"])
+                # Binary frame = audio chunk → strip WAV header, forward raw PCM to Deepgram
+                raw_pcm = _strip_wav_header(msg["bytes"])
+                if raw_pcm:
+                    await session.deepgram.send_audio(raw_pcm)
 
             elif "text" in msg:
                 try:
