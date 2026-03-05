@@ -14,6 +14,9 @@ import { supabase } from './supabase';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
+// Token request timeout — Render free tier can cold-start in 50s
+const TOKEN_TIMEOUT_MS = 60000;
+
 export interface LiveKitSession {
   token: string;
   wsUrl: string;
@@ -23,42 +26,66 @@ export interface LiveKitSession {
 /**
  * Request a LiveKit room token from the backend.
  * Requires authenticated Supabase session.
+ * Has a 60s timeout to handle Render cold starts.
  */
 export async function createLiveKitSession(
   mode: 'default' | 'job' = 'job',
 ): Promise<LiveKitSession> {
-  // Get fresh auth token
-  const { data } = await supabase.auth.getSession();
-  let authToken = data.session?.access_token;
+  // Get fresh auth token — always refresh to avoid expired JWT
+  const { data: refreshed } = await supabase.auth.refreshSession();
+  let authToken = refreshed.session?.access_token;
 
   if (!authToken) {
-    const { data: refreshed } = await supabase.auth.refreshSession();
-    authToken = refreshed.session?.access_token;
+    // Fall back to cached session
+    const { data } = await supabase.auth.getSession();
+    authToken = data.session?.access_token;
   }
 
   if (!authToken) {
     throw new Error('Not authenticated — please sign in first.');
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/livekit-token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
-    },
-    body: JSON.stringify({ mode }),
-  });
+  console.log(`[LiveKitService] Requesting token from ${BACKEND_URL}/api/livekit-token (mode=${mode})`);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to get LiveKit token: ${response.status} — ${errorText}`);
+  // Use AbortController for timeout
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/livekit-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ mode }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[LiveKitService] Token request failed: ${response.status} — ${errorText}`);
+
+      if (response.status === 401) {
+        throw new Error('Auth expired — restarting session...');
+      }
+      throw new Error(`Token error ${response.status}: ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log(`[LiveKitService] Token received. Room: ${result.room_name}, URL: ${result.ws_url}`);
+
+    return {
+      token: result.token,
+      wsUrl: result.ws_url,
+      roomName: result.room_name,
+    };
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      throw new Error('Server is waking up (cold start). Try again in a few seconds.');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const result = await response.json();
-
-  return {
-    token: result.token,
-    wsUrl: result.ws_url,
-    roomName: result.room_name,
-  };
 }

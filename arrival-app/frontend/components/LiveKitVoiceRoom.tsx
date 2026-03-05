@@ -2,10 +2,10 @@
  * LiveKitVoiceRoom — Full-duplex voice agent powered by LiveKit.
  *
  * This component:
- * - Connects to a LiveKit room
+ * - Connects to a LiveKit room with auto-retry (up to 3 attempts)
  * - Publishes the user's microphone audio
  * - Receives and plays agent audio via WebRTC (full-duplex)
- * - Displays connection state and agent state
+ * - Handles disconnect/reconnect gracefully
  * - Handles cleanup on unmount
  *
  * The heavy lifting (STT, LLM, TTS, turn detection, interruption)
@@ -45,6 +45,9 @@ interface LiveKitVoiceRoomProps {
   onError?: (message: string) => void;
 }
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
 export default function LiveKitVoiceRoom({
   mode,
   active,
@@ -56,7 +59,10 @@ export default function LiveKitVoiceRoom({
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
   const [error, setError] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string>('Connecting to voice agent...');
   const audioSessionStarted = useRef(false);
+  const retryCount = useRef(0);
+  const unmounted = useRef(false);
 
   // Update parent when state changes
   const updateState = useCallback((state: AgentVoiceState) => {
@@ -64,17 +70,22 @@ export default function LiveKitVoiceRoom({
     onStateChange?.(state);
   }, [onStateChange]);
 
-  // Start audio session and get token
+  // Start audio session and get token (with retry)
   useEffect(() => {
+    unmounted.current = false;
+
     if (!active) {
       setSession(null);
       setError(null);
+      retryCount.current = 0;
       return;
     }
 
     let cancelled = false;
 
-    const setup = async () => {
+    const setup = async (attempt: number) => {
+      if (cancelled) return;
+
       try {
         // Start iOS audio session if not already started
         if (!audioSessionStarted.current) {
@@ -83,16 +94,38 @@ export default function LiveKitVoiceRoom({
         }
 
         updateState('connecting');
+        if (attempt > 0) {
+          setStatusMsg(`Retrying connection (${attempt}/${MAX_RETRIES})...`);
+        } else {
+          setStatusMsg('Connecting to voice agent...');
+        }
 
         // Get token from backend
+        console.log(`[LiveKitVoice] Getting token (attempt ${attempt + 1})...`);
         const lkSession = await createLiveKitSession(mode);
+        console.log(`[LiveKitVoice] Token received. Room: ${lkSession.roomName}, URL: ${lkSession.wsUrl}`);
+
         if (!cancelled) {
           setSession(lkSession);
+          setError(null);
+          retryCount.current = 0;
         }
       } catch (e: any) {
-        console.error('[LiveKitVoice] Setup failed:', e);
-        if (!cancelled) {
-          const msg = e.message || 'Failed to connect';
+        console.error(`[LiveKitVoice] Setup failed (attempt ${attempt + 1}):`, e.message);
+        if (cancelled) return;
+
+        if (attempt < MAX_RETRIES - 1) {
+          // Retry after delay
+          const delay = RETRY_DELAY_MS * (attempt + 1);
+          console.log(`[LiveKitVoice] Retrying in ${delay}ms...`);
+          setStatusMsg(`Connection failed, retrying in ${Math.round(delay / 1000)}s...`);
+          setTimeout(() => {
+            if (!cancelled) setup(attempt + 1);
+          }, delay);
+        } else {
+          // All retries exhausted
+          const msg = `Failed after ${MAX_RETRIES} attempts: ${e.message || 'Unknown error'}`;
+          console.error(`[LiveKitVoice] ${msg}`);
           setError(msg);
           updateState('error');
           onError?.(msg);
@@ -100,10 +133,11 @@ export default function LiveKitVoiceRoom({
       }
     };
 
-    setup();
+    setup(0);
 
     return () => {
       cancelled = true;
+      unmounted.current = true;
     };
   }, [active, mode]);
 
@@ -133,7 +167,7 @@ export default function LiveKitVoiceRoom({
     return (
       <View style={styles.container}>
         <ActivityIndicator size="small" color="#F97316" />
-        <Text style={styles.statusText}>Connecting to voice agent...</Text>
+        <Text style={styles.statusText}>{statusMsg}</Text>
       </View>
     );
   }
@@ -154,6 +188,7 @@ export default function LiveKitVoiceRoom({
         onAgentTranscript={onAgentTranscript}
         onUserTranscript={onUserTranscript}
         onError={onError}
+        unmountedRef={unmounted}
       />
     </LiveKitRoom>
   );
@@ -161,40 +196,77 @@ export default function LiveKitVoiceRoom({
 
 /**
  * Inner component that has access to room context.
+ * Tracks whether we ever successfully connected to distinguish
+ * "never connected" from "was connected then disconnected".
  */
 function RoomContent({
   onStateChange,
   onAgentTranscript,
   onUserTranscript,
   onError,
+  unmountedRef,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onAgentTranscript?: (text: string, isFinal: boolean) => void;
   onUserTranscript?: (text: string, isFinal: boolean) => void;
   onError?: (message: string) => void;
+  unmountedRef: React.MutableRefObject<boolean>;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
+  const wasConnected = useRef(false);
+
+  // Track if we ever achieved a connection
+  useEffect(() => {
+    if (connectionState === ConnectionState.Connected) {
+      wasConnected.current = true;
+    }
+  }, [connectionState]);
 
   // Map connection state to agent state
   useEffect(() => {
+    console.log(`[LiveKitVoice] Connection state: ${connectionState}`);
+
     switch (connectionState) {
       case ConnectionState.Connecting:
         onStateChange('connecting');
         break;
       case ConnectionState.Connected:
         // Connected — agent is idle until user speaks
+        console.log('[LiveKitVoice] Connected to LiveKit room');
         onStateChange('idle');
         break;
       case ConnectionState.Reconnecting:
+        console.log('[LiveKitVoice] Reconnecting...');
         onStateChange('connecting');
         break;
       case ConnectionState.Disconnected:
-        onStateChange('error');
-        onError?.('Disconnected from voice agent');
+        // Only report error if this isn't a clean unmount
+        if (!unmountedRef.current) {
+          if (wasConnected.current) {
+            console.warn('[LiveKitVoice] Disconnected after being connected');
+            onStateChange('error');
+            onError?.('Voice connection lost. Switch modes and back to reconnect.');
+          } else {
+            console.warn('[LiveKitVoice] Failed to connect to LiveKit room');
+            onStateChange('error');
+            onError?.('Could not connect to voice server. Check your internet connection.');
+          }
+        }
         break;
     }
   }, [connectionState]);
+
+  // Log participant changes
+  useEffect(() => {
+    const remoteCount = participants.filter(p => !p.isLocal).length;
+    console.log(`[LiveKitVoice] Participants: ${participants.length} total, ${remoteCount} remote`);
+    participants.forEach(p => {
+      if (!p.isLocal) {
+        console.log(`[LiveKitVoice] Remote participant: ${p.identity} (${p.name || 'unnamed'})`);
+      }
+    });
+  }, [participants]);
 
   // Check if agent is in the room
   const agentConnected = participants.some(p => p.identity?.startsWith('agent-'));
@@ -205,6 +277,15 @@ function RoomContent({
       <View style={styles.container}>
         <ActivityIndicator size="small" color="#F97316" />
         <Text style={styles.statusText}>Connecting...</Text>
+      </View>
+    );
+  }
+
+  if (connectionState === ConnectionState.Reconnecting) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="small" color="#F97316" />
+        <Text style={styles.statusText}>Reconnecting...</Text>
       </View>
     );
   }
