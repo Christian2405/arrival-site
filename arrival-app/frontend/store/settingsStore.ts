@@ -75,6 +75,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         await AsyncStorage.setItem('settings_v2_migrated', 'true');
       }
 
+      // Force streaming voice OFF — needs more debugging before enabling
+      await AsyncStorage.setItem('use_streaming_voice', 'false');
+
       const voiceOutput = await AsyncStorage.getItem('voice_output');
       const demoMode = await AsyncStorage.getItem('demo_mode');
       const jobMode = await AsyncStorage.getItem('job_mode');
