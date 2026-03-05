@@ -23,11 +23,19 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 # Add backend root to path so we can import from app.services
 _backend_root = os.path.join(os.path.dirname(__file__), "..")
 if _backend_root not in sys.path:
     sys.path.insert(0, _backend_root)
+
+# CRITICAL: LiveKit agents framework spawns worker subprocesses that don't
+# inherit the parent's dotenv. Load .env explicitly here so every subprocess
+# gets the API keys (Deepgram, Anthropic, ElevenLabs).
+from dotenv import load_dotenv
+_env_file = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_env_file, override=True)
 
 from livekit.agents import (
     Agent,
@@ -208,6 +216,7 @@ async def entrypoint(ctx: JobContext):
         stt=deepgram.STT(
             model="nova-2",
             language="en",
+            api_key=config.DEEPGRAM_API_KEY,
         ),
         llm=anthropic.LLM(
             model=config.ANTHROPIC_VOICE_MODEL,
