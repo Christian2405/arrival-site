@@ -10,6 +10,7 @@ interface SettingsState {
   units: 'imperial' | 'metric';
   textSize: 'small' | 'medium' | 'large';
   useStreamingVoice: boolean; // Streaming pipeline toggle (WebSocket vs REST)
+  useLiveKit: boolean; // LiveKit voice agent (full-duplex WebRTC) — primary voice engine
 
   setVoiceOutput: (value: boolean) => void;
   setDemoMode: (value: boolean) => void;
@@ -19,6 +20,7 @@ interface SettingsState {
   setUnits: (value: 'imperial' | 'metric') => void;
   setTextSize: (value: 'small' | 'medium' | 'large') => void;
   setUseStreamingVoice: (value: boolean) => void;
+  setUseLiveKit: (value: boolean) => void;
   loadSettings: () => Promise<void>;
 }
 
@@ -30,7 +32,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   voiceSpeed: 'normal',
   units: 'imperial',
   textSize: 'medium',
-  useStreamingVoice: true, // Streaming pipeline ON by default for job mode
+  useStreamingVoice: true, // Streaming pipeline ON as fallback
+  useLiveKit: true, // LiveKit is the PRIMARY voice engine
 
   setVoiceOutput: (value) => {
     set({ voiceOutput: value });
@@ -66,6 +69,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ useStreamingVoice: value });
     AsyncStorage.setItem('use_streaming_voice', value.toString()).catch(console.error);
   },
+  setUseLiveKit: (value) => {
+    set({ useLiveKit: value });
+    AsyncStorage.setItem('use_livekit', value.toString()).catch(console.error);
+  },
   loadSettings: async () => {
     try {
       // One-time migration: force demo mode OFF now that real API keys are set
@@ -75,9 +82,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         await AsyncStorage.setItem('settings_v2_migrated', 'true');
       }
 
-      // Force streaming ON — override any cached 'false' from previous debugging
-      await AsyncStorage.setItem('use_streaming_voice', 'true');
-
       const voiceOutput = await AsyncStorage.getItem('voice_output');
       const demoMode = await AsyncStorage.getItem('demo_mode');
       const jobMode = await AsyncStorage.getItem('job_mode');
@@ -85,6 +89,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const voiceSpeed = await AsyncStorage.getItem('voice_speed');
       const units = await AsyncStorage.getItem('units');
       const textSize = await AsyncStorage.getItem('text_size');
+      const useLiveKit = await AsyncStorage.getItem('use_livekit');
 
       set({
         voiceOutput: voiceOutput !== 'false',
@@ -94,7 +99,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',
-        useStreamingVoice: true, // Always true — streaming is the production path
+        useStreamingVoice: true, // Streaming stays as fallback
+        useLiveKit: useLiveKit !== 'false', // LiveKit ON by default
       });
     } catch (error) {
       console.error('Error loading settings:', error);

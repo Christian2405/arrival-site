@@ -26,6 +26,8 @@ import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIn
 import JobModeView, { JobAIState } from '../../components/JobModeView';
 import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
+import LiveKitVoiceRoom, { type AgentVoiceState } from '../../components/LiveKitVoiceRoom';
+import FrameBatcher from '../../services/frameBatcher';
 
 // Collision-safe ID generator
 function generateId(): string {
@@ -96,7 +98,9 @@ export default function HomeScreen() {
   } = useConversationStore();
   const messages = currentConversation?.messages || [];
 
-  const { demoMode, voiceOutput, interactionMode, setInteractionMode, useStreamingVoice } = useSettingsStore();
+  const { demoMode, voiceOutput, interactionMode, setInteractionMode, useStreamingVoice, useLiveKit } = useSettingsStore();
+  const livekitFrameBatcherRef = useRef<FrameBatcher | null>(null);
+  const [livekitActive, setLivekitActive] = useState(false);
   const { saveAnswer } = useSavedAnswersStore();
   const { profile, subscription } = useAuthStore();
 
@@ -573,7 +577,7 @@ export default function HomeScreen() {
   }, [interactionMode, tierLimits, stopAudio, setInteractionMode, setIsRecording, setIsProcessing]);
 
   // --- JOB MODE EFFECT ---
-  // Branches on useStreamingVoice: streaming pipeline (WebSocket) vs REST pipeline
+  // Priority: LiveKit (full-duplex WebRTC) > Streaming (WebSocket) > REST
   useEffect(() => {
     if (interactionMode !== 'job' || !permission?.granted) {
       if (jobControllerRef.current) {
@@ -584,12 +588,59 @@ export default function HomeScreen() {
         streamingControllerRef.current.stop();
         streamingControllerRef.current = null;
       }
+      if (livekitFrameBatcherRef.current) {
+        livekitFrameBatcherRef.current.stop();
+        livekitFrameBatcherRef.current = null;
+      }
+      setLivekitActive(false);
       return;
     }
 
+    const livekit = useSettingsStore.getState().useLiveKit;
     const isStreaming = useSettingsStore.getState().useStreamingVoice;
 
-    if (isStreaming) {
+    if (livekit) {
+      // --- LIVEKIT PIPELINE (WebRTC full-duplex) ---
+      // Voice is handled by LiveKitVoiceRoom component (rendered in JSX).
+      // Here we only set up frame analysis (same REST-based camera pipeline).
+      setLivekitActive(true);
+      setJobAIState('monitoring');
+
+      const frameBatcher = new FrameBatcher({
+        minInterval: 3000,
+        maxInterval: 10000,
+        changeThreshold: 0.10,
+        captureInterval: 3000,
+        onAnalyze: async (frame: string) => {
+          try {
+            const recentAlerts = jobAlertHistoryRef.current.slice(-5);
+            const result = await aiAPI.analyzeFrame(frame, recentAlerts);
+            if (result.alert && result.message) {
+              jobAlertHistoryRef.current.push(result.message);
+              setLastJobAlert({ message: result.message, severity: result.severity || 'warning', ts: Date.now() });
+              addMessage({
+                id: generateId(), role: 'assistant', content: result.message,
+                alertType: result.severity === 'critical' ? 'critical' : 'warning',
+                source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
+              });
+            }
+          } catch (e) {
+            console.log('Job Mode frame error:', e);
+          }
+        },
+      });
+
+      frameBatcher.start(captureFrame);
+      livekitFrameBatcherRef.current = frameBatcher;
+
+      return () => {
+        frameBatcher.stop();
+        livekitFrameBatcherRef.current = null;
+        setLivekitActive(false);
+        setLastJobAlert(null);
+        jobAlertHistoryRef.current = [];
+      };
+    } else if (isStreaming) {
       // --- STREAMING PIPELINE (WebSocket) ---
       const responseTextRef = { current: '' };
 
@@ -1049,6 +1100,35 @@ export default function HomeScreen() {
 
           {interactionMode === 'job' && (
             <View style={styles.modeContainer}>
+              {/* LiveKit full-duplex voice — handles all audio via WebRTC */}
+              {livekitActive && (
+                <LiveKitVoiceRoom
+                  mode="job"
+                  active={livekitActive}
+                  onStateChange={(state: AgentVoiceState) => {
+                    // Map LiveKit agent states to JobAIState for the UI
+                    const stateMap: Record<AgentVoiceState, JobAIState> = {
+                      connecting: 'monitoring',
+                      idle: 'monitoring',
+                      listening: 'listening',
+                      thinking: 'processing',
+                      speaking: 'speaking',
+                      error: 'monitoring',
+                    };
+                    setJobAIState(stateMap[state] || 'monitoring');
+                  }}
+                  onError={(msg) => {
+                    console.error('[LiveKit] Error:', msg);
+                    // Fallback to streaming pipeline on error
+                    useSettingsStore.getState().setUseLiveKit(false);
+                    addMessage({
+                      id: generateId(), role: 'assistant',
+                      content: 'Voice connection issue — switching to backup pipeline.',
+                      displayMode: 'job', timestamp: new Date(),
+                    });
+                  }}
+                />
+              )}
               <JobModeView
                 aiState={jobAIState}
                 onPause={() => {

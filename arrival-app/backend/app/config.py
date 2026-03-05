@@ -43,6 +43,11 @@ MEM0_API_KEY = os.getenv("MEM0_API_KEY", "")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "arrival-docs")
 
+# --- LiveKit (Real-time Voice Agent) ---
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
+
 # --- System Prompt ---
 SYSTEM_PROMPT = """You are Arrival, an AI field assistant for trade professionals — HVAC techs, plumbers, electricians, and builders. You have the knowledge of a 50-year veteran and the communication style of someone who respects that the person asking is also a professional.
 

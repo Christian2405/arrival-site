@@ -71,7 +71,9 @@
           "organization": "spheree",
           "project": "arrival-mobile"
         }
-      ]
+      ],
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
     ],
     "owner": "christianfladgate"
   }
