@@ -978,10 +978,13 @@ export default function HomeScreen() {
                       data={textMessages}
                       keyboardDismissMode="on-drag"
                       keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => {
+                      renderItem={({ item, index }) => {
+                        // Typing animation only for the latest assistant message
+                        const isLatestAssistant = item.role === 'assistant' && index === textMessages.length - 1;
                         return (
                           <ChatBubble
                             message={item}
+                            isLatest={isLatestAssistant}
                             onSave={item.role === 'assistant' ? () => {
                               saveAnswer({
                                 id: item.id, question: '', answer: item.content,

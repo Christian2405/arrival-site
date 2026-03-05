@@ -18,16 +18,16 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # --- Anthropic (Claude) ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-3-5-20241022")  # Haiku for real-time voice (<2s latency)
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-3-5-20241022")  # Haiku for speed everywhere
+ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-3-5-20241022")  # Haiku for real-time voice
 
 # --- Deepgram (Speech-to-Text) ---
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 
 # --- ElevenLabs (Text-to-Speech) ---
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "UGTtbzgh3HObxRjWaSpr")  # Selected voice
-ELEVENLABS_JOB_VOICE_ID = os.getenv("ELEVENLABS_JOB_VOICE_ID", "UGTtbzgh3HObxRjWaSpr")  # Same voice for consistency
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "TX3LPaxmHKxFdv7VOQHJ")  # Liam — clear American male, reliable with Flash v2.5
+ELEVENLABS_JOB_VOICE_ID = os.getenv("ELEVENLABS_JOB_VOICE_ID", "TX3LPaxmHKxFdv7VOQHJ")  # Same voice for consistency
 
 # --- Supabase ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

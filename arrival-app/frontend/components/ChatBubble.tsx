@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
@@ -9,6 +9,8 @@ interface ChatBubbleProps {
   onSave?: () => void;
   onFeedback?: (rating: 'positive' | 'negative', feedbackText?: string) => void;
   userQuestion?: string;
+  /** Set to true for the most recent assistant message to enable typing animation */
+  isLatest?: boolean;
 }
 
 const ALERT_COLORS = {
@@ -28,11 +30,53 @@ const ALERT_COLORS = {
   },
 };
 
-export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
+// Characters revealed per tick for typewriter effect
+const CHARS_PER_TICK = 3;
+const TICK_MS = 16; // ~60fps
+
+export default function ChatBubble({ message, onSave, isLatest }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const isAlert = !!message.alertType;
   const alertConfig = message.alertType ? ALERT_COLORS[message.alertType] : null;
   const [saved, setSaved] = useState(false);
+
+  // Typewriter effect for assistant messages
+  const [displayedText, setDisplayedText] = useState(
+    // Only animate the latest assistant message; show full text for all others
+    (!isUser && isLatest) ? '' : message.content
+  );
+  const animatingRef = useRef(false);
+
+  useEffect(() => {
+    // Only animate the latest assistant message in text mode
+    if (isUser || !isLatest || !message.content) {
+      setDisplayedText(message.content);
+      return;
+    }
+
+    // If we already showed the full text, don't re-animate
+    if (displayedText === message.content) return;
+
+    animatingRef.current = true;
+    let charIndex = 0;
+
+    const interval = setInterval(() => {
+      charIndex += CHARS_PER_TICK;
+      if (charIndex >= message.content.length) {
+        setDisplayedText(message.content);
+        animatingRef.current = false;
+        clearInterval(interval);
+      } else {
+        setDisplayedText(message.content.slice(0, charIndex));
+      }
+    }, TICK_MS);
+
+    return () => {
+      clearInterval(interval);
+      // If unmounting while animating, show full text
+      animatingRef.current = false;
+    };
+  }, [message.content, isLatest]);
 
   const handleLongPress = () => {
     if (isUser || !onSave) return;
@@ -82,7 +126,7 @@ export default function ChatBubble({ message, onSave }: ChatBubbleProps) {
           isAlert && alertConfig && { color: alertConfig.accent },
         ]}
       >
-        {message.content}
+        {displayedText}
       </Text>
 
       {/* Saved badge */}
