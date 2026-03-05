@@ -41,7 +41,7 @@ async def create_livekit_token(req: TokenRequest, request: Request):
         raise HTTPException(status_code=401, detail="Missing auth token")
 
     jwt_token = auth_header.replace("Bearer ", "")
-    payload = decode_jwt_token(jwt_token)
+    payload = await decode_jwt_token(jwt_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
