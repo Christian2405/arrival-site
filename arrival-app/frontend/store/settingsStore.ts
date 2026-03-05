@@ -82,6 +82,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         await AsyncStorage.setItem('settings_v2_migrated', 'true');
       }
 
+      // One-time migration: force LiveKit ON (undo accidental permanent disable)
+      const lkMigrated = await AsyncStorage.getItem('settings_lk_v1_migrated');
+      if (!lkMigrated) {
+        await AsyncStorage.setItem('use_livekit', 'true');
+        await AsyncStorage.setItem('settings_lk_v1_migrated', 'true');
+      }
+
       const voiceOutput = await AsyncStorage.getItem('voice_output');
       const demoMode = await AsyncStorage.getItem('demo_mode');
       const jobMode = await AsyncStorage.getItem('job_mode');

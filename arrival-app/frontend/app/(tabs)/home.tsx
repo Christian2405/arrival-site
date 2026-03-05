@@ -1127,11 +1127,11 @@ export default function HomeScreen() {
                   }}
                   onError={(msg: string) => {
                     console.error('[LiveKit] Error:', msg);
-                    // Fallback to streaming pipeline on error
-                    useSettingsStore.getState().setUseLiveKit(false);
+                    // Don't permanently disable LiveKit — just show the error
+                    // The user can toggle away from job mode and back to retry
                     addMessage({
                       id: generateId(), role: 'assistant',
-                      content: 'Voice connection issue — switching to backup pipeline.',
+                      content: `Voice agent connection issue: ${msg}. Switch modes and back to retry.`,
                       displayMode: 'job', timestamp: new Date(),
                     });
                   }}
