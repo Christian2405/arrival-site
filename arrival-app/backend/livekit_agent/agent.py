@@ -162,92 +162,104 @@ server = AgentServer()
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     """Called when a participant joins a LiveKit room that needs an agent."""
-    logger.info(f"[arrival-agent] ★ Entrypoint called — room={ctx.room.name}")
-    await ctx.connect()
-    logger.info(f"[arrival-agent] Connected to room: {ctx.room.name}")
+    try:
+        logger.info(f"[arrival-agent] ★ Entrypoint called — room={ctx.room.name}")
+        await ctx.connect()
+        logger.info(f"[arrival-agent] Connected to room: {ctx.room.name}")
 
-    # Parse metadata for user info
-    room_name = ctx.room.name or ""
-    mode = "job"
-    user_id = "unknown"
+        # Parse metadata for user info
+        room_name = ctx.room.name or ""
+        mode = "job"
+        user_id = "unknown"
 
-    for participant in ctx.room.remote_participants.values():
-        if participant.metadata:
+        for participant in ctx.room.remote_participants.values():
+            if participant.metadata:
+                try:
+                    meta = json.loads(participant.metadata)
+                    user_id = meta.get("user_id", user_id)
+                    mode = meta.get("mode", mode)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                break
+
+        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode}")
+
+        # Select prompt based on mode
+        prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
+
+        # Load ML models with fallback — these download on first use and may fail
+        # on memory-constrained environments (Render free tier = 512MB)
+        vad = None
+        turn_det = None
+        if silero is not None:
             try:
-                meta = json.loads(participant.metadata)
-                user_id = meta.get("user_id", user_id)
-                mode = meta.get("mode", mode)
-            except (json.JSONDecodeError, TypeError):
-                pass
-            break
+                vad = silero.VAD.load()
+                logger.info("[arrival-agent] ✓ Silero VAD loaded")
+            except Exception as e:
+                logger.warning(f"[arrival-agent] Silero VAD failed: {e} — running without VAD")
+        else:
+            logger.info("[arrival-agent] Silero not available — skipping VAD")
 
-    logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode}")
+        if MultilingualModel is not None:
+            try:
+                turn_det = MultilingualModel()
+                logger.info("[arrival-agent] ✓ Turn detector loaded")
+            except Exception as e:
+                logger.warning(f"[arrival-agent] Turn detector failed: {e} — using default")
+        else:
+            logger.info("[arrival-agent] MultilingualModel not available — skipping turn detection")
 
-    # Select prompt based on mode
-    prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
+        # Log API key status
+        logger.info(f"[arrival-agent] DEEPGRAM key: {'set' if config.DEEPGRAM_API_KEY else 'MISSING'}")
+        logger.info(f"[arrival-agent] ANTHROPIC key: {'set' if config.ANTHROPIC_API_KEY else 'MISSING'}")
+        logger.info(f"[arrival-agent] ELEVENLABS key: {'set' if config.ELEVENLABS_API_KEY else 'MISSING'}")
 
-    # Load ML models with fallback — these download on first use and may fail
-    # on memory-constrained environments (Render free tier = 512MB)
-    vad = None
-    turn_det = None
-    if silero is not None:
-        try:
-            vad = silero.VAD.load()
-            logger.info("[arrival-agent] ✓ Silero VAD loaded")
-        except Exception as e:
-            logger.warning(f"[arrival-agent] Silero VAD failed: {e} — running without VAD")
-    else:
-        logger.info("[arrival-agent] Silero not available — skipping VAD")
-
-    if MultilingualModel is not None:
-        try:
-            turn_det = MultilingualModel()
-            logger.info("[arrival-agent] ✓ Turn detector loaded")
-        except Exception as e:
-            logger.warning(f"[arrival-agent] Turn detector failed: {e} — using default")
-    else:
-        logger.info("[arrival-agent] MultilingualModel not available — skipping turn detection")
-
-    # Create the voice pipeline — optimized for speed
-    session_kwargs = dict(
-        stt=deepgram.STT(
-            model="nova-2",
-            language="en",
-            api_key=config.DEEPGRAM_API_KEY,
-        ),
-        llm=anthropic.LLM(
-            model=config.ANTHROPIC_VOICE_MODEL,
-            api_key=config.ANTHROPIC_API_KEY,
-        ),
-        tts=elevenlabs.TTS(
-            voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
-            model="eleven_flash_v2_5",
-            api_key=config.ELEVENLABS_API_KEY,
-        ),
-    )
-    if vad is not None:
-        session_kwargs["vad"] = vad
-    if turn_det is not None:
-        session_kwargs["turn_detection"] = turn_det
-
-    session = AgentSession(**session_kwargs)
-
-    # Create agent with error code lookup tool
-    agent = ArrivalAgent(
-        instructions=prompt,
-        allow_interruptions=True,
-        min_endpointing_delay=0.5,
-        max_endpointing_delay=1.5,
-    )
-
-    await session.start(agent=agent, room=ctx.room)
-
-    # In default/voice mode, greet. In job mode, stay silent until they talk.
-    if mode == "default":
-        await session.generate_reply(
-            instructions="Say a very brief greeting, like 'Hey, what's up?' — 5 words max."
+        # Create the voice pipeline — optimized for speed
+        session_kwargs = dict(
+            stt=deepgram.STT(
+                model="nova-2",
+                language="en",
+                api_key=config.DEEPGRAM_API_KEY,
+            ),
+            llm=anthropic.LLM(
+                model=config.ANTHROPIC_VOICE_MODEL,
+                api_key=config.ANTHROPIC_API_KEY,
+            ),
+            tts=elevenlabs.TTS(
+                voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
+                model="eleven_flash_v2_5",
+                api_key=config.ELEVENLABS_API_KEY,
+            ),
         )
-    # Job mode: agent is silently monitoring. Tech speaks when ready.
+        if vad is not None:
+            session_kwargs["vad"] = vad
+        if turn_det is not None:
+            session_kwargs["turn_detection"] = turn_det
+
+        session = AgentSession(**session_kwargs)
+        logger.info("[arrival-agent] ✓ AgentSession created")
+
+        # Create agent with error code lookup tool
+        agent = ArrivalAgent(
+            instructions=prompt,
+            allow_interruptions=True,
+            min_endpointing_delay=0.5,
+            max_endpointing_delay=1.5,
+        )
+
+        await session.start(agent=agent, room=ctx.room)
+        logger.info("[arrival-agent] ✓ Session started — voice pipeline active")
+
+        # Greet to confirm the full pipeline works (STT→LLM→TTS→audio)
+        # This proves: agent connected, Claude works, ElevenLabs works, audio plays
+        await session.generate_reply(
+            instructions="Say exactly: 'Hey, I'm here.' Nothing else."
+        )
+        logger.info("[arrival-agent] ✓ Greeting sent")
+
+    except Exception as e:
+        logger.error(f"[arrival-agent] ✗ ENTRYPOINT CRASHED: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":
