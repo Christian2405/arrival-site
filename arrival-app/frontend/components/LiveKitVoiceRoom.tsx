@@ -214,14 +214,8 @@ function RoomContent({
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
+  const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
-
-  // Track if we ever achieved a connection
-  useEffect(() => {
-    if (connectionState === ConnectionState.Connected) {
-      wasConnected.current = true;
-    }
-  }, [connectionState]);
 
   // Map connection state to agent state
   useEffect(() => {
@@ -229,10 +223,11 @@ function RoomContent({
 
     switch (connectionState) {
       case ConnectionState.Connecting:
+        hasStartedConnecting.current = true;
         onStateChange('connecting');
         break;
       case ConnectionState.Connected:
-        // Connected — agent is idle until user speaks
+        wasConnected.current = true;
         console.log('[LiveKitVoice] Connected to LiveKit room');
         onStateChange('idle');
         break;
@@ -241,17 +236,19 @@ function RoomContent({
         onStateChange('connecting');
         break;
       case ConnectionState.Disconnected:
-        // Only report error if this isn't a clean unmount
-        if (!unmountedRef.current) {
-          if (wasConnected.current) {
-            console.warn('[LiveKitVoice] Disconnected after being connected');
-            onStateChange('error');
-            onError?.('Voice connection lost. Switch modes and back to reconnect.');
-          } else {
-            console.warn('[LiveKitVoice] Failed to connect to LiveKit room');
-            onStateChange('error');
-            onError?.('Could not connect to voice server. Check your internet connection.');
-          }
+        // Ignore the initial Disconnected state (before connecting starts)
+        if (!hasStartedConnecting.current) break;
+        // Ignore clean unmount
+        if (unmountedRef.current) break;
+
+        if (wasConnected.current) {
+          console.warn('[LiveKitVoice] Disconnected after being connected');
+          onStateChange('error');
+          onError?.('Voice connection lost. Switch modes and back to reconnect.');
+        } else {
+          console.warn('[LiveKitVoice] Failed to connect to LiveKit room');
+          onStateChange('error');
+          onError?.('Could not connect to voice server. Check your internet connection.');
         }
         break;
     }
