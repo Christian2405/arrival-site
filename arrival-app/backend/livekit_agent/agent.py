@@ -4,7 +4,8 @@ Arrival AI — LiveKit Voice Agent
 Full-duplex voice agent for trade workers.
 
 Pipeline:
-  - Deepgram Nova-2 STT (server-side VAD, works next to compressors)
+  - Silero VAD (ML-based, works next to compressors)
+  - Deepgram Nova-2 STT (streaming, noise-immune)
   - Claude Haiku LLM (fast real-time responses)
   - ElevenLabs Flash v2.5 TTS (<300ms to first audio)
   - LiveKit WebRTC transport (full-duplex, <1s end-to-end)
@@ -42,28 +43,89 @@ from livekit.agents import (
     AgentServer,
     JobContext,
     cli,
+    function_tool,
 )
 from livekit.plugins import deepgram, anthropic, elevenlabs, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from app import config
+from app.services.error_codes import lookup_error_code, format_error_code_context
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Voice prompt — short, direct, optimized for spoken responses
+# Voice prompts
 # ---------------------------------------------------------------------------
 
-VOICE_PROMPT = """You are Arrival, an AI field assistant for trade professionals — HVAC techs, plumbers, electricians, and builders.
+JOB_MODE_PROMPT = (
+    "You're a 50-year vet working alongside a tech on a job. You're their buddy — "
+    "you talk about anything, answer anything. Short, confident, natural. "
+    "1-3 sentences max. This is spoken aloud — don't drone on.\n\n"
 
-RULES FOR VOICE:
-- Lead with the answer. No preamble, no filler.
-- Keep responses to 2-3 sentences max. Be specific.
-- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.
-- When giving specs, give the number. "8 AWG copper, 40A breaker" not "appropriate wire size."
-- Never say "consult a professional" — they ARE the professional.
-- If you don't know, say so in one sentence. Don't ramble.
-- You're talking to someone on a job site. Respect their time."""
+    "RULES:\n"
+    "- Answer what they asked, nothing extra. Simple question = simple answer.\n"
+    "- Lead with the most likely cause. Don't list 5 things.\n"
+    "- If they ask about a specific error code or blink code, use the lookup_error_code tool to get the EXACT data. "
+    "If the tool returns nothing, say 'I don't have that code memorized — what does the chart on the unit show?' NEVER guess error codes.\n"
+    "- If they ask something non-trade (weather, sports, lunch), just chat naturally. You're a person, not a manual.\n"
+    "- If you tell them to check something, ask what they find.\n"
+    "- If they confirm ('yeah I see it'), give the next step.\n"
+    "- If they say 'it's fine' or 'no' or push back, DROP IT IMMEDIATELY. Say 'Fair enough' or 'Got it' and move on.\n"
+    "- If they challenge something you said ('what are you talking about', 'there's no leak', 'that's wrong'), "
+    "IMMEDIATELY back off. Say 'My bad' or 'Alright, scratch that'. NEVER double down. NEVER insist.\n"
+    "- NEVER make something up. If you're not sure, say so. A wrong answer wastes the tech's time.\n"
+    "- No filler: no 'Great question', no 'Let me know if you need anything'.\n"
+    "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
+    "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
+    "- Never say 'consult a professional' — they ARE the professional.\n"
+    "- Use contractions. Say 'you're' not 'you are', 'don't' not 'do not'.\n\n"
+
+    "EXAMPLES:\n"
+    "Q: 'Superheat target on a TXV?' → 'Subcooling, not superheat — 10 to 12 degrees. What are you reading?'\n"
+    "Q: 'Carrier keeps short cycling' → 'Flame sensor. Pull it, emery cloth, fixes it 80% of the time.'\n"
+    "Q: 'What size wire for 40 amps?' → '8 gauge copper. Over 50 feet, bump to 6.'\n"
+    "Q: 'Yeah I see the corrosion' → 'Emery cloth and NoOx. Want me to walk you through it?'\n"
+    "Q: 'There's no leak here' → 'My bad, must have misread that. What are you looking at?'\n"
+    "Q: 'What do you think about the Bears game?' → 'Don't get me started. What a season though.'"
+)
+
+
+DEFAULT_MODE_PROMPT = (
+    "You are Arrival, an AI assistant for trade professionals — HVAC techs, plumbers, electricians, and builders.\n\n"
+
+    "RULES FOR VOICE:\n"
+    "- Lead with the answer. No preamble, no filler.\n"
+    "- Keep responses to 1-3 sentences max. Be specific.\n"
+    "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
+    "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
+    "- Never say 'consult a professional' — they ARE the professional.\n"
+    "- If they ask about a specific error code or blink code, use the lookup_error_code tool first.\n"
+    "- If you don't know, say so in one sentence. Don't ramble.\n"
+    "- You're talking to someone on a job site. Respect their time."
+)
+
+
+# ---------------------------------------------------------------------------
+# Agent with error code lookup tool
+# ---------------------------------------------------------------------------
+
+class ArrivalAgent(Agent):
+    """Trade worker voice agent with error code lookup."""
+
+    @function_tool()
+    async def lookup_error_code(self, query: str) -> str:
+        """Look up an HVAC, plumbing, or electrical error code. Pass the full question
+        like 'Carrier furnace code 34' or 'Rheem 3 blinks' or 'Daikin U4'."""
+        logger.info(f"[arrival-agent] Error code lookup: {query}")
+        result = lookup_error_code(query)
+        if result:
+            context = format_error_code_context(result)
+            logger.info(f"[arrival-agent] Found: {result['brand']} {result['code']}")
+            return context
+        logger.info("[arrival-agent] No error code match found")
+        return ("No verified error code found for that query. "
+                "Tell the tech you don't have that code memorized and "
+                "ask what the chart on the unit shows.")
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +157,9 @@ async def entrypoint(ctx: JobContext):
 
     logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode}")
 
+    # Select prompt based on mode
+    prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
+
     # Create the voice pipeline — optimized for speed
     session = AgentSession(
         vad=silero.VAD.load(),
@@ -108,16 +173,16 @@ async def entrypoint(ctx: JobContext):
             api_key=config.ANTHROPIC_API_KEY,
         ),
         tts=elevenlabs.TTS(
-            voice_id=config.ELEVENLABS_JOB_VOICE_ID,
+            voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
             model="eleven_flash_v2_5",
             api_key=config.ELEVENLABS_API_KEY,
         ),
         turn_detection=MultilingualModel(),
     )
 
-    # Create agent — no tools for now, pure speed
-    agent = Agent(
-        instructions=VOICE_PROMPT,
+    # Create agent with error code lookup tool
+    agent = ArrivalAgent(
+        instructions=prompt,
         allow_interruptions=True,
         min_endpointing_delay=0.5,
         max_endpointing_delay=1.5,
