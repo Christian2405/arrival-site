@@ -5,14 +5,12 @@
  * - Server-side VAD (Deepgram endpointing) — works in noisy environments
  * - Audio streams in real-time instead of record-all-then-send
  * - TTS audio streams back incrementally
- * - Voice interrupt via metering: if user speaks loudly while AI is talking,
- *   the response is cancelled. No buttons to tap.
  *
- * Audio routing on iOS:
- * - Recording active = audio plays through earpiece (iOS limitation)
- * - We keep recording active at all times for voice interrupt
- * - For loudspeaker playback, we'd need to pause the mic (no voice interrupt)
- * - Trade-off: earpiece audio + voice interrupt > speaker audio + no interrupt
+ * Audio routing on iOS (critical fix):
+ * - Recording active = iOS routes audio through EARPIECE (not speaker)
+ * - When AI speaks: recorder PAUSES → audio routes to LOUDSPEAKER
+ * - When AI finishes: recorder RESUMES → back to listening
+ * - This trades voice interrupt for audible output — required for job sites
  *
  * FrameBatcher stays unchanged — frame analysis is a separate pipeline.
  */
@@ -24,13 +22,8 @@ import StreamingAudioRecorder from './streamingAudioRecorder';
 
 export type StreamingJobAIState = 'connecting' | 'monitoring' | 'listening' | 'processing' | 'speaking' | 'error';
 
-/** Metering threshold for voice interrupt (dB).
- * While AI is speaking, if mic picks up audio louder than this, trigger interrupt.
- * Must be high enough that earpiece echo doesn't trigger it (-12 dB is loud/close speech). */
-const INTERRUPT_METERING_THRESHOLD = -15;
-
-/** Minimum consecutive loud samples before triggering interrupt (prevents blips). */
-const INTERRUPT_MIN_SAMPLES = 2;
+/** Safety timeout: if recorder stays paused > 20s, something went wrong — force resume */
+const SPEAKING_SAFETY_TIMEOUT_MS = 20000;
 
 export interface StreamingJobModeCallbacks {
   /** Frame analysis alert — spoken to user */
@@ -63,7 +56,7 @@ export default class StreamingJobModeController {
   private conversationHistory: Array<{ role: string; content: string }> = [];
   private currentResponseText = '';
   private _interrupted = false;
-  private interruptLoudSamples = 0;
+  private speakingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     callbacks: StreamingJobModeCallbacks,
@@ -125,27 +118,14 @@ export default class StreamingJobModeController {
     this.player = new StreamingAudioPlayer();
 
     // --- StreamingAudioRecorder ---
-    // Recorder stays active at all times — audio streams to server continuously.
-    // During AI speaking, metering is used for voice interrupt detection.
+    // Recorder streams audio to server. PAUSED during AI speaking for loudspeaker output.
     this.recorder = new StreamingAudioRecorder({
       onAudioChunk: (base64Data) => {
         this.client.sendAudio(base64Data);
       },
-      onMetering: (dB) => {
-        // Voice interrupt: if loud speech detected while AI is speaking, interrupt
-        if (this._state === 'speaking' && !this._interrupted) {
-          if (dB > INTERRUPT_METERING_THRESHOLD) {
-            this.interruptLoudSamples++;
-            if (this.interruptLoudSamples >= INTERRUPT_MIN_SAMPLES) {
-              console.log(`[StreamingJobMode] Voice interrupt triggered (${dB.toFixed(1)} dB)`);
-              this.interrupt();
-            }
-          } else {
-            this.interruptLoudSamples = 0;
-          }
-        } else {
-          this.interruptLoudSamples = 0;
-        }
+      onMetering: (_dB) => {
+        // Metering not used for interrupt (recorder is paused during speaking).
+        // Could be used for UI visualization in the future.
       },
       onError: (error) => {
         console.error('[StreamingJobMode] Recorder error:', error);
@@ -193,7 +173,7 @@ export default class StreamingJobModeController {
         image_base64: imageBase64,
       });
 
-      // Start recording audio chunks — stays on for the entire session
+      // Start recording audio chunks
       await this.recorder.start();
       this.isRecording = true;
 
@@ -213,6 +193,7 @@ export default class StreamingJobModeController {
    * Stop everything and clean up.
    */
   async stop(): Promise<void> {
+    this.clearSpeakingSafetyTimer();
     this.frameBatcher.stop();
     await this.recorder.stop();
     await this.player.stop();
@@ -220,16 +201,17 @@ export default class StreamingJobModeController {
     this.isRecording = false;
     this._interrupted = false;
     this.currentResponseText = '';
-    this.interruptLoudSamples = 0;
   }
 
   /**
    * Interrupt — cancel current AI response.
-   * Called by voice interrupt (metering) or could be called from UI.
+   * Called from UI tap or could be called programmatically.
    */
   async interrupt(): Promise<void> {
     if (this._interrupted) return; // Already interrupted
     this._interrupted = true;
+
+    this.clearSpeakingSafetyTimer();
 
     // Stop audio playback immediately
     await this.player.stop();
@@ -239,7 +221,11 @@ export default class StreamingJobModeController {
     this.client.interrupt();
 
     this.currentResponseText = '';
-    this.interruptLoudSamples = 0;
+
+    // Resume recording (may have been paused for speaking)
+    await this.recorder.resume();
+    this.isRecording = true;
+
     this.setState('monitoring');
     this.callbacks.onInterrupt?.();
   }
@@ -252,7 +238,7 @@ export default class StreamingJobModeController {
   }
 
   /**
-   * Handle a frame analysis alert (from FrameBatcher → analyzeFrame API).
+   * Handle a frame analysis alert (from FrameBatcher -> analyzeFrame API).
    * Still uses the REST API for frame analysis (separate pipeline).
    */
   async handleFrameAlert(message: string, severity: string): Promise<void> {
@@ -274,16 +260,24 @@ export default class StreamingJobModeController {
       case 'processing':
         this.setState('processing');
         this.currentResponseText = '';
-        // NOTE: We do NOT pause the recorder here.
-        // It keeps streaming audio for voice interrupt detection.
-        // Audio plays through earpiece (iOS constraint with active recording).
         break;
       case 'speaking':
         this.setState('speaking');
-        this.interruptLoudSamples = 0;
+        this._interrupted = false;
+        // CRITICAL FIX: Pause recorder so iOS routes audio to LOUDSPEAKER.
+        // Without this, allowsRecordingIOS=true forces audio through earpiece.
+        // recorder.pause() sets allowsRecordingIOS=false → speaker output.
+        this.recorder.pause().catch(e =>
+          console.warn('[StreamingJobMode] Pause recorder error:', e)
+        );
+        this.isRecording = false;
+        // Safety timeout: force-resume if something goes wrong
+        this.startSpeakingSafetyTimer();
         break;
       case 'ready':
-        // Server is ready for next turn — recorder is already running
+        // Server says it's ready for the next turn.
+        // Don't resume recorder here — player may still be playing audio.
+        // The recorder resumes in onTurnDone() when playback actually finishes.
         this.setState('monitoring');
         break;
       case 'error':
@@ -296,8 +290,11 @@ export default class StreamingJobModeController {
 
   /**
    * Called when audio playback finishes for a turn.
+   * Resume recording so the mic is live for the next utterance.
    */
   private async onTurnDone(): Promise<void> {
+    this.clearSpeakingSafetyTimer();
+
     if (this._interrupted) {
       this._interrupted = false;
       return;
@@ -305,8 +302,32 @@ export default class StreamingJobModeController {
 
     this.player.reset();
     this.currentResponseText = '';
-    this.interruptLoudSamples = 0;
+
+    // Resume recording — switches audio mode back to recording
+    // (earpiece for mic, but no audio is playing now so it doesn't matter)
+    await this.recorder.resume();
+    this.isRecording = true;
+
     this.setState('monitoring');
     this.callbacks.onTurnComplete?.();
+  }
+
+  private startSpeakingSafetyTimer(): void {
+    this.clearSpeakingSafetyTimer();
+    this.speakingSafetyTimer = setTimeout(async () => {
+      console.warn('[StreamingJobMode] Speaking safety timeout — force resuming recorder');
+      await this.player.stop();
+      this.player.reset();
+      await this.recorder.resume();
+      this.isRecording = true;
+      this.setState('monitoring');
+    }, SPEAKING_SAFETY_TIMEOUT_MS);
+  }
+
+  private clearSpeakingSafetyTimer(): void {
+    if (this.speakingSafetyTimer) {
+      clearTimeout(this.speakingSafetyTimer);
+      this.speakingSafetyTimer = null;
+    }
   }
 }

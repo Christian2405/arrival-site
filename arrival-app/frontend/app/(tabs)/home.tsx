@@ -605,8 +605,9 @@ export default function HomeScreen() {
       return;
     }
 
-    const livekit = useSettingsStore.getState().useLiveKit;
-    const isStreaming = useSettingsStore.getState().useStreamingVoice;
+    // Use reactive values so changing these re-runs the effect (enables fallback)
+    const livekit = useLiveKit;
+    const isStreaming = useStreamingVoice;
 
     if (livekit && LiveKitVoiceRoom) {
       // --- LIVEKIT PIPELINE (WebRTC full-duplex) ---
@@ -819,7 +820,7 @@ export default function HomeScreen() {
         jobAlertHistoryRef.current = [];
       };
     }
-  }, [interactionMode, permission?.granted]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [interactionMode, permission?.granted, useLiveKit, useStreamingVoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- TEXT MODE: Chat show/hide effects ---
   // Bug 20: Animate instead of snapping to 1

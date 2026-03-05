@@ -32,8 +32,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   voiceSpeed: 'normal',
   units: 'imperial',
   textSize: 'medium',
-  useStreamingVoice: true, // Streaming pipeline ON as fallback
-  useLiveKit: false, // OFF until dev client is rebuilt with native WebRTC modules
+  useStreamingVoice: false, // OFF — WebSocket streaming unreliable, use REST pipeline
+  useLiveKit: true, // ON — LiveKit full-duplex WebRTC (needs EAS dev client build)
 
   setVoiceOutput: (value) => {
     set({ voiceOutput: value });
@@ -82,12 +82,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         await AsyncStorage.setItem('settings_v2_migrated', 'true');
       }
 
-      // Force LiveKit OFF until a new dev client build includes native WebRTC
-      // The build from March 4 (8e39a1be) predates LiveKit packages
-      const lkMigrated2 = await AsyncStorage.getItem('settings_lk_v2_off');
-      if (!lkMigrated2) {
-        await AsyncStorage.setItem('use_livekit', 'false');
-        await AsyncStorage.setItem('settings_lk_v2_off', 'true');
+      // Force LiveKit ON — EAS dev client now includes native WebRTC
+      const lkMigrated3 = await AsyncStorage.getItem('settings_lk_v3_on');
+      if (!lkMigrated3) {
+        await AsyncStorage.setItem('use_livekit', 'true');
+        await AsyncStorage.setItem('settings_lk_v3_on', 'true');
+      }
+
+      // Force streaming OFF — WebSocket pipeline is unreliable, use REST
+      const streamMigrated = await AsyncStorage.getItem('settings_stream_v1_off');
+      if (!streamMigrated) {
+        await AsyncStorage.setItem('use_streaming_voice', 'false');
+        await AsyncStorage.setItem('settings_stream_v1_off', 'true');
       }
 
       const voiceOutput = await AsyncStorage.getItem('voice_output');
@@ -107,8 +113,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',
-        useStreamingVoice: true,
-        useLiveKit: useLiveKit === 'true', // Only ON if explicitly set (after new build)
+        useStreamingVoice: false, // REST pipeline — streaming disabled until debugged
+        useLiveKit: useLiveKit !== 'false', // ON by default — LiveKit is the primary voice pipeline
       });
     } catch (error) {
       console.error('Error loading settings:', error);
