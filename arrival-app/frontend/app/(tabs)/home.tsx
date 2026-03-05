@@ -26,7 +26,15 @@ import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIn
 import JobModeView, { JobAIState } from '../../components/JobModeView';
 import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
-import LiveKitVoiceRoom, { type AgentVoiceState } from '../../components/LiveKitVoiceRoom';
+// LiveKit requires native WebRTC — lazy-load so Expo Go doesn't crash
+let LiveKitVoiceRoom: React.ComponentType<any> | null = null;
+try {
+  LiveKitVoiceRoom = require('../../components/LiveKitVoiceRoom').default;
+} catch (e) {
+  console.warn('[Home] LiveKit native module not available (Expo Go?) — falling back to REST voice');
+}
+// AgentVoiceState type defined inline to avoid importing the native module
+type AgentVoiceState = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 import FrameBatcher from '../../services/frameBatcher';
 
 // Collision-safe ID generator
@@ -599,7 +607,7 @@ export default function HomeScreen() {
     const livekit = useSettingsStore.getState().useLiveKit;
     const isStreaming = useSettingsStore.getState().useStreamingVoice;
 
-    if (livekit) {
+    if (livekit && LiveKitVoiceRoom) {
       // --- LIVEKIT PIPELINE (WebRTC full-duplex) ---
       // Voice is handled by LiveKitVoiceRoom component (rendered in JSX).
       // Here we only set up frame analysis (same REST-based camera pipeline).
@@ -1101,7 +1109,7 @@ export default function HomeScreen() {
           {interactionMode === 'job' && (
             <View style={styles.modeContainer}>
               {/* LiveKit full-duplex voice — handles all audio via WebRTC */}
-              {livekitActive && (
+              {livekitActive && LiveKitVoiceRoom && (
                 <LiveKitVoiceRoom
                   mode="job"
                   active={livekitActive}
@@ -1117,7 +1125,7 @@ export default function HomeScreen() {
                     };
                     setJobAIState(stateMap[state] || 'monitoring');
                   }}
-                  onError={(msg) => {
+                  onError={(msg: string) => {
                     console.error('[LiveKit] Error:', msg);
                     // Fallback to streaming pipeline on error
                     useSettingsStore.getState().setUseLiveKit(false);
