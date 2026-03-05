@@ -1,14 +1,20 @@
 /**
  * StreamingJobModeController — Job mode using the WebSocket streaming pipeline.
  *
- * Replaces the old JobModeController for streaming mode:
- * - Uses StreamingVoiceClient instead of REST API + client-side VAD
- * - Server-side VAD (Deepgram endpointing) replaces voiceActivityDetector.ts
+ * This is the hands-free controller for trade workers:
+ * - Server-side VAD (Deepgram endpointing) — works in noisy environments
  * - Audio streams in real-time instead of record-all-then-send
- * - TTS audio streams back incrementally instead of waiting for full response
+ * - TTS audio streams back incrementally
+ * - Voice interrupt via metering: if user speaks loudly while AI is talking,
+ *   the response is cancelled. No buttons to tap.
+ *
+ * Audio routing on iOS:
+ * - Recording active = audio plays through earpiece (iOS limitation)
+ * - We keep recording active at all times for voice interrupt
+ * - For loudspeaker playback, we'd need to pause the mic (no voice interrupt)
+ * - Trade-off: earpiece audio + voice interrupt > speaker audio + no interrupt
  *
  * FrameBatcher stays unchanged — frame analysis is a separate pipeline.
- * Interrupt sends a WebSocket signal instead of just stopping playback.
  */
 
 import FrameBatcher, { FrameBatcherConfig } from './frameBatcher';
@@ -17,6 +23,14 @@ import StreamingAudioPlayer from './streamingAudioPlayer';
 import StreamingAudioRecorder from './streamingAudioRecorder';
 
 export type StreamingJobAIState = 'connecting' | 'monitoring' | 'listening' | 'processing' | 'speaking' | 'error';
+
+/** Metering threshold for voice interrupt (dB).
+ * While AI is speaking, if mic picks up audio louder than this, trigger interrupt.
+ * Must be high enough that earpiece echo doesn't trigger it (-12 dB is loud/close speech). */
+const INTERRUPT_METERING_THRESHOLD = -15;
+
+/** Minimum consecutive loud samples before triggering interrupt (prevents blips). */
+const INTERRUPT_MIN_SAMPLES = 2;
 
 export interface StreamingJobModeCallbacks {
   /** Frame analysis alert — spoken to user */
@@ -49,6 +63,7 @@ export default class StreamingJobModeController {
   private conversationHistory: Array<{ role: string; content: string }> = [];
   private currentResponseText = '';
   private _interrupted = false;
+  private interruptLoudSamples = 0;
 
   constructor(
     callbacks: StreamingJobModeCallbacks,
@@ -79,7 +94,6 @@ export default class StreamingJobModeController {
       onAudioEnd: () => {
         // All audio for this turn received — tell player to finish
         this.player.finish(() => {
-          // Playback complete — resume recording
           this.onTurnDone();
         });
       },
@@ -111,13 +125,27 @@ export default class StreamingJobModeController {
     this.player = new StreamingAudioPlayer();
 
     // --- StreamingAudioRecorder ---
+    // Recorder stays active at all times — audio streams to server continuously.
+    // During AI speaking, metering is used for voice interrupt detection.
     this.recorder = new StreamingAudioRecorder({
       onAudioChunk: (base64Data) => {
-        // Send base64 audio directly as JSON — more reliable than binary frames in React Native
         this.client.sendAudio(base64Data);
       },
-      onMetering: (_dB) => {
-        // Could use this for UI visualization
+      onMetering: (dB) => {
+        // Voice interrupt: if loud speech detected while AI is speaking, interrupt
+        if (this._state === 'speaking' && !this._interrupted) {
+          if (dB > INTERRUPT_METERING_THRESHOLD) {
+            this.interruptLoudSamples++;
+            if (this.interruptLoudSamples >= INTERRUPT_MIN_SAMPLES) {
+              console.log(`[StreamingJobMode] Voice interrupt triggered (${dB.toFixed(1)} dB)`);
+              this.interrupt();
+            }
+          } else {
+            this.interruptLoudSamples = 0;
+          }
+        } else {
+          this.interruptLoudSamples = 0;
+        }
       },
       onError: (error) => {
         console.error('[StreamingJobMode] Recorder error:', error);
@@ -161,11 +189,11 @@ export default class StreamingJobModeController {
 
       // Send initial config
       this.client.sendConfig({
-        conversation_history: this.conversationHistory.slice(-6), // Last 3 exchanges
+        conversation_history: this.conversationHistory.slice(-6),
         image_base64: imageBase64,
       });
 
-      // Start recording audio chunks
+      // Start recording audio chunks — stays on for the entire session
       await this.recorder.start();
       this.isRecording = true;
 
@@ -192,12 +220,15 @@ export default class StreamingJobModeController {
     this.isRecording = false;
     this._interrupted = false;
     this.currentResponseText = '';
+    this.interruptLoudSamples = 0;
   }
 
   /**
-   * Interrupt — user tapped while AI is speaking/processing.
+   * Interrupt — cancel current AI response.
+   * Called by voice interrupt (metering) or could be called from UI.
    */
   async interrupt(): Promise<void> {
+    if (this._interrupted) return; // Already interrupted
     this._interrupted = true;
 
     // Stop audio playback immediately
@@ -207,13 +238,8 @@ export default class StreamingJobModeController {
     // Tell server to cancel in-flight generation
     this.client.interrupt();
 
-    // Resume recording immediately so user can speak
     this.currentResponseText = '';
-    if (!this.isRecording) {
-      await this.recorder.resume();
-      this.isRecording = true;
-    }
-
+    this.interruptLoudSamples = 0;
     this.setState('monitoring');
     this.callbacks.onInterrupt?.();
   }
@@ -228,10 +254,8 @@ export default class StreamingJobModeController {
   /**
    * Handle a frame analysis alert (from FrameBatcher → analyzeFrame API).
    * Still uses the REST API for frame analysis (separate pipeline).
-   * TTS for alerts also uses REST (short one-off utterances).
    */
   async handleFrameAlert(message: string, severity: string): Promise<void> {
-    // Delegate to callback — home.tsx handles TTS for alerts via REST
     await this.callbacks.onAlert(message, severity);
   }
 
@@ -250,20 +274,16 @@ export default class StreamingJobModeController {
       case 'processing':
         this.setState('processing');
         this.currentResponseText = '';
-        // Pause recording while processing/speaking
-        if (this.isRecording) {
-          this.recorder.pause();
-          this.isRecording = false;
-        }
+        // NOTE: We do NOT pause the recorder here.
+        // It keeps streaming audio for voice interrupt detection.
+        // Audio plays through earpiece (iOS constraint with active recording).
         break;
       case 'speaking':
         this.setState('speaking');
+        this.interruptLoudSamples = 0;
         break;
       case 'ready':
-        // Server is ready for next turn
-        if (!this.isRecording) {
-          this.recorder.resume().then(() => { this.isRecording = true; });
-        }
+        // Server is ready for next turn — recorder is already running
         this.setState('monitoring');
         break;
       case 'error':
@@ -285,13 +305,7 @@ export default class StreamingJobModeController {
 
     this.player.reset();
     this.currentResponseText = '';
-
-    // Resume recording for next turn
-    if (!this.isRecording) {
-      await this.recorder.resume();
-      this.isRecording = true;
-    }
-
+    this.interruptLoudSamples = 0;
     this.setState('monitoring');
     this.callbacks.onTurnComplete?.();
   }

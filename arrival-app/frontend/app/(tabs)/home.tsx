@@ -696,7 +696,10 @@ export default function HomeScreen() {
             try {
               const currentDemoMode = useSettingsStore.getState().demoMode;
               const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
-              if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
+              if (ttsResp.audio_base64) {
+                setJobAIState('speaking');
+                await playAudio(ttsResp.audio_base64);
+              }
             } catch (e) {
               console.log('Job Mode TTS error:', e);
             }
@@ -715,6 +718,7 @@ export default function HomeScreen() {
 
               if (jobControllerRef.current?.wasInterrupted) return;
               if (result.audio_base64) {
+                setJobAIState('speaking');
                 await playAudio(result.audio_base64);
               }
             } catch (e: any) {
@@ -730,7 +734,7 @@ export default function HomeScreen() {
           onInterrupt: () => { stopAudio(); },
         },
         { minInterval: 3000, maxInterval: 10000, changeThreshold: 0.10, captureInterval: 3000 },
-        { speechThreshold: -30, silenceThreshold: -50, speechMinDuration: 300, silenceMaxDuration: 1200, meteringInterval: 100 },
+        { speechThreshold: -25, silenceThreshold: -50, speechMinDuration: 250, silenceMaxDuration: 800, maxSpeechDuration: 10000, meteringInterval: 100 },
       );
 
       controller.frameBatcher['config'].onAnalyze = async (frame: string) => {

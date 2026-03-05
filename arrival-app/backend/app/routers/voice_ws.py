@@ -107,10 +107,13 @@ class VoiceSession:
         except Exception:
             pass  # Client may have disconnected
 
-    async def send_bytes(self, data: bytes) -> None:
-        """Send binary data (audio) to the client."""
+    async def send_audio_chunk(self, mp3_bytes: bytes) -> None:
+        """Send MP3 audio as base64 JSON (React Native can't reliably receive binary frames)."""
         try:
-            await self.ws.send_bytes(data)
+            await self.ws.send_json({
+                "type": "audio_chunk",
+                "data": base64.b64encode(mp3_bytes).decode("ascii"),
+            })
         except Exception:
             pass
 
@@ -425,7 +428,7 @@ async def _handle_utterance(session: VoiceSession, transcript: str, gen: int) ->
             if not audio_sent:
                 await session.send_json({"type": "state", "state": "speaking"})
                 audio_sent = True
-            await session.send_bytes(mp3_bytes)
+            await session.send_audio_chunk(mp3_bytes)
 
         async def on_tts_done():
             if session.generation == gen:

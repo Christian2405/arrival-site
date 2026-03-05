@@ -24,13 +24,13 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   voiceOutput: true,
-  demoMode: false, // Real API keys are configured — use live mode
+  demoMode: false,
   jobMode: false,
   interactionMode: 'default',
   voiceSpeed: 'normal',
   units: 'imperial',
   textSize: 'medium',
-  useStreamingVoice: false, // Default OFF — streaming pipeline needs debugging, use REST
+  useStreamingVoice: true, // Streaming pipeline ON by default for job mode
 
   setVoiceOutput: (value) => {
     set({ voiceOutput: value });
@@ -75,8 +75,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         await AsyncStorage.setItem('settings_v2_migrated', 'true');
       }
 
-      // Force streaming voice OFF — needs more debugging before enabling
-      await AsyncStorage.setItem('use_streaming_voice', 'false');
+      // Force streaming ON — override any cached 'false' from previous debugging
+      await AsyncStorage.setItem('use_streaming_voice', 'true');
 
       const voiceOutput = await AsyncStorage.getItem('voice_output');
       const demoMode = await AsyncStorage.getItem('demo_mode');
@@ -85,17 +85,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const voiceSpeed = await AsyncStorage.getItem('voice_speed');
       const units = await AsyncStorage.getItem('units');
       const textSize = await AsyncStorage.getItem('text_size');
-      const useStreamingVoice = await AsyncStorage.getItem('use_streaming_voice');
 
       set({
         voiceOutput: voiceOutput !== 'false',
-        demoMode: demoMode === 'true', // Only enable if explicitly set
+        demoMode: demoMode === 'true',
         jobMode: jobMode === 'true',
         interactionMode: (['default', 'text', 'job'].includes(interactionMode || '') ? interactionMode : 'default') as 'default' | 'text' | 'job',
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',
-        useStreamingVoice: useStreamingVoice === 'true', // Default false — opt-in until streaming is stable
+        useStreamingVoice: true, // Always true — streaming is the production path
       });
     } catch (error) {
       console.error('Error loading settings:', error);

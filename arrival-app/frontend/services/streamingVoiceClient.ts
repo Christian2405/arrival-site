@@ -2,6 +2,9 @@
  * StreamingVoiceClient — WebSocket client for the streaming voice pipeline.
  * Manages connection lifecycle, sends audio chunks, receives events.
  * Replaces REST-based voiceChat() calls for streaming mode.
+ *
+ * ALL data is JSON — no binary WebSocket frames in either direction.
+ * React Native's binary WebSocket support is unreliable, so audio is base64-encoded.
  */
 
 import { supabase } from './supabase';
@@ -11,6 +14,16 @@ const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 // Convert http(s) to ws(s)
 function getWsUrl(): string {
   return BASE_URL.replace(/^http/, 'ws');
+}
+
+/** Decode a base64 string to ArrayBuffer. */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 export type StreamingState = 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking' | 'disconnected' | 'error';
@@ -89,11 +102,11 @@ export default class StreamingVoiceClient {
     }
 
     const wsUrl = `${getWsUrl()}/ws/voice-session?token=${encodeURIComponent(token)}&mode=${this.mode}`;
+    console.log('[StreamingVoice] Connecting to:', wsUrl.replace(/token=[^&]+/, 'token=***'));
 
     return new Promise<void>((resolve, reject) => {
       try {
         this.ws = new WebSocket(wsUrl);
-        this.ws.binaryType = 'arraybuffer';
 
         const connectTimeout = setTimeout(() => {
           if (this.ws?.readyState !== WebSocket.OPEN) {
@@ -132,7 +145,6 @@ export default class StreamingVoiceClient {
           this.ws = null;
 
           if (wasConnected && event.code !== 1000) {
-            // Abnormal close — try reconnecting
             this.callbacks.onClose?.(`Connection lost: ${event.reason || 'unknown'}`);
           } else {
             this.callbacks.onClose?.(event.reason || 'closed');
@@ -163,7 +175,6 @@ export default class StreamingVoiceClient {
   /**
    * Send audio data to the server as base64 JSON (forwarded to Deepgram).
    * Uses JSON instead of binary frames for React Native WebSocket compatibility.
-   * Call this with base64-encoded WAV chunks from the recorder.
    */
   sendAudio(base64Data: string): void {
     this.sendJSON({ type: 'audio', data: base64Data });
@@ -210,13 +221,7 @@ export default class StreamingVoiceClient {
   }
 
   private handleMessage(event: MessageEvent): void {
-    // Binary frame = MP3 audio chunk
-    if (event.data instanceof ArrayBuffer) {
-      this.callbacks.onAudioChunk?.(event.data);
-      return;
-    }
-
-    // Text frame = JSON event
+    // All messages are JSON (no binary frames — React Native can't handle them reliably)
     try {
       const msg = JSON.parse(event.data as string);
       const type = msg.type || '';
@@ -232,6 +237,14 @@ export default class StreamingVoiceClient {
 
         case 'response_text':
           this.callbacks.onResponseText?.(msg.text || '', !!msg.done);
+          break;
+
+        case 'audio_chunk':
+          // MP3 audio as base64 — decode to ArrayBuffer for the audio player
+          if (msg.data) {
+            const buffer = base64ToArrayBuffer(msg.data);
+            this.callbacks.onAudioChunk?.(buffer);
+          }
           break;
 
         case 'audio_end':
@@ -254,15 +267,14 @@ export default class StreamingVoiceClient {
           break;
 
         default:
-          console.log('[StreamingVoice] Unknown message type:', type);
+          console.log('[StreamingVoice] Unknown message type:', type, Object.keys(msg));
       }
     } catch (e) {
-      console.warn('[StreamingVoice] Failed to parse message:', e);
+      console.warn('[StreamingVoice] Failed to parse message:', e, typeof event.data);
     }
   }
 
   private startPing(): void {
-    // Send a heartbeat every 30s to keep the connection alive
     this.pingInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.sendJSON({ type: 'ping' });
