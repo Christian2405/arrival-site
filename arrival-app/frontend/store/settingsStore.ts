@@ -30,7 +30,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   voiceSpeed: 'normal',
   units: 'imperial',
   textSize: 'medium',
-  useStreamingVoice: true, // Default ON — new streaming pipeline
+  useStreamingVoice: false, // Default OFF — streaming pipeline needs debugging, use REST
 
   setVoiceOutput: (value) => {
     set({ voiceOutput: value });
@@ -92,7 +92,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         voiceSpeed: (voiceSpeed as any) || 'normal',
         units: (units as any) || 'imperial',
         textSize: (textSize as any) || 'medium',
-        useStreamingVoice: useStreamingVoice !== 'false', // Default true
+        useStreamingVoice: useStreamingVoice === 'true', // Default false — opt-in until streaming is stable
       });
     } catch (error) {
       console.error('Error loading settings:', error);
