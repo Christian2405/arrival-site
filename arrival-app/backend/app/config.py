@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 # Load .env from the backend root (one level up from /app)
 _env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(_env_path, override=False)
+load_dotenv(_env_path, override=True)
 
 
 # --- Server ---
@@ -18,8 +18,8 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # --- Anthropic (Claude) ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-3-5-20241022")  # Haiku for speed everywhere
-ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-3-5-20241022")  # Haiku for real-time voice
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")  # Haiku 4.5 for speed
+ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-4-5-20251001")  # Haiku 4.5 for real-time voice
 
 # --- Deepgram (Speech-to-Text) ---
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
