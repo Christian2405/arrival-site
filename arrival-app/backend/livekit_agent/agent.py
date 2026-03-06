@@ -67,14 +67,18 @@ except ImportError:
         MultilingualModel = None
         print("[arrival-agent] WARNING: MultilingualModel not available")
 
-import urllib.request
+import httpx
 
 from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.services.frame_store import get_frame, get_frame_age
 
-# FastAPI port — agent fetches frames via HTTP from the FastAPI process
+# URLs for fetching frames from FastAPI (agent runs in a separate process)
 _FASTAPI_PORT = os.environ.get("PORT", "8000")
+_FRAME_URLS = [
+    f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-frame/{{room}}",  # localhost first
+    "https://arrival-backend-81x7.onrender.com/api/livekit-frame/{room}",  # public fallback
+]
 
 logger = logging.getLogger(__name__)
 
@@ -208,22 +212,23 @@ class ArrivalAgent(Agent):
         return self._latest_frame
 
     def _fetch_frame_http(self, room_name: str) -> Optional[str]:
-        """Fetch latest camera frame from FastAPI via HTTP localhost.
-        This works across process boundaries — no shared memory needed."""
-        url = f"http://localhost:{_FASTAPI_PORT}/api/livekit-frame/{room_name}"
-        try:
-            req = urllib.request.Request(url, method="GET")
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read())
-                    return data.get("frame")
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                logger.debug(f"[arrival-agent] No frame via HTTP (404) for room={room_name}")
-            else:
-                logger.warning(f"[arrival-agent] HTTP frame fetch error: {e.code} {e.reason}")
-        except Exception as e:
-            logger.warning(f"[arrival-agent] HTTP frame fetch failed: {type(e).__name__}: {e}")
+        """Fetch latest camera frame from FastAPI via HTTP.
+        Tries localhost first (fast), then public URL (guaranteed to work)."""
+        for url_template in _FRAME_URLS:
+            url = url_template.format(room=room_name)
+            try:
+                resp = httpx.get(url, timeout=5.0)
+                if resp.status_code == 200:
+                    frame = resp.json().get("frame")
+                    if frame:
+                        logger.info(f"[arrival-agent] ✓ Got frame via HTTP ({len(frame)} chars) from {url[:50]}")
+                        return frame
+                elif resp.status_code == 404:
+                    logger.debug(f"[arrival-agent] No frame (404) at {url[:50]}")
+                else:
+                    logger.warning(f"[arrival-agent] Frame fetch {resp.status_code} from {url[:50]}")
+            except Exception as e:
+                logger.warning(f"[arrival-agent] Frame fetch failed ({url[:50]}): {type(e).__name__}: {e}")
         return None
 
     def _frame_hash(self, frame: str) -> str:
@@ -261,9 +266,27 @@ class ArrivalAgent(Agent):
         """Look at what the user's phone camera sees. Use this when they ask you to
         look at something, identify something, check something, read a model number,
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
+        logger.info(f"[arrival-agent] look_at_camera called — room={self._room_name}, question={question[:60]}")
         frame = self.get_current_frame()
         if not frame:
-            logger.warning("[arrival-agent] look_at_camera called but no frame available (data channel + HTTP both empty)")
+            # Log detailed diagnostics
+            logger.error(
+                f"[arrival-agent] ✗ VISION FAILED — no frame from any source. "
+                f"room_name={self._room_name!r}, port={_FASTAPI_PORT}, "
+                f"data_channel_frame={'yes' if self._latest_frame else 'no'}"
+            )
+            # Quick inline test — can we reach FastAPI at all?
+            try:
+                test_resp = httpx.get(f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-status", timeout=2.0)
+                logger.error(f"[arrival-agent] Localhost reachable: {test_resp.status_code}")
+            except Exception as e:
+                logger.error(f"[arrival-agent] Localhost NOT reachable: {e}")
+            try:
+                test_resp2 = httpx.get("https://arrival-backend-81x7.onrender.com/api/livekit-status", timeout=5.0)
+                logger.error(f"[arrival-agent] Public URL reachable: {test_resp2.status_code}")
+            except Exception as e2:
+                logger.error(f"[arrival-agent] Public URL NOT reachable: {e2}")
+
             return ("I can't see anything right now — I'm not getting a camera feed. "
                     "Make sure the camera is on and pointed at what you want me to see.")
 
