@@ -23,11 +23,18 @@ import {
   useRoomContext,
   registerGlobals,
 } from '@livekit/react-native';
-import { ConnectionState, RoomEvent, DataPacket_Kind } from 'livekit-client';
+import { ConnectionState, RoomEvent } from 'livekit-client';
 import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
 
 // Register LiveKit globals — must be called once before any LK usage
 registerGlobals();
+
+/** Convert a string to Uint8Array (ASCII-safe, no TextEncoder needed) */
+function strToBytes(str: string): Uint8Array {
+  const buf = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) buf[i] = str.charCodeAt(i) & 0xff;
+  return buf;
+}
 
 export type AgentVoiceState = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
@@ -274,8 +281,7 @@ function RoomContent({
       try {
         const frame = await captureFrame();
         if (frame && room.localParticipant) {
-          const encoder = new TextEncoder();
-          const data = encoder.encode(JSON.stringify({ type: 'camera_frame', image: frame }));
+          const data = strToBytes(JSON.stringify({ type: 'camera_frame', image: frame }));
           await room.localParticipant.publishData(data, { reliable: true });
         }
       } catch (e) {
