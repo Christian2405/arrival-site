@@ -160,36 +160,8 @@ async def create_livekit_token(req: TokenRequest, request: Request):
 
     logger.info(f"[livekit-token] Generated token for user={short_id} room={room_name} mode={req.mode}")
 
-    # Pre-create the room and try explicit agent dispatch
-    # This ensures the room exists before the client joins, and explicitly
-    # dispatches the agent worker (in case auto-dispatch isn't working)
-    try:
-        lk = api.LiveKitAPI(
-            config.LIVEKIT_URL,
-            api_key=config.LIVEKIT_API_KEY,
-            api_secret=config.LIVEKIT_API_SECRET,
-        )
-        # Create the room before the client joins
-        await lk.room.create_room(api.CreateRoomRequest(
-            name=room_name,
-            empty_timeout=300,  # 5 min empty timeout
-            max_participants=3,  # user + agent + buffer
-        ))
-        logger.info(f"[livekit-token] ✓ Pre-created room: {room_name}")
-
-        # Try explicit agent dispatch (belt + suspenders with auto-dispatch)
-        try:
-            await lk.agent_dispatch.create_dispatch(
-                api.CreateAgentDispatchRequest(room=room_name)
-            )
-            logger.info(f"[livekit-token] ✓ Explicit agent dispatch: {room_name}")
-        except Exception as de:
-            logger.info(f"[livekit-token] Agent dispatch API: {de} (auto-dispatch expected)")
-
-        await lk.aclose()
-    except Exception as e:
-        # Room pre-creation is optional — don't block token generation
-        logger.warning(f"[livekit-token] Room pre-creation (non-fatal): {e}")
+    # NOTE: Do NOT explicitly dispatch agents here — LiveKit auto-dispatch
+    # handles it. Explicit dispatch + auto-dispatch = duplicate agents.
 
     return TokenResponse(
         token=token,
