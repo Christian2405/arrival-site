@@ -24,6 +24,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add backend root to path so we can import from app.services
 _backend_root = os.path.join(os.path.dirname(__file__), "..")
@@ -99,6 +100,8 @@ JOB_MODE_PROMPT = (
     "IMMEDIATELY back off. Say 'My bad' or 'Alright, scratch that'. NEVER double down. NEVER insist.\n"
     "- NEVER make something up. If you're not sure, say so. A wrong answer wastes the tech's time.\n"
     "- No filler: no 'Great question', no 'Let me know if you need anything'.\n"
+    "- If they ask you to LOOK at something, identify something, check something visual, or read a model number, "
+    "use the look_at_camera tool. Their phone camera is pointed at the job.\n"
     "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
     "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
@@ -134,7 +137,15 @@ DEFAULT_MODE_PROMPT = (
 # ---------------------------------------------------------------------------
 
 class ArrivalAgent(Agent):
-    """Trade worker voice agent with error code lookup."""
+    """Trade worker voice agent with error code lookup and camera vision."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._latest_frame: Optional[str] = None  # base64 JPEG from phone camera
+
+    def update_camera_frame(self, frame_b64: str):
+        """Store the latest camera frame from the mobile app."""
+        self._latest_frame = frame_b64
 
     @function_tool()
     async def lookup_error_code(self, query: str) -> str:
@@ -150,6 +161,51 @@ class ArrivalAgent(Agent):
         return ("No verified error code found for that query. "
                 "Tell the tech you don't have that code memorized and "
                 "ask what the chart on the unit shows.")
+
+    @function_tool()
+    async def look_at_camera(self, question: str) -> str:
+        """Look at what the user's phone camera sees. Use this when they ask you to
+        look at something, identify something, check something, read a model number,
+        or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
+        if not self._latest_frame:
+            return ("I can't see anything right now — the camera feed isn't available. "
+                    "Ask the tech to make sure the camera is pointed at what they want you to see.")
+
+        logger.info("[arrival-agent] Looking at camera frame...")
+        try:
+            import anthropic as anthropic_sdk
+            client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+            response = await client.messages.create(
+                model=config.ANTHROPIC_VOICE_MODEL,
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": self._latest_frame,
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "You're a 50-year trade veteran looking at this through a tech's phone camera. "
+                                f"{question}. Be specific and practical, 1-3 sentences. "
+                                "If you can read any model numbers, brands, or error codes, mention them."
+                            ),
+                        },
+                    ],
+                }],
+            )
+            result_text = response.content[0].text
+            logger.info(f"[arrival-agent] Camera analysis: {result_text[:80]}...")
+            return result_text
+        except Exception as e:
+            logger.error(f"[arrival-agent] Camera analysis failed: {e}")
+            return "I tried to look but something went wrong with the camera. Ask them to describe what they see."
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +306,20 @@ async def entrypoint(ctx: JobContext):
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")
 
+        # Listen for camera frames from the mobile app via data channel
+        @ctx.room.on("data_received")
+        def on_data(data: bytes, participant, kind, topic):
+            try:
+                payload = json.loads(data.decode("utf-8"))
+                if payload.get("type") == "camera_frame" and payload.get("image"):
+                    agent.update_camera_frame(payload["image"])
+                    logger.debug("[arrival-agent] 📷 Camera frame received")
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass  # Not a camera frame — ignore
+
+        logger.info("[arrival-agent] ✓ Camera data channel listener registered")
+
         # Greet to confirm the full pipeline works (STT→LLM→TTS→audio)
-        # This proves: agent connected, Claude works, ElevenLabs works, audio plays
         await session.generate_reply(
             instructions="Say exactly: 'Hey, I'm here.' Nothing else."
         )

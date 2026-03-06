@@ -26,8 +26,8 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 
 # --- ElevenLabs (Text-to-Speech) ---
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "NOpBlnGInO9m6vDvFkFC")
-ELEVENLABS_JOB_VOICE_ID = os.getenv("ELEVENLABS_JOB_VOICE_ID", "NOpBlnGInO9m6vDvFkFC")
+ELEVENLABS_VOICE_ID = "NOpBlnGInO9m6vDvFkFC"  # Hardcoded — don't let Render env vars override
+ELEVENLABS_JOB_VOICE_ID = "NOpBlnGInO9m6vDvFkFC"  # Same voice for all modes
 
 # --- Supabase ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

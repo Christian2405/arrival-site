@@ -1118,6 +1118,7 @@ export default function HomeScreen() {
                 <LiveKitVoiceRoom
                   mode="job"
                   active={livekitActive}
+                  captureFrame={captureFrame}
                   onStateChange={(state: AgentVoiceState) => {
                     // Map LiveKit agent states to JobAIState for the UI
                     const stateMap: Record<AgentVoiceState, JobAIState> = {

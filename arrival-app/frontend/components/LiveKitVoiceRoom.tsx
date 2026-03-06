@@ -20,6 +20,7 @@ import {
   AudioSession,
   useConnectionState,
   useParticipants,
+  useRoomContext,
   registerGlobals,
 } from '@livekit/react-native';
 import { ConnectionState, RoomEvent, DataPacket_Kind } from 'livekit-client';
@@ -35,6 +36,8 @@ interface LiveKitVoiceRoomProps {
   mode: 'default' | 'job';
   /** Whether the room should be active */
   active: boolean;
+  /** Camera capture function — returns base64 JPEG */
+  captureFrame?: () => Promise<string | undefined>;
   /** Callback with agent state changes */
   onStateChange?: (state: AgentVoiceState) => void;
   /** Callback when agent speaks (for transcript display) */
@@ -51,6 +54,7 @@ const RETRY_DELAY_MS = 2000;
 export default function LiveKitVoiceRoom({
   mode,
   active,
+  captureFrame,
   onStateChange,
   onAgentTranscript,
   onUserTranscript,
@@ -99,8 +103,19 @@ export default function LiveKitVoiceRoom({
       if (cancelled) return;
 
       try {
-        // Start iOS audio session if not already started
+        // Start iOS audio session with voiceChat mode for echo cancellation
         if (!audioSessionStarted.current) {
+          await AudioSession.configureAudio({
+            android: {
+              audioTypeOptions: {
+                audioMode: 'voiceCommunication',
+              },
+            },
+            ios: {
+              audioMode: 'voiceChat',
+              defaultOutput: 'speaker',
+            },
+          });
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;
         }
@@ -203,6 +218,11 @@ export default function LiveKitVoiceRoom({
       video={false}
       options={{
         adaptiveStream: false,
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       }}
     >
       <RoomContent
@@ -211,6 +231,7 @@ export default function LiveKitVoiceRoom({
         onUserTranscript={onUserTranscript}
         onRetry={retry}
         unmountedRef={unmounted}
+        captureFrame={captureFrame}
       />
     </LiveKitRoom>
   );
@@ -227,18 +248,50 @@ function RoomContent({
   onUserTranscript,
   onRetry,
   unmountedRef,
+  captureFrame,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onAgentTranscript?: (text: string, isFinal: boolean) => void;
   onUserTranscript?: (text: string, isFinal: boolean) => void;
   onRetry: () => void;
   unmountedRef: React.MutableRefObject<boolean>;
+  captureFrame?: () => Promise<string | undefined>;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
+  const room = useRoomContext();
   const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
   const [roomError, setRoomError] = useState<string | null>(null);
+
+  // Send camera frames to agent via data channel (every 5s when connected)
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected || !captureFrame || !room) return;
+
+    let active = true;
+    const sendFrame = async () => {
+      if (!active) return;
+      try {
+        const frame = await captureFrame();
+        if (frame && room.localParticipant) {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(JSON.stringify({ type: 'camera_frame', image: frame }));
+          await room.localParticipant.publishData(data, { reliable: true });
+        }
+      } catch (e) {
+        // Silent fail — frame sending is best-effort
+      }
+    };
+
+    // Send initial frame immediately, then every 5 seconds
+    sendFrame();
+    const interval = setInterval(sendFrame, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [connectionState, captureFrame, room]);
 
   // Map connection state to agent state
   useEffect(() => {
