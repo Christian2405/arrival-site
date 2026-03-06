@@ -71,8 +71,8 @@ function RootLayout() {
   // Show loading spinner while checking auth
   if (!isInitialized) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator size="large" color={Colors.accent} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1C1C1E' }}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );
   }

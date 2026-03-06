@@ -401,19 +401,82 @@ class ArrivalAgent(Agent):
 # Proactive Vision — background analysis loop
 # ---------------------------------------------------------------------------
 
+async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str]) -> Optional[str]:
+    """Analyze a frame directly with Claude Vision for proactive monitoring.
+    Returns a short observation string or None if nothing notable."""
+    import anthropic as anthropic_sdk
+
+    client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+
+    # Build context from recent observations to avoid repeats
+    context = ""
+    if recent_observations:
+        context = f"\nYou already mentioned: {'; '.join(recent_observations[-3:])}. Don't repeat these."
+
+    response = await client.messages.create(
+        model=config.ANTHROPIC_VOICE_MODEL,
+        max_tokens=100,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        "You're a 50-year trade veteran watching a job site through a phone camera. "
+                        "Is there anything worth speaking up about RIGHT NOW?\n\n"
+                        "SPEAK UP about: safety hazards (exposed wires, flame, water near electrical, gas), "
+                        "visible problems (wrong fitting, corroded connections, code violations), "
+                        "readable model/serial numbers the tech might need.\n\n"
+                        "STAY QUIET about: normal equipment, tools, general scene, things that look fine, "
+                        "blurry or unclear frames.\n\n"
+                        f"{context}\n\n"
+                        "If something is worth mentioning, respond with ONE short sentence a veteran would say. "
+                        "If nothing notable, respond with exactly: NOTHING"
+                    ),
+                },
+            ],
+        }],
+    )
+    result = response.content[0].text.strip()
+
+    # Filter out non-observations
+    if result.upper() == "NOTHING" or len(result) < 5:
+        return None
+    if "nothing" in result.lower() and len(result) < 30:
+        return None
+    if "don't see" in result.lower() or "can't see" in result.lower():
+        return None
+
+    return result
+
+
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
-    """Background task: periodically ask frontend to analyze camera and speak up when warranted."""
+    """Background task: reads camera frames and speaks up when something's notable.
+
+    Uses TWO frame sources (in priority order):
+    1. Data channel frame cached on agent (fastest, no I/O)
+    2. File-based frame store in /tmp (shared between agent + FastAPI processes)
+
+    Analyzes directly with Claude Vision API — no frontend roundtrip.
+    Falls back to frontend data channel if no local frames available.
+    """
     logger.info("[proactive] Monitor started — waiting for initial connection...")
 
     # Wait for greeting to finish and things to stabilize
-    await asyncio.sleep(10)
+    await asyncio.sleep(12)
+
+    last_analysis_time = 0
 
     while True:
         try:
             await asyncio.sleep(PROACTIVE_CHECK_INTERVAL)
 
-            # Skip if proactive disabled
-            if not agent._proactive_enabled:
+            # Skip if proactive disabled or no room
+            if not agent._proactive_enabled or not agent._room_name:
                 continue
 
             now = time.time()
@@ -423,29 +486,47 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if now - agent._last_proactive_time < cooldown:
                 continue
 
-            if not agent._room_name:
+            # --- Get frame (local first, then fallback) ---
+            frame = None
+
+            # Source 1: Data channel frame cached on agent
+            if agent._latest_frame and (now - agent._frame_received_at) < 30:
+                frame = agent._latest_frame
+                logger.debug("[proactive] Using data channel frame")
+
+            # Source 2: File-based frame store (/tmp — shared filesystem)
+            if not frame:
+                frame = get_frame(agent._room_name)
+                if frame:
+                    logger.debug("[proactive] Using frame store frame")
+
+            if not frame:
+                logger.debug("[proactive] No frame available — skipping cycle")
                 continue
 
-            # Use frontend data channel for proactive analysis (same reliable path)
-            logger.debug("[proactive] Requesting proactive analysis...")
-            proactive_question = (
-                "Is there anything worth speaking up about RIGHT NOW? "
-                "Safety hazards, visible problems, readable model/serial numbers. "
-                "If nothing notable, respond with exactly: NOTHING"
-            )
-            observation = await agent._request_vision_via_frontend(proactive_question)
+            # Frame diffing — skip if scene hasn't changed (saves API calls)
+            force_analyze = (now - last_analysis_time) > 30  # Always re-analyze every 30s
+            if not force_analyze and not agent._frame_changed(frame):
+                logger.debug("[proactive] Frame unchanged — skipping")
+                continue
 
-            # Fallback to API if frontend didn't respond
-            if not observation:
-                observation = await agent._analyze_via_api(
-                    agent._room_name, proactive_question
+            # --- Analyze frame directly with Claude Vision ---
+            logger.debug("[proactive] Analyzing frame directly...")
+            agent._last_analyzed_hash = agent._frame_hash(frame)
+            last_analysis_time = now
+
+            try:
+                observation = await _analyze_frame_proactive(frame, agent._recent_observations)
+            except Exception as e:
+                logger.warning(f"[proactive] Direct vision failed: {e} — trying frontend fallback")
+                # Fallback: ask frontend to do it
+                observation = await agent._request_vision_via_frontend(
+                    "Is there anything worth speaking up about RIGHT NOW? "
+                    "Safety hazards, visible problems, readable model/serial numbers. "
+                    "If nothing notable, respond with exactly: NOTHING"
                 )
-
-            # Filter out non-observations
-            if observation and ("NOTHING" in observation.upper() or len(observation) < 5):
-                observation = None
-            if observation and "nothing" in observation.lower() and len(observation) < 30:
-                observation = None
+                if observation and ("NOTHING" in observation.upper() or len(observation) < 5):
+                    observation = None
 
             if observation:
                 # Check for repeats

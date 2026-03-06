@@ -16,8 +16,8 @@ export const TIER_LIMITS: Record<string, TierLimits> = {
   free: {
     maxQueries: -1,   // Unlimited for launch — gate later with IAP
     maxDocs: 20,
-    jobMode: true,
-    proactiveAlerts: true,
+    jobMode: false,    // Business/Enterprise only
+    proactiveAlerts: false,
     teamDocs: false,
     voiceOutput: true,
   },

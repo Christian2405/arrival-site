@@ -1270,7 +1270,6 @@ export default function HomeScreen() {
             {([
               { icon: 'bookmark-outline' as const, label: 'Saved Answers', route: '/saved-answers' },
               { icon: 'document-text-outline' as const, label: 'Manuals', route: '/manuals' },
-              { icon: 'code-slash-outline' as const, label: 'Error Codes', route: '/codes' },
               { icon: 'calculator-outline' as const, label: 'Quick Tools', route: '/quick-tools' },
               { icon: 'time-outline' as const, label: 'History', route: '/(tabs)/history' },
               { icon: 'settings-outline' as const, label: 'Settings', route: '/(tabs)/settings' },

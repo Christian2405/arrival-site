@@ -402,6 +402,7 @@ function RoomContent({
 
   // -----------------------------------------------------------------------
   // Frame upload loop — sends camera frames to backend every 5s (for frame store)
+  // Also sends via data channel so the agent has a local cache for proactive vision
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
@@ -417,6 +418,21 @@ function RoomContent({
         const frame = await captureFrame();
         if (!frame) return;
 
+        // 1. Send to agent via data channel (local cache for proactive vision)
+        try {
+          if (room?.localParticipant) {
+            const dcMsg = JSON.stringify({ type: 'camera_frame', image: frame });
+            await room.localParticipant.publishData(
+              new TextEncoder().encode(dcMsg),
+              { reliable: false },  // unreliable = lower latency, OK to drop
+            );
+          }
+        } catch (dcErr: any) {
+          // Data channel send is best-effort — don't block HTTP upload
+          console.debug(`[LiveKitVoice] DC frame send failed: ${dcErr?.message || dcErr}`);
+        }
+
+        // 2. Upload to backend frame store via HTTP (persistent, cross-process)
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return;
@@ -447,7 +463,7 @@ function RoomContent({
       clearTimeout(initialTimeout);
       clearInterval(interval);
     };
-  }, [connectionState, captureFrame, roomName]);
+  }, [connectionState, captureFrame, roomName, room]);
 
   // -----------------------------------------------------------------------
   // Connection state tracking

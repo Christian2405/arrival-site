@@ -237,6 +237,23 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Upgrade Banner — free users only */}
+        {(!plan || plan === 'free') && (
+          <TouchableOpacity
+            style={st.upgradeBanner}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/#pricing`).catch(() => {})}
+          >
+            <View style={st.upgradeBannerInner}>
+              <View style={{ flex: 1 }}>
+                <Text style={st.upgradeBannerTitle}>Upgrade to Pro or Business</Text>
+                <Text style={st.upgradeBannerSub}>Unlock Job Mode, more queries & priority support</Text>
+              </View>
+              <Ionicons name="arrow-forward-circle" size={28} color="#FFF" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Usage */}
         {profile && (
           <View style={st.usageRow}>
@@ -497,13 +514,13 @@ const st = StyleSheet.create({
 
   // Section headers
   section: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
     letterSpacing: 0.5,
     paddingHorizontal: 20,
     marginTop: 24,
-    marginBottom: 6,
+    marginBottom: 8,
   },
 
   // Grouped rows
@@ -521,17 +538,18 @@ const st = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 16,
-    color: Colors.textDark,
+    fontWeight: '500',
+    color: Colors.text,
     letterSpacing: -0.2,
   },
   rowHint: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     marginTop: 1,
   },
   rowDetail: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
   },
   sep: {
     height: StyleSheet.hairlineWidth,
@@ -581,5 +599,32 @@ const st = StyleSheet.create({
     color: Colors.textFaint,
     textAlign: 'center',
     marginTop: 8,
+  },
+
+  // Upgrade banner
+  upgradeBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.planBusiness,
+    overflow: 'hidden',
+  },
+  upgradeBannerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  upgradeBannerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  upgradeBannerSub: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
   },
 });
