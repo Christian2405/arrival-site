@@ -202,6 +202,63 @@ async def get_frame_api(room_name: str):
     return {"frame": frame, "age": round(age, 1) if age is not None else None}
 
 
+class AnalyzeRequest(BaseModel):
+    room_name: str
+    question: str = "What do you see?"
+
+
+@router.post("/analyze-frame")
+async def analyze_frame(req: AnalyzeRequest):
+    """Analyze a camera frame using Claude Vision.
+    Called by the LiveKit agent — runs IN the FastAPI process which already
+    has the frame in memory. No cross-process frame transfer needed."""
+    import anthropic as anthropic_sdk
+
+    frame = get_frame(req.room_name)
+    if not frame:
+        age = get_frame_age(req.room_name)
+        raise HTTPException(
+            status_code=404,
+            detail=f"No frame for room {req.room_name}. age={age}"
+        )
+
+    logger.info(f"[analyze-frame] Analyzing frame for room={req.room_name} ({len(frame)} chars)")
+
+    try:
+        client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+        response = await client.messages.create(
+            model=config.ANTHROPIC_VOICE_MODEL,
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": frame,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "You're a 50-year trade veteran looking at this through a tech's phone camera. "
+                            f"{req.question}. Be specific and practical, 1-3 sentences. "
+                            "If you can read any model numbers, brands, or error codes, mention them."
+                        ),
+                    },
+                ],
+            }],
+        )
+        result_text = response.content[0].text
+        logger.info(f"[analyze-frame] Result: {result_text[:100]}...")
+        return {"analysis": result_text, "frame_size": len(frame)}
+    except Exception as e:
+        logger.error(f"[analyze-frame] Vision API failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Vision analysis failed: {e}")
+
+
 @router.get("/livekit-frame-debug/{room_name}")
 async def frame_debug(room_name: str):
     """Diagnostic: check if a frame exists in the file store for a room."""

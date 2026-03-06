@@ -265,68 +265,73 @@ class ArrivalAgent(Agent):
         look at something, identify something, check something, read a model number,
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
         logger.info(f"[arrival-agent] look_at_camera called — room={self._room_name}, question={question[:60]}")
+
+        # Call FastAPI's analyze endpoint — it has the frame in its process,
+        # does the Claude Vision call, and returns just the text analysis.
+        # This avoids transferring large base64 images across processes.
+        analysis = await self._analyze_via_api(self._room_name, question)
+        if analysis:
+            return analysis
+
+        # Fallback: try getting frame directly (data channel or file store)
         frame = await self.get_current_frame()
-        if not frame:
-            logger.error(
-                f"[arrival-agent] ✗ VISION FAILED — room={self._room_name!r}, port={_FASTAPI_PORT}"
-            )
-            # Async connectivity diagnostics
-            async with httpx.AsyncClient(timeout=3.0) as diag:
-                for label, url in [
-                    ("localhost", f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-status"),
-                    ("public", "https://arrival-backend-81x7.onrender.com/api/livekit-status"),
-                ]:
-                    try:
-                        r = await diag.get(url)
-                        logger.error(f"[arrival-agent] {label} reachable: {r.status_code}")
-                    except Exception as e:
-                        logger.error(f"[arrival-agent] {label} NOT reachable: {e}")
-                # Also try fetching frame from public URL directly
-                try:
-                    r = await diag.get(f"https://arrival-backend-81x7.onrender.com/api/livekit-frame-debug/{self._room_name}")
-                    logger.error(f"[arrival-agent] Frame debug: {r.text[:200]}")
-                except Exception as e:
-                    logger.error(f"[arrival-agent] Frame debug failed: {e}")
-
-            return ("I can't see anything right now — I'm not getting a camera feed. "
-                    "Make sure the camera is on and pointed at what you want me to see.")
-
-        logger.info(f"[arrival-agent] Looking at camera frame (size: {len(frame)} chars, room: {self._room_name})")
-
-        try:
-            import anthropic as anthropic_sdk
-            client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-            response = await client.messages.create(
-                model=config.ANTHROPIC_VOICE_MODEL,
-                max_tokens=300,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": frame,
+        if frame:
+            logger.info(f"[arrival-agent] Got frame via fallback ({len(frame)} chars), doing vision locally")
+            try:
+                import anthropic as anthropic_sdk
+                client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+                response = await client.messages.create(
+                    model=config.ANTHROPIC_VOICE_MODEL,
+                    max_tokens=300,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": "image/jpeg", "data": frame},
                             },
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "You're a 50-year trade veteran looking at this through a tech's phone camera. "
-                                f"{question}. Be specific and practical, 1-3 sentences. "
-                                "If you can read any model numbers, brands, or error codes, mention them."
-                            ),
-                        },
-                    ],
-                }],
-            )
-            result_text = response.content[0].text
-            logger.info(f"[arrival-agent] Camera analysis: {result_text[:100]}...")
-            return result_text
-        except Exception as e:
-            logger.error(f"[arrival-agent] Camera analysis failed: {e}")
-            return "I tried to look but something went wrong. Can you describe what you're seeing?"
+                            {
+                                "type": "text",
+                                "text": f"You're a 50-year trade veteran looking at this through a tech's phone camera. "
+                                        f"{question}. Be specific and practical, 1-3 sentences. "
+                                        f"If you can read any model numbers, brands, or error codes, mention them.",
+                            },
+                        ],
+                    }],
+                )
+                return response.content[0].text
+            except Exception as e:
+                logger.error(f"[arrival-agent] Local vision failed: {e}")
+
+        logger.error(f"[arrival-agent] ✗ VISION COMPLETELY FAILED — room={self._room_name}")
+        return ("I can't see anything right now — I'm not getting a camera feed. "
+                "Make sure the camera is on and pointed at what you want me to see.")
+
+    async def _analyze_via_api(self, room_name: str, question: str) -> Optional[str]:
+        """Ask FastAPI to analyze the frame — it has the frame in its own process."""
+        urls = [
+            f"http://127.0.0.1:{_FASTAPI_PORT}/api/analyze-frame",
+            "https://arrival-backend-81x7.onrender.com/api/analyze-frame",
+        ]
+        for url in urls:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(url, json={
+                        "room_name": room_name,
+                        "question": question,
+                    })
+                    if resp.status_code == 200:
+                        result = resp.json().get("analysis")
+                        if result:
+                            logger.info(f"[arrival-agent] ✓ Vision via API ({url[:40]}): {result[:60]}...")
+                            return result
+                    elif resp.status_code == 404:
+                        logger.warning(f"[arrival-agent] No frame at API ({url[:40]}): {resp.text[:100]}")
+                    else:
+                        logger.warning(f"[arrival-agent] API error {resp.status_code} ({url[:40]}): {resp.text[:100]}")
+            except Exception as e:
+                logger.warning(f"[arrival-agent] API call failed ({url[:40]}): {type(e).__name__}: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -401,27 +406,31 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not agent._proactive_enabled:
                 continue
 
-            frame = await agent.get_current_frame()
-            if not frame:
-                continue
-
             now = time.time()
 
             # Cooldown check — don't spam the tech
             cooldown = PROACTIVE_PUSHBACK_COOLDOWN if agent._user_pushback_count > 2 else PROACTIVE_MIN_COOLDOWN
             if now - agent._last_proactive_time < cooldown:
                 continue
-            force = (now - last_analysis_time) > PROACTIVE_FORCE_INTERVAL
-            if not force and not agent._frame_changed(frame):
+
+            # Check if there's a frame available via the API
+            if not agent._room_name:
                 continue
 
-            # Update hash and timestamp
-            agent._last_analyzed_hash = agent._frame_hash(frame)
-            last_analysis_time = now
+            # Use the analyze API for proactive checks too
+            logger.info("[proactive] Checking frame via API...")
+            observation = await agent._analyze_via_api(
+                agent._room_name,
+                "Is there anything worth speaking up about RIGHT NOW? "
+                "Safety hazards, visible problems, readable model/serial numbers. "
+                "If nothing notable, respond with exactly: NOTHING"
+            )
 
-            # Analyze frame with Claude Vision
-            logger.info("[proactive] Analyzing frame...")
-            observation = await analyze_frame_for_alert(agent, frame)
+            # Filter out non-observations
+            if observation and "NOTHING" in observation.upper():
+                observation = None
+            if observation and len(observation) < 5:
+                observation = None
 
             if observation:
                 # Check for repeats
@@ -575,10 +584,27 @@ async def entrypoint(ctx: JobContext):
         # Wait for first frame to arrive (frontend sends after 2s)
         await asyncio.sleep(4)
 
-        # Self-test: can we get a camera frame?
-        test_frame = await agent.get_current_frame()
-        if test_frame:
-            logger.info(f"[arrival-agent] ✓ VISION SELF-TEST PASSED — got {len(test_frame)} chars")
+        # Self-test: can we reach FastAPI and get a frame?
+        vision_ok = False
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as test_client:
+                # Try localhost first
+                for base_url in [f"http://127.0.0.1:{_FASTAPI_PORT}", "https://arrival-backend-81x7.onrender.com"]:
+                    try:
+                        r = await test_client.get(f"{base_url}/api/livekit-frame-debug/{room_name}")
+                        if r.status_code == 200:
+                            data = r.json()
+                            logger.info(f"[arrival-agent] Self-test via {base_url[:30]}: {data}")
+                            if data.get("frame_found"):
+                                vision_ok = True
+                                break
+                    except Exception as e:
+                        logger.warning(f"[arrival-agent] Self-test failed ({base_url[:30]}): {e}")
+        except Exception as e:
+            logger.error(f"[arrival-agent] Self-test error: {e}")
+
+        if vision_ok:
+            logger.info(f"[arrival-agent] ✓ VISION SELF-TEST PASSED")
             await session.generate_reply(
                 instructions="Say exactly: 'Hey, I can see your camera. What are we working on?' Nothing else."
             )
