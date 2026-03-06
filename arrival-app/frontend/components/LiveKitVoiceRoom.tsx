@@ -115,13 +115,18 @@ export default function LiveKitVoiceRoom({
           await AudioSession.configureAudio({
             android: {
               audioTypeOptions: {
-                audioMode: 'voiceCommunication',
+                audioMode: 'inCommunication',
               },
             },
             ios: {
-              audioMode: 'voiceChat',
               defaultOutput: 'speaker',
             },
+          });
+          // Set iOS to voiceChat mode for better echo cancellation
+          await AudioSession.setAppleAudioConfiguration({
+            audioCategory: 'playAndRecord',
+            audioCategoryOptions: ['allowBluetooth', 'defaultToSpeaker'],
+            audioMode: 'voiceChat',
           });
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;
