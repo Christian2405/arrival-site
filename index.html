@@ -1357,6 +1357,25 @@
                                 <option value="10_plus_years">10+ Years</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>Choose your free trial plan</label>
+                            <div style="display: flex; gap: 10px; margin-top: 4px;">
+                                <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 1.5px solid #ddd9d5; border-radius: 10px; cursor: pointer; transition: border-color 0.2s, background 0.2s;" id="plan-option-pro" onclick="selectTrialPlan('pro')">
+                                    <input type="radio" name="signup-plan" value="pro" checked style="accent-color: #2a2622;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 15px; color: #2a2622;">Pro</div>
+                                        <div style="font-size: 12px; color: #7c736a;">Individual tech</div>
+                                    </div>
+                                </label>
+                                <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 1.5px solid #ddd9d5; border-radius: 10px; cursor: pointer; transition: border-color 0.2s, background 0.2s;" id="plan-option-business" onclick="selectTrialPlan('business')">
+                                    <input type="radio" name="signup-plan" value="business" style="accent-color: #2a2622;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 15px; color: #2a2622;">Business</div>
+                                        <div style="font-size: 12px; color: #7c736a;">Team + Job Mode</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
                         <label class="form-check" style="margin-bottom: 16px;">
                             <input type="checkbox" id="signup-terms" required>
                             <span>I agree to the <a href="#" onclick="showPage('terms'); return false;" style="color: #2a2622; text-decoration: underline;">terms of service</a> and <a href="#" onclick="showPage('privacy'); return false;" style="color: #2a2622; text-decoration: underline;">privacy policy</a></span>
@@ -1721,6 +1740,13 @@
                 }
             }, 50);
         };
+        // Auto-show page based on URL path (for /privacy, /terms direct links)
+        (function() {
+            var path = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+            if (path === 'privacy' || path === 'terms') {
+                showPage(path);
+            }
+        })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="auth.js"></script>

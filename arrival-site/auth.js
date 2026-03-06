@@ -58,6 +58,22 @@ function showToast(message, type) {
     setTimeout(function() { toast.remove(); }, 4000);
 }
 
+// Plan selection UI helper for signup form
+function selectTrialPlan(plan) {
+    var proOption = document.getElementById('plan-option-pro');
+    var bizOption = document.getElementById('plan-option-business');
+    if (proOption && bizOption) {
+        proOption.style.borderColor = plan === 'pro' ? '#2a2622' : '#ddd9d5';
+        proOption.style.background = plan === 'pro' ? '#f9f8f6' : 'transparent';
+        bizOption.style.borderColor = plan === 'business' ? '#2a2622' : '#ddd9d5';
+        bizOption.style.background = plan === 'business' ? '#f9f8f6' : 'transparent';
+    }
+}
+// Auto-highlight Pro on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() { selectTrialPlan('pro'); }, 100);
+});
+
 // ============================================
 // NAV STATE
 // ============================================
@@ -96,6 +112,8 @@ async function handleSignup(event) {
     var trade = document.getElementById('signup-trade').value;
     var experience = document.getElementById('signup-experience').value;
     var terms = document.getElementById('signup-terms').checked;
+    var planRadio = document.querySelector('input[name="signup-plan"]:checked');
+    var selectedPlan = planRadio ? planRadio.value : 'pro';
 
     if (!terms) {
         showFormError('signup-error', 'Please agree to the terms of service.');
@@ -136,20 +154,37 @@ async function handleSignup(event) {
             last_name: lastName,
             primary_trade: trade,
             experience_level: experience,
-            account_type: 'pro'
+            account_type: selectedPlan
         }, { onConflict: 'id' });
         if (userResult.error) throw userResult.error;
 
-        // 3. Upsert pro subscription with 7-day trial
+        // 3. Upsert subscription with 7-day trial (Pro or Business based on selection)
         var trialEnd = new Date();
         trialEnd.setDate(trialEnd.getDate() + 7);
         var subResult = await sb.from('subscriptions').upsert({
             user_id: userId,
-            plan: 'pro',
+            plan: selectedPlan,
             status: 'active',
             trial_ends_at: trialEnd.toISOString()
         }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
+
+        // 4. If business plan selected, create team for the user
+        if (selectedPlan === 'business') {
+            var teamResult = await sb.from('teams').upsert({
+                owner_id: userId,
+                name: firstName + "'s Team",
+                max_seats: 10
+            }, { onConflict: 'owner_id' });
+            if (teamResult.error) console.error('Team creation error:', teamResult.error);
+            else if (teamResult.data && teamResult.data[0]) {
+                await sb.from('team_members').upsert({
+                    team_id: teamResult.data[0].id,
+                    user_id: userId,
+                    role: 'admin'
+                }, { onConflict: 'team_id,user_id' }).catch(function(e) { console.error('Team member error:', e); });
+            }
+        }
 
         // 4. Send welcome email (fire-and-forget; function requires JWT and to === user email)
         var accessToken = result.data.session ? result.data.session.access_token : '';
@@ -161,8 +196,8 @@ async function handleSignup(event) {
             }).catch(function(err) { console.error('Welcome email error:', err); });
         }
 
-        // 5. Redirect to individual dashboard
-        window.location.href = '/dashboard-individual';
+        // 5. Redirect to appropriate dashboard
+        window.location.href = selectedPlan === 'business' ? '/dashboard-business' : '/dashboard-individual';
 
     } catch (error) {
         console.error('Signup error:', error);

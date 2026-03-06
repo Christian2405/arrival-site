@@ -389,6 +389,7 @@ function renderDocTable(docs) {
             '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
             '<td>' + date + '</td>' +
             '<td><a href="#" class="table-action' + viewDisabled + '" onclick="viewDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
+            '<a href="#" class="table-action" onclick="openEditDocument(\'' + d.id + '\'); return false;">Edit</a> ' +
             '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + d.id + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
             '</tr>';
     }).join('');
@@ -535,6 +536,96 @@ async function deleteDocument(docId, storagePath) {
     } catch (err) {
         console.error('Delete error:', err);
         showToast('Failed to delete document. Please try again later.', 'error');
+    }
+}
+
+function openEditDocument(docId) {
+    var doc = teamDocs.find(function(d) { return d.id === docId; });
+    if (!doc) { showToast('Document not found.', 'error'); return; }
+
+    document.getElementById('edit-doc-id').value = doc.id;
+    document.getElementById('edit-doc-storage-path').value = doc.storage_path;
+    document.getElementById('edit-doc-name').value = doc.file_name;
+    document.getElementById('edit-doc-category').value = doc.category;
+    document.getElementById('edit-doc-project').value = doc.project_tag || '';
+    document.getElementById('edit-doc-notes').value = doc.notes || '';
+    document.getElementById('edit-doc-file').value = '';
+
+    openModal('edit-doc-modal');
+}
+
+async function handleEditDocSave() {
+    var docId = document.getElementById('edit-doc-id').value;
+    var oldStoragePath = document.getElementById('edit-doc-storage-path').value;
+    var newName = document.getElementById('edit-doc-name').value.trim();
+    var newCategory = document.getElementById('edit-doc-category').value;
+    var newProject = document.getElementById('edit-doc-project').value.trim() || null;
+    var newNotes = document.getElementById('edit-doc-notes').value.trim() || null;
+    var fileInput = document.getElementById('edit-doc-file');
+    var replaceFile = fileInput.files && fileInput.files.length > 0;
+
+    if (!newName) { showToast('File name cannot be empty.', 'error'); return; }
+
+    closeModal('edit-doc-modal');
+    showUploadOverlay(replaceFile ? 'Replacing file...' : 'Saving changes...');
+
+    try {
+        var updates = {
+            file_name: newName,
+            category: newCategory,
+            project_tag: newProject,
+            notes: newNotes
+        };
+
+        if (replaceFile) {
+            var file = fileInput.files[0];
+            if (file.size > 100 * 1024 * 1024) {
+                hideUploadOverlay();
+                showToast('File exceeds 100MB limit.', 'error');
+                return;
+            }
+
+            // Upload new file to storage
+            var newStoragePath = 'teams/' + currentTeam.id + '/docs/' + Date.now() + '_' + file.name;
+            var uploadResult = await sb.storage.from('documents').upload(newStoragePath, file);
+            if (uploadResult.error) throw uploadResult.error;
+
+            // Delete old file from storage (best-effort)
+            sb.storage.from('documents').remove([oldStoragePath]).catch(function() {});
+
+            updates.storage_path = newStoragePath;
+            updates.file_type = file.type || 'application/' + file.name.split('.').pop().toLowerCase();
+            updates.file_size = file.size;
+        }
+
+        // Update document record in DB
+        var updateResult = await sb.from('documents').update(updates).eq('id', docId);
+        if (updateResult.error) throw updateResult.error;
+
+        hideUploadOverlay();
+        showToast('Document updated.');
+
+        // Reload documents list
+        await loadDocuments();
+        loadHome();
+
+        // Re-index for AI search if file was replaced
+        if (replaceFile) {
+            try {
+                var session = (await sb.auth.getSession()).data.session;
+                if (session) {
+                    fetch(BACKEND_URL + '/index-document', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document_id: docId, storage_path: updates.storage_path })
+                    }).catch(function() {});
+                }
+            } catch (_) {}
+        }
+    } catch (err) {
+        console.error('Edit error:', err);
+        hideUploadOverlay();
+        showToast('Failed to update document: ' + (err.message || 'Unknown error'), 'error');
     }
 }
 
@@ -1208,6 +1299,9 @@ function timeAgo(date) {
 document.addEventListener('DOMContentLoaded', function() {
     // Upload document button
     document.getElementById('upload-submit-btn').addEventListener('click', handleDocUpload);
+
+    // Edit document save button
+    document.getElementById('edit-doc-save-btn').addEventListener('click', handleEditDocSave);
 
     // Invite team member
     document.getElementById('invite-send-btn').addEventListener('click', handleInvite);

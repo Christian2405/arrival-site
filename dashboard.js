@@ -103,6 +103,8 @@ async function initAuth() {
     }
 
     loadDocuments();
+    loadChatHistory();
+    loadSavedAnswers();
     loadBilling();
     loadSettings();
     checkCheckoutSuccess();
@@ -134,6 +136,8 @@ async function handleLogout() {
 // MY DOCUMENTS
 // ============================================
 
+var cachedDocs = [];
+
 async function loadDocuments() {
     var result = await sb
         .from('documents')
@@ -144,6 +148,7 @@ async function loadDocuments() {
         .order('created_at', { ascending: false });
 
     var docs = result.data || [];
+    cachedDocs = docs;
     var plan = currentProfile ? currentProfile.account_type : 'pro';
     var limit = DOC_LIMITS[plan] || 50;
     var tbody = document.getElementById('documents-tbody');
@@ -195,6 +200,7 @@ async function loadDocuments() {
                 '<td><span class="' + statusClass + '">' + statusLabel + '</span></td>' +
                 '<td>' + date + '</td>' +
                 '<td><a href="#" class="table-action" onclick="viewDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
+                '<a href="#" class="table-action" onclick="openEditDocument(\'' + escapeAttr(d.id) + '\'); return false;">Edit</a> ' +
                 '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
                 '</tr>';
         }).join('');
@@ -349,6 +355,201 @@ async function deleteDocument(docId, storagePath) {
         showToast('Failed to delete document.', 'error');
     }
 }
+
+function openEditDocument(docId) {
+    var doc = cachedDocs.find(function(d) { return d.id === docId; });
+    if (!doc) { showToast('Document not found.', 'error'); return; }
+
+    document.getElementById('edit-doc-id').value = doc.id;
+    document.getElementById('edit-doc-storage-path').value = doc.storage_path;
+    document.getElementById('edit-doc-name').value = doc.file_name;
+    document.getElementById('edit-doc-category').value = doc.category;
+    document.getElementById('edit-doc-project').value = doc.project_tag || doc.notes || '';
+    document.getElementById('edit-doc-notes').value = doc.notes || '';
+    document.getElementById('edit-doc-file').value = '';
+
+    openModal('edit-doc-modal');
+}
+
+async function handleEditDocSave() {
+    var docId = document.getElementById('edit-doc-id').value;
+    var oldStoragePath = document.getElementById('edit-doc-storage-path').value;
+    var newName = document.getElementById('edit-doc-name').value.trim();
+    var newCategory = document.getElementById('edit-doc-category').value;
+    var newProject = document.getElementById('edit-doc-project').value.trim() || null;
+    var newNotes = document.getElementById('edit-doc-notes').value.trim() || null;
+    var fileInput = document.getElementById('edit-doc-file');
+    var replaceFile = fileInput.files && fileInput.files.length > 0;
+
+    if (!newName) { showToast('File name cannot be empty.', 'error'); return; }
+
+    closeModal('edit-doc-modal');
+    showUploadOverlay(replaceFile ? 'Replacing file...' : 'Saving changes...');
+
+    try {
+        var updates = {
+            file_name: newName,
+            category: newCategory,
+            project_tag: newProject,
+            notes: newNotes
+        };
+
+        if (replaceFile) {
+            var file = fileInput.files[0];
+            if (file.size > 50 * 1024 * 1024) {
+                hideUploadOverlay();
+                showToast('File exceeds 50MB limit.', 'error');
+                return;
+            }
+
+            // Upload new file to storage
+            var newStoragePath = currentUser.id + '/' + Date.now() + '_' + file.name;
+            var uploadResult = await sb.storage.from('documents').upload(newStoragePath, file);
+            if (uploadResult.error) throw uploadResult.error;
+
+            // Delete old file from storage (best-effort)
+            sb.storage.from('documents').remove([oldStoragePath]).catch(function() {});
+
+            updates.storage_path = newStoragePath;
+            updates.file_type = file.type || 'application/' + file.name.split('.').pop().toLowerCase();
+            updates.file_size = file.size;
+        }
+
+        // Update document record in DB
+        var updateResult = await sb.from('documents').update(updates).eq('id', docId);
+        if (updateResult.error) throw updateResult.error;
+
+        hideUploadOverlay();
+        showToast('Document updated.');
+
+        // Reload documents list
+        await loadDocuments();
+
+        // Re-index for AI search if file was replaced
+        if (replaceFile) {
+            try {
+                var session = (await sb.auth.getSession()).data.session;
+                if (session) {
+                    fetch(BACKEND_URL + '/index-document', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document_id: docId, storage_path: updates.storage_path })
+                    }).catch(function() {});
+                }
+            } catch (_) {}
+        }
+    } catch (err) {
+        console.error('Edit error:', err);
+        hideUploadOverlay();
+        showToast('Failed to update document: ' + (err.message || 'Unknown error'), 'error');
+    }
+}
+
+// ============================================
+// CHAT HISTORY
+// ============================================
+
+async function loadChatHistory() {
+    if (!currentUser) return;
+    try {
+        var { data: convs, error } = await sb.from('conversations')
+            .select('id, title, trade, created_at, updated_at')
+            .eq('user_id', currentUser.id)
+            .order('updated_at', { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+
+        var tbody = document.getElementById('chat-history-tbody');
+        if (!tbody) return;
+
+        if (!convs || convs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No conversations yet. Start using Arrival to see your chat history here.</td></tr>';
+            return;
+        }
+
+        // Fetch the first user message from each conversation for preview
+        var convIds = convs.map(function(c) { return c.id; });
+        var { data: msgs } = await sb.from('messages')
+            .select('conversation_id, content, role')
+            .in('conversation_id', convIds)
+            .eq('role', 'user')
+            .order('timestamp', { ascending: true });
+
+        // Group first user message per conversation
+        var firstMsg = {};
+        if (msgs) {
+            msgs.forEach(function(m) {
+                if (!firstMsg[m.conversation_id]) {
+                    firstMsg[m.conversation_id] = m.content;
+                }
+            });
+        }
+
+        tbody.innerHTML = convs.map(function(c) {
+            var date = new Date(c.updated_at || c.created_at);
+            var dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var preview = firstMsg[c.id] || c.title || 'Conversation';
+            if (preview.length > 80) preview = preview.substring(0, 80) + '...';
+            var trade = c.trade ? capitalize(c.trade.replace(/_/g, ' ')) : '—';
+            return '<tr>' +
+                '<td style="white-space:nowrap;">' + escapeHtml(dateStr) + '</td>' +
+                '<td>' + escapeHtml(preview) + '</td>' +
+                '<td>' + escapeHtml(trade) + '</td>' +
+                '</tr>';
+        }).join('');
+
+    } catch (err) {
+        console.error('loadChatHistory error:', err);
+    }
+}
+
+
+// ============================================
+// SAVED ANSWERS
+// ============================================
+
+async function loadSavedAnswers() {
+    if (!currentUser) return;
+    try {
+        var { data: answers, error } = await sb.from('saved_answers')
+            .select('id, question, answer, trade, created_at')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (error) {
+            // Table may not exist yet — not a critical failure
+            console.warn('loadSavedAnswers:', error.message);
+            return;
+        }
+
+        var tbody = document.getElementById('saved-answers-tbody');
+        if (!tbody) return;
+
+        if (!answers || answers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted,#7c736a);padding:32px;">No saved answers yet. Bookmark answers in the Arrival app to see them here.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = answers.map(function(a) {
+            var question = a.question || 'Saved answer';
+            if (question.length > 80) question = question.substring(0, 80) + '...';
+            var date = new Date(a.created_at);
+            var dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var trade = a.trade ? capitalize(a.trade.replace(/_/g, ' ')) : '—';
+            return '<tr>' +
+                '<td>' + escapeHtml(question) + '</td>' +
+                '<td style="white-space:nowrap;">' + escapeHtml(dateStr) + '</td>' +
+                '<td>' + escapeHtml(trade) + '</td>' +
+                '</tr>';
+        }).join('');
+
+    } catch (err) {
+        console.error('loadSavedAnswers error:', err);
+    }
+}
+
 
 // ============================================
 // SUBSCRIPTION & BILLING
@@ -930,6 +1131,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Upload modal submit button
     var uploadBtn = document.getElementById('upload-submit-btn');
     if (uploadBtn) uploadBtn.addEventListener('click', handleDocUpload);
+
+    // Edit document save button
+    var editDocBtn = document.getElementById('edit-doc-save-btn');
+    if (editDocBtn) editDocBtn.addEventListener('click', handleEditDocSave);
 
     // Profile save
     document.getElementById('settings-save-btn').addEventListener('click', handleSaveProfile);
