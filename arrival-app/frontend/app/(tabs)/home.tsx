@@ -17,7 +17,7 @@ import { useConversationStore, Message } from '../../store/conversationStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useSavedAnswersStore } from '../../store/savedAnswersStore';
 import { useAuthStore } from '../../store/authStore';
-import { aiAPI } from '../../services/api';
+import { aiAPI, feedbackAPI } from '../../services/api';
 import { useUsageStore, isQueryLimitReached } from '../../store/usageStore';
 import ChatBubble from '../../components/ChatBubble';
 import ArrivalLogo from '../../components/ArrivalLogo';
@@ -1001,6 +1001,22 @@ export default function HomeScreen() {
                                 source: item.source, trade: currentConversation?.trade || 'General',
                                 savedAt: new Date(),
                               });
+                            } : undefined}
+                            onFeedback={item.role === 'assistant' ? (rating, feedbackText) => {
+                              // Find the preceding user message as the question
+                              const msgIdx = textMessages.findIndex(m => m.id === item.id);
+                              const userQ = msgIdx > 0 ? textMessages[msgIdx - 1]?.content : '';
+                              // Fire-and-forget — don't block UI
+                              feedbackAPI.submit({
+                                question: userQ,
+                                answer: item.content,
+                                rating,
+                                feedback_text: feedbackText,
+                                source: item.source,
+                                conversation_id: currentConversation?.id,
+                              }).catch(err => console.warn('[feedback]', err));
+                              // Update message locally so rating persists on re-render
+                              item.feedbackRating = rating;
                             } : undefined}
                           />
                         );

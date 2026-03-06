@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
 import { Message } from '../store/conversationStore';
@@ -34,11 +34,18 @@ const ALERT_COLORS = {
 const CHARS_PER_TICK = 3;
 const TICK_MS = 16; // ~60fps
 
-export default function ChatBubble({ message, onSave, isLatest }: ChatBubbleProps) {
+export default function ChatBubble({ message, onSave, onFeedback, isLatest }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const isAlert = !!message.alertType;
   const alertConfig = message.alertType ? ALERT_COLORS[message.alertType] : null;
   const [saved, setSaved] = useState(false);
+
+  // Feedback state
+  const [feedbackGiven, setFeedbackGiven] = useState<'positive' | 'negative' | null>(
+    message.feedbackRating || null
+  );
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [commentText, setCommentText] = useState('');
 
   // Typewriter effect for assistant messages
   const [displayedText, setDisplayedText] = useState(
@@ -134,6 +141,78 @@ export default function ChatBubble({ message, onSave, isLatest }: ChatBubbleProp
         <View style={styles.savedBadge}>
           <Ionicons name="bookmark" size={10} color={Colors.accent} />
           <Text style={styles.savedText}>Saved</Text>
+        </View>
+      )}
+
+      {/* Feedback: thumbs up/down */}
+      {!isUser && onFeedback && !feedbackGiven && !showCommentInput && (
+        <View style={styles.feedbackRow}>
+          <TouchableOpacity
+            onPress={() => {
+              setFeedbackGiven('positive');
+              onFeedback('positive');
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="thumbs-up-outline" size={14} color={Colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowCommentInput(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="thumbs-down-outline" size={14} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Feedback: comment input for negative rating */}
+      {!isUser && showCommentInput && !feedbackGiven && (
+        <View style={styles.commentContainer}>
+          <TextInput
+            style={styles.commentInput}
+            placeholder="What was wrong? (optional)"
+            placeholderTextColor={Colors.textMuted}
+            value={commentText}
+            onChangeText={setCommentText}
+            maxLength={200}
+            multiline
+            autoFocus
+          />
+          <View style={styles.commentActions}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowCommentInput(false);
+                setCommentText('');
+              }}
+            >
+              <Text style={styles.commentCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setFeedbackGiven('negative');
+                setShowCommentInput(false);
+                onFeedback('negative', commentText.trim() || undefined);
+                setCommentText('');
+                Keyboard.dismiss();
+              }}
+            >
+              <Text style={styles.commentSubmit}>Submit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Feedback: confirmation icon */}
+      {!isUser && feedbackGiven && (
+        <View style={styles.feedbackRow}>
+          <Ionicons
+            name={feedbackGiven === 'positive' ? 'thumbs-up' : 'thumbs-down'}
+            size={14}
+            color={feedbackGiven === 'positive' ? Colors.accent : Colors.textMuted}
+          />
+          <Text style={[styles.feedbackConfirm, feedbackGiven === 'positive' && { color: Colors.accent }]}>
+            {feedbackGiven === 'positive' ? 'Thanks!' : 'Noted'}
+          </Text>
         </View>
       )}
     </View>
@@ -246,5 +325,48 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: Colors.accent,
+  },
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 12,
+  },
+  feedbackConfirm: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  commentContainer: {
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 8,
+  },
+  commentInput: {
+    fontSize: 12,
+    color: Colors.text,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 32,
+    maxHeight: 60,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 6,
+  },
+  commentCancel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '500',
+  },
+  commentSubmit: {
+    fontSize: 11,
+    color: Colors.accent,
+    fontWeight: '600',
   },
 });

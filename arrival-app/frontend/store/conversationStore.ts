@@ -26,6 +26,7 @@ export interface Message {
   confidence?: 'high' | 'medium' | 'low';
   alertType?: 'warning' | 'critical';
   displayMode?: 'voice' | 'text' | 'job';
+  feedbackRating?: 'positive' | 'negative';
   timestamp: Date;
 }
 

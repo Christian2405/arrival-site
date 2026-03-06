@@ -22,6 +22,7 @@ from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
 from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.services.diagnostic_flows import lookup_diagnostic_flow, format_diagnostic_context
+from app.services.feedback_learning import get_feedback_context
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
 
@@ -217,17 +218,18 @@ async def chat(
                         diagnostic_context = format_diagnostic_context(diag_result)
                         logger.info(f"[chat] Diagnostic flow hit: {diag_result['title']}")
 
-                # Run memory + team_id + RAG (user+global) ALL in parallel
-                # RAG starts immediately with user+global namespaces — no need to wait for team_id
+                # Run memory + team_id + RAG + feedback corrections ALL in parallel
                 parallel_results = await asyncio.gather(
                     retrieve_memories(user_id, request.message),
                     get_user_team_id(user_id),
                     retrieve_context(user_id, request.message),  # user+global namespaces
+                    get_feedback_context(request.message),  # correction cache lookup
                     return_exceptions=True,
                 )
                 memories = parallel_results[0] if not isinstance(parallel_results[0], Exception) else []
                 team_id = parallel_results[1] if not isinstance(parallel_results[1], Exception) else None
                 rag_context = parallel_results[2] if not isinstance(parallel_results[2], Exception) else []
+                feedback_context = parallel_results[3] if not isinstance(parallel_results[3], Exception) else None
 
                 if isinstance(parallel_results[0], Exception):
                     logger.warning(f"[chat] Memory retrieval failed: {parallel_results[0]}")
@@ -235,6 +237,8 @@ async def chat(
                     logger.warning(f"[chat] Team ID retrieval failed: {parallel_results[1]}")
                 if isinstance(parallel_results[2], Exception):
                     logger.warning(f"[chat] RAG retrieval failed: {parallel_results[2]}")
+                if isinstance(parallel_results[3], Exception):
+                    logger.warning(f"[chat] Feedback context failed: {parallel_results[3]}")
 
                 # Supplementary team namespace search (quick — only if team_id found)
                 if team_id and not isinstance(parallel_results[2], Exception):
@@ -281,7 +285,10 @@ async def chat(
                     user_memories=memories,
                     rag_context=rag_context,
                     max_tokens=1024,
-                    system_prompt_prefix=(error_code_context or diagnostic_context or "") + units_note,
+                    system_prompt_prefix=(
+                        "\n\n".join(filter(None, [error_code_context, diagnostic_context, feedback_context]))
+                        + units_note
+                    ),
                 )
 
                 # Fire-and-forget background tasks

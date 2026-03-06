@@ -1,14 +1,18 @@
 """
 Feedback router — POST /api/feedback
 Stores thumbs-up/down ratings on AI responses for quality tracking.
+On negative feedback with a comment, triggers the learning pipeline
+to store the correction as a Mem0 memory for this user.
 """
 
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app import config
 from app.middleware.auth import get_current_user
+from app.services.feedback_learning import process_negative_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +31,17 @@ class FeedbackRequest(BaseModel):
 class FeedbackResponse(BaseModel):
     success: bool
     id: str | None = None
+
+
+# Bug #36 pattern: safe task wrapper
+async def _safe_task(coro, task_name: str = "background_task"):
+    """Wrap a coroutine so exceptions are logged instead of swallowed."""
+    try:
+        await coro
+    except asyncio.CancelledError:
+        logger.debug(f"[{task_name}] Task cancelled")
+    except Exception as e:
+        logger.error(f"[{task_name}] Background task failed: {e}", exc_info=True)
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
@@ -62,8 +77,8 @@ async def submit_feedback(request: FeedbackRequest, req: Request):
                 },
                 json={
                     "user_id": user_id,
-                    "question": request.question[:5000],  # Truncate long questions
-                    "answer": request.answer[:10000],  # Truncate long answers
+                    "question": request.question[:5000],
+                    "answer": request.answer[:10000],
                     "rating": request.rating,
                     "feedback_text": (request.feedback_text or "")[:2000] if request.feedback_text else None,
                     "source": request.source,
@@ -75,6 +90,20 @@ async def submit_feedback(request: FeedbackRequest, req: Request):
             feedback_id = rows[0]["id"] if rows else None
 
         logger.info(f"[feedback] {request.rating} from {user_id[:8]}… (id={feedback_id})")
+
+        # Trigger learning pipeline for negative feedback (fire-and-forget)
+        if request.rating == "negative" and feedback_id:
+            asyncio.create_task(_safe_task(
+                process_negative_feedback(
+                    feedback_id=feedback_id,
+                    user_id=user_id,
+                    question=request.question,
+                    answer=request.answer,
+                    feedback_text=request.feedback_text,
+                ),
+                task_name="process_negative_feedback",
+            ))
+
         return FeedbackResponse(success=True, id=feedback_id)
 
     except Exception as e:

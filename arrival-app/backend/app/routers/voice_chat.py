@@ -22,6 +22,7 @@ from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
 from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.services.diagnostic_flows import lookup_diagnostic_flow, format_diagnostic_context
+from app.services.feedback_learning import get_feedback_context
 from app.services.job_context import get_job_context, format_job_context_prompt
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
@@ -282,6 +283,13 @@ async def voice_chat(
                 diagnostic_context = format_diagnostic_context(diag_result)
                 logger.info(f"[voice-chat] Diagnostic flow hit: {diag_result['title']}")
 
+        # Feedback correction lookup — check if we've been corrected on similar questions
+        fb_context = None
+        try:
+            fb_context = await get_feedback_context(transcript)
+        except Exception as e:
+            logger.debug(f"[voice-chat] Feedback context skipped: {e}")
+
         # Per-mode response tuning
         if request.mode == "job":
             voice_max_tokens = 150  # 1-3 spoken sentences — keep it tight for speed
@@ -323,6 +331,8 @@ async def voice_chat(
                 voice_prompt_prefix += "\n\n" + error_code_context
             elif diagnostic_context:
                 voice_prompt_prefix += "\n\n" + diagnostic_context
+            if fb_context:
+                voice_prompt_prefix += "\n\n" + fb_context
 
             tts_voice_id = config.ELEVENLABS_JOB_VOICE_ID
             tts_voice_settings = {
@@ -362,6 +372,8 @@ async def voice_chat(
                 voice_prompt_prefix += "\n\n" + error_code_context
             elif diagnostic_context:
                 voice_prompt_prefix += "\n\n" + diagnostic_context
+            if fb_context:
+                voice_prompt_prefix += "\n\n" + fb_context
 
             tts_voice_id = None  # use default
             tts_voice_settings = None  # use default
