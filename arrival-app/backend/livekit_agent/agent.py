@@ -73,6 +73,7 @@ except ImportError:
         print("[arrival-agent] WARNING: MultilingualModel not available")
 
 import httpx
+import anthropic as anthropic_sdk
 
 from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
@@ -87,6 +88,18 @@ _FRAME_URLS = [
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Shared Anthropic client — reused across all vision calls (avoids creating
+# a new HTTP client on every proactive check or camera look)
+# ---------------------------------------------------------------------------
+_anthropic_client: Optional[anthropic_sdk.AsyncAnthropic] = None
+
+def _get_anthropic_client() -> anthropic_sdk.AsyncAnthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+    return _anthropic_client
+
 # Startup banner — visible in Render logs for diagnostics
 logger.info("[arrival-agent] ============================")
 logger.info("[arrival-agent] LiveKit Voice Agent Loading (Data Channel Vision)")
@@ -99,10 +112,10 @@ logger.info("[arrival-agent] ============================")
 # ---------------------------------------------------------------------------
 # Proactive vision config
 # ---------------------------------------------------------------------------
-PROACTIVE_CHECK_INTERVAL = 8   # seconds between vision checks
-PROACTIVE_MIN_COOLDOWN = 15    # min seconds between proactive speech
-PROACTIVE_PUSHBACK_COOLDOWN = 60  # cooldown after user pushes back
-FRAME_CHANGE_THRESHOLD = 10    # out of 100 sampled positions
+PROACTIVE_CHECK_INTERVAL = 3   # seconds between vision checks — fast enough to catch things
+PROACTIVE_MIN_COOLDOWN = 8     # min seconds between proactive speech
+PROACTIVE_PUSHBACK_COOLDOWN = 45  # cooldown after user pushes back
+FRAME_CHANGE_THRESHOLD = 8    # out of 100 sampled positions — slightly more sensitive
 
 # ---------------------------------------------------------------------------
 # Voice prompts
@@ -185,6 +198,7 @@ class ArrivalAgent(Agent):
         self._last_proactive_time: float = 0
         self._user_pushback_count: int = 0
         self._proactive_enabled: bool = True
+        self._last_user_speech_time: float = 0  # Don't interrupt active conversation
 
     def update_camera_frame(self, frame_b64: str):
         """Store the latest camera frame from the mobile app (data channel path)."""
@@ -226,15 +240,15 @@ class ArrivalAgent(Agent):
             return None
 
         # Wait for frontend to capture, analyze, and send back result
-        # Budget: ~2s capture + ~5s API call + ~1s latency = ~8s typical
+        # Budget: ~1s capture + ~3s API call + ~1s latency = ~5s typical
         try:
-            await asyncio.wait_for(self._vision_event.wait(), timeout=20.0)
+            await asyncio.wait_for(self._vision_event.wait(), timeout=10.0)
             result = self._pending_vision_result
             self._pending_vision_result = None
             self._vision_event = None
             return result
         except asyncio.TimeoutError:
-            logger.warning("[arrival-agent] Vision request to frontend timed out (20s)")
+            logger.warning("[arrival-agent] Vision request to frontend timed out (10s)")
             self._vision_event = None
             return None
 
@@ -311,6 +325,32 @@ class ArrivalAgent(Agent):
                 "Tell the tech you don't have that code memorized and "
                 "ask what the chart on the unit shows.")
 
+    async def _analyze_frame_local(self, frame_b64: str, question: str) -> Optional[str]:
+        """Analyze a frame directly with Claude Vision — fastest path, no network roundtrip."""
+        client = _get_anthropic_client()
+        response = await client.messages.create(
+            model=config.ANTHROPIC_VOICE_MODEL,
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "You're a 50-year trade veteran looking at this through a tech's phone camera. "
+                            f"{question}. Be specific and practical, 1-3 sentences. "
+                            "If you can read any model numbers, brands, or error codes, mention them."
+                        ),
+                    },
+                ],
+            }],
+        )
+        return response.content[0].text
+
     @function_tool()
     async def look_at_camera(self, question: str) -> str:
         """Look at what the user's phone camera sees. Use this when they ask you to
@@ -318,54 +358,33 @@ class ArrivalAgent(Agent):
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
         logger.info(f"[arrival-agent] ★ look_at_camera called — room={self._room_name}, q={question[:60]}")
 
-        # METHOD 1: Ask frontend to capture + analyze (most reliable)
-        # The phone can always talk to the backend — no cross-process issues.
-        logger.info("[arrival-agent] Trying METHOD 1: frontend data channel...")
-        result = await self._request_vision_via_frontend(question)
-        if result:
-            logger.info(f"[arrival-agent] ✓ METHOD 1 SUCCESS: {result[:80]}...")
-            return result
-        logger.warning("[arrival-agent] METHOD 1 failed — trying METHOD 2...")
+        # METHOD 1 (fastest): Direct — use cached frame + local Claude Vision
+        # Frame is already in memory from data channel or HTTP fetch. No roundtrip needed.
+        frame = await self.get_current_frame()
+        if frame:
+            logger.info(f"[arrival-agent] METHOD 1: direct vision ({len(frame)} chars)...")
+            try:
+                result = await self._analyze_frame_local(frame, question)
+                if result:
+                    logger.info(f"[arrival-agent] ✓ METHOD 1 SUCCESS: {result[:80]}...")
+                    return result
+            except Exception as e:
+                logger.warning(f"[arrival-agent] METHOD 1 failed: {e}")
 
-        # METHOD 2: Direct API call from agent to FastAPI
-        logger.info("[arrival-agent] Trying METHOD 2: direct API call...")
-        result = await self._analyze_via_api(self._room_name, question)
+        # METHOD 2: Ask frontend to capture fresh frame + analyze via API
+        # Frontend can always reach the backend — more reliable than agent→FastAPI
+        logger.info("[arrival-agent] METHOD 2: frontend data channel...")
+        result = await self._request_vision_via_frontend(question)
         if result:
             logger.info(f"[arrival-agent] ✓ METHOD 2 SUCCESS: {result[:80]}...")
             return result
-        logger.warning("[arrival-agent] METHOD 2 failed — trying METHOD 3...")
 
-        # METHOD 3: Get frame directly and analyze locally
-        logger.info("[arrival-agent] Trying METHOD 3: local frame + vision...")
-        frame = await self.get_current_frame()
-        if frame:
-            logger.info(f"[arrival-agent] Got frame ({len(frame)} chars), analyzing locally...")
-            try:
-                import anthropic as anthropic_sdk
-                client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-                response = await client.messages.create(
-                    model=config.ANTHROPIC_VOICE_MODEL,
-                    max_tokens=300,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {"type": "base64", "media_type": "image/jpeg", "data": frame},
-                            },
-                            {
-                                "type": "text",
-                                "text": f"You're a 50-year trade veteran looking at this through a tech's phone camera. "
-                                        f"{question}. Be specific and practical, 1-3 sentences. "
-                                        f"If you can read any model numbers, brands, or error codes, mention them.",
-                            },
-                        ],
-                    }],
-                )
-                logger.info(f"[arrival-agent] ✓ METHOD 3 SUCCESS")
-                return response.content[0].text
-            except Exception as e:
-                logger.error(f"[arrival-agent] METHOD 3 vision API failed: {e}")
+        # METHOD 3: Direct API call from agent to FastAPI (least reliable)
+        logger.info("[arrival-agent] METHOD 3: API call...")
+        result = await self._analyze_via_api(self._room_name, question)
+        if result:
+            logger.info(f"[arrival-agent] ✓ METHOD 3 SUCCESS: {result[:80]}...")
+            return result
 
         # ALL METHODS FAILED
         logger.error(f"[arrival-agent] ✗ ALL VISION METHODS FAILED — room={self._room_name}")
@@ -380,7 +399,7 @@ class ArrivalAgent(Agent):
         ]
         for url in urls:
             try:
-                async with httpx.AsyncClient(timeout=12.0) as client:
+                async with httpx.AsyncClient(timeout=6.0) as client:
                     resp = await client.post(url, json={
                         "room_name": room_name,
                         "question": question,
@@ -404,9 +423,7 @@ class ArrivalAgent(Agent):
 async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str]) -> Optional[str]:
     """Analyze a frame directly with Claude Vision for proactive monitoring.
     Returns a short observation string or None if nothing notable."""
-    import anthropic as anthropic_sdk
-
-    client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = _get_anthropic_client()
 
     # Build context from recent observations to avoid repeats
     context = ""
@@ -464,10 +481,10 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
     Analyzes directly with Claude Vision API — no frontend roundtrip.
     Falls back to frontend data channel if no local frames available.
     """
-    logger.info("[proactive] Monitor started — waiting for initial connection...")
+    logger.info("[proactive] Monitor started — waiting for greeting to finish...")
 
-    # Wait for greeting to finish and things to stabilize
-    await asyncio.sleep(12)
+    # Wait for greeting to finish then start watching immediately
+    await asyncio.sleep(5)
 
     last_analysis_time = 0
 
@@ -484,6 +501,11 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             # Cooldown check — don't spam the tech
             cooldown = PROACTIVE_PUSHBACK_COOLDOWN if agent._user_pushback_count > 2 else PROACTIVE_MIN_COOLDOWN
             if now - agent._last_proactive_time < cooldown:
+                continue
+
+            # Don't interrupt active conversation — wait 8s after user last spoke
+            if now - agent._last_user_speech_time < 8:
+                logger.debug("[proactive] User recently spoke — skipping to avoid interrupt")
                 continue
 
             # --- Get frame (local first, then fallback) ---
@@ -505,7 +527,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                 continue
 
             # Frame diffing — skip if scene hasn't changed (saves API calls)
-            force_analyze = (now - last_analysis_time) > 30  # Always re-analyze every 30s
+            force_analyze = (now - last_analysis_time) > 15  # Re-analyze at least every 15s
             if not force_analyze and not agent._frame_changed(frame):
                 logger.debug("[proactive] Frame unchanged — skipping")
                 continue
@@ -693,6 +715,11 @@ async def entrypoint(ctx: JobContext):
                 logger.debug(f"[arrival-agent] Data channel parse error: {e}")
 
         logger.info("[arrival-agent] ✓ Data channel listener registered (camera + vision)")
+
+        # Track user speech so proactive monitor doesn't interrupt conversations
+        @session.on("user_input_transcribed")
+        def on_user_speech(ev):
+            agent._last_user_speech_time = time.time()
 
         # Start proactive vision monitor (job mode only)
         monitor_task = None

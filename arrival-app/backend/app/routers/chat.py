@@ -201,31 +201,15 @@ async def chat(
                     task_name="log_query",
                 ))
             else:
-                # ── FULL PATH ── Memory + team_id + RAG(user-ns) all in parallel
+                # ── FULL PATH ── Memory + team_id + RAG all in parallel for speed
                 logger.info(f"[chat] Full path for '{request.message[:40]}…' ({user_id[:8]}…)")
 
-                # Bug fix: return_exceptions=True so one failed service
-                # doesn't kill the entire request
-                # Phase 1: Get memories and team_id in parallel
-                phase1_results = await asyncio.gather(
-                    retrieve_memories(user_id, request.message),
-                    get_user_team_id(user_id),
-                    return_exceptions=True,
-                )
-                memories = phase1_results[0] if not isinstance(phase1_results[0], Exception) else []
-                team_id = phase1_results[1] if not isinstance(phase1_results[1], Exception) else None
-                if isinstance(phase1_results[0], Exception):
-                    logger.warning(f"[chat] Memory retrieval failed: {phase1_results[0]}")
-                if isinstance(phase1_results[1], Exception):
-                    logger.warning(f"[chat] Team ID retrieval failed: {phase1_results[1]}")
-
-                # Static error code lookup — instant answers, no RAG latency
+                # Static lookups — instant, no I/O
                 error_code_result = lookup_error_code(request.message)
                 error_code_context = format_error_code_context(error_code_result) if error_code_result else None
                 if error_code_result:
                     logger.info(f"[chat] Error code hit: {error_code_result['brand']} {error_code_result['code']}")
 
-                # Diagnostic flow lookup — if no error code match, check for symptom match
                 diagnostic_context = None
                 if not error_code_result:
                     diag_result = lookup_diagnostic_flow(request.message)
@@ -233,12 +217,41 @@ async def chat(
                         diagnostic_context = format_diagnostic_context(diag_result)
                         logger.info(f"[chat] Diagnostic flow hit: {diag_result['title']}")
 
-                # Phase 2: RAG search (now searches user + global + team namespaces in parallel internally)
-                try:
-                    rag_context = await retrieve_context(user_id, request.message, team_id=team_id)
-                except Exception as e:
-                    logger.warning(f"[chat] RAG retrieval failed: {e}")
-                    rag_context = []
+                # Run memory + team_id + RAG (user+global) ALL in parallel
+                # RAG starts immediately with user+global namespaces — no need to wait for team_id
+                parallel_results = await asyncio.gather(
+                    retrieve_memories(user_id, request.message),
+                    get_user_team_id(user_id),
+                    retrieve_context(user_id, request.message),  # user+global namespaces
+                    return_exceptions=True,
+                )
+                memories = parallel_results[0] if not isinstance(parallel_results[0], Exception) else []
+                team_id = parallel_results[1] if not isinstance(parallel_results[1], Exception) else None
+                rag_context = parallel_results[2] if not isinstance(parallel_results[2], Exception) else []
+
+                if isinstance(parallel_results[0], Exception):
+                    logger.warning(f"[chat] Memory retrieval failed: {parallel_results[0]}")
+                if isinstance(parallel_results[1], Exception):
+                    logger.warning(f"[chat] Team ID retrieval failed: {parallel_results[1]}")
+                if isinstance(parallel_results[2], Exception):
+                    logger.warning(f"[chat] RAG retrieval failed: {parallel_results[2]}")
+
+                # Supplementary team namespace search (quick — only if team_id found)
+                if team_id and not isinstance(parallel_results[2], Exception):
+                    try:
+                        team_rag = await asyncio.wait_for(
+                            retrieve_context(user_id, request.message, team_id=team_id),
+                            timeout=2.0,
+                        )
+                        # Merge team results, avoiding duplicates
+                        existing_texts = {r["text"][:200] for r in rag_context}
+                        for item in team_rag:
+                            if item["text"][:200] not in existing_texts:
+                                rag_context.append(item)
+                        rag_context.sort(key=lambda x: x.get("score", 0), reverse=True)
+                        rag_context = rag_context[:5]
+                    except (asyncio.TimeoutError, Exception) as e:
+                        logger.debug(f"[chat] Team RAG supplementary search skipped: {e}")
 
                 # Strip image unless the message contains visual keywords.
                 # Prevents Claude from describing the camera when user asks a text question

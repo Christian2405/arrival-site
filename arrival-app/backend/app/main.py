@@ -45,16 +45,81 @@ async def _keep_alive():
                 logger.warning(f"[keep-alive] Ping failed: {e}")
 
 
+async def _seed_building_codes():
+    """One-time task: index building code reference docs into Pinecone global_knowledge.
+    Runs on startup — skips if Pinecone isn't configured or docs already indexed."""
+    from app import config
+    if not config.PINECONE_API_KEY:
+        logger.info("[seed] Pinecone not configured — skipping building codes seed")
+        return
+
+    from pathlib import Path
+    codes_dir = Path(__file__).resolve().parent.parent / "knowledge" / "building_codes"
+    if not codes_dir.exists():
+        logger.info("[seed] No knowledge/building_codes directory — skipping")
+        return
+
+    from app.services.rag import extract_text_from_file, chunk_text_smart, chunk_text, _get_pinecone_index
+    index = _get_pinecone_index()
+    if not index:
+        return
+
+    files = sorted(codes_dir.glob("*.md"))
+    if not files:
+        return
+
+    logger.info(f"[seed] Indexing {len(files)} building code docs into global_knowledge...")
+    total = 0
+
+    for filepath in files:
+        filename = filepath.name
+        doc_id = f"global_{filename.replace(' ', '_').replace('.', '_')}"
+
+        file_bytes = filepath.read_bytes()
+        text = extract_text_from_file(file_bytes, "text/markdown", filename)
+        if not text:
+            continue
+
+        chunks = chunk_text_smart(text) or chunk_text(text)
+        if not chunks:
+            continue
+
+        records = []
+        for i, chunk in enumerate(chunks):
+            records.append({
+                "_id": f"{doc_id}_{i}",
+                "text": chunk,
+                "document_id": doc_id,
+                "user_id": "system",
+                "filename": filename,
+                "chunk_index": i,
+            })
+
+        try:
+            for batch_start in range(0, len(records), 96):
+                batch = records[batch_start:batch_start + 96]
+                await asyncio.to_thread(index.upsert_records, namespace="global_knowledge", records=batch)
+            total += len(records)
+            logger.info(f"[seed] ✓ {filename}: {len(chunks)} chunks")
+        except Exception as e:
+            logger.warning(f"[seed] Failed to index {filename}: {e}")
+
+    logger.info(f"[seed] Done — {total} total chunks indexed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — launches keep-alive task."""
-    task = asyncio.create_task(_keep_alive())
+    """Startup/shutdown lifecycle — launches keep-alive + seeds building codes."""
+    keep_alive_task = asyncio.create_task(_keep_alive())
+    seed_task = asyncio.create_task(_seed_building_codes())
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    keep_alive_task.cancel()
+    seed_task.cancel()
+    for t in (keep_alive_task, seed_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
