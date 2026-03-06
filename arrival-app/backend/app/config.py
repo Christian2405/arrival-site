@@ -26,8 +26,8 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 
 # --- ElevenLabs (Text-to-Speech) ---
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "TX3LPaxmHKxFdv7VOQHJ")  # Liam — clear American male, reliable with Flash v2.5
-ELEVENLABS_JOB_VOICE_ID = os.getenv("ELEVENLABS_JOB_VOICE_ID", "TX3LPaxmHKxFdv7VOQHJ")  # Same voice for consistency
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "NOpBlnGInO9m6vDvFkFC")
+ELEVENLABS_JOB_VOICE_ID = os.getenv("ELEVENLABS_JOB_VOICE_ID", "NOpBlnGInO9m6vDvFkFC")
 
 # --- Supabase ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
