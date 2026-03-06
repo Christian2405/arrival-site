@@ -164,16 +164,25 @@ export default function HomeScreen() {
 
   // --- Camera capture (silent, no shutter) ---
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
-    if (!cameraRef.current) return undefined;
+    if (!cameraRef.current) {
+      console.warn('[captureFrame] cameraRef.current is null');
+      return undefined;
+    }
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.5,
+        quality: 0.3,  // Lower quality = smaller payload, faster upload
         exif: false,
         shutterSound: false,
       });
+      if (photo?.base64) {
+        console.log(`[captureFrame] OK (${Math.round(photo.base64.length / 1024)}KB)`);
+      } else {
+        console.warn('[captureFrame] takePictureAsync returned no base64');
+      }
       return photo?.base64 || undefined;
-    } catch {
+    } catch (e: any) {
+      console.error('[captureFrame] FAILED:', e?.message || e);
       return undefined;
     }
   }, []);

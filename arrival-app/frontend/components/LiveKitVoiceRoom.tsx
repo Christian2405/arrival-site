@@ -260,22 +260,39 @@ function RoomContent({
   // Send camera frames to agent via HTTP (every 5s when connected)
   // HTTP is more reliable than WebRTC data channels for large image payloads
   useEffect(() => {
-    if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) return;
+    console.log(`[LiveKitVoice] Frame upload effect: conn=${connectionState} hasCapture=${!!captureFrame} room=${roomName || 'none'}`);
+    if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
+      console.log('[LiveKitVoice] Frame upload skipped — missing deps');
+      return;
+    }
 
+    console.log('[LiveKitVoice] ✓ Starting frame upload loop');
     let active = true;
+    let frameCount = 0;
+
     const sendFrame = async () => {
       if (!active) return;
       try {
+        console.log('[LiveKitVoice] Capturing frame...');
         const frame = await captureFrame();
-        if (!frame) return;
+        if (!frame) {
+          console.warn('[LiveKitVoice] captureFrame() returned empty — camera not ready?');
+          return;
+        }
+        console.log(`[LiveKitVoice] Frame captured (${Math.round(frame.length / 1024)}KB)`);
 
         // Get auth token
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) return;
+        if (!token) {
+          console.warn('[LiveKitVoice] No auth token — skipping frame upload');
+          return;
+        }
 
         // POST frame to backend HTTP endpoint
-        const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
+        const url = `${BACKEND_URL}/api/livekit-frame`;
+        console.log(`[LiveKitVoice] POSTing frame to ${url} room=${roomName}`);
+        const resp = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -283,10 +300,12 @@ function RoomContent({
           },
           body: JSON.stringify({ room_name: roomName, frame }),
         });
+        frameCount++;
         if (resp.ok) {
-          console.log(`[LiveKitVoice] Camera frame uploaded (${Math.round(frame.length / 1024)}KB)`);
+          console.log(`[LiveKitVoice] ✓ Frame #${frameCount} uploaded (${Math.round(frame.length / 1024)}KB)`);
         } else {
-          console.warn(`[LiveKitVoice] Frame upload failed: ${resp.status}`);
+          const errorText = await resp.text().catch(() => '');
+          console.warn(`[LiveKitVoice] Frame upload failed: ${resp.status} ${errorText}`);
         }
       } catch (e: any) {
         console.warn(`[LiveKitVoice] Frame upload error: ${e?.message || e}`);
@@ -301,6 +320,7 @@ function RoomContent({
       active = false;
       clearTimeout(initialTimeout);
       clearInterval(interval);
+      console.log(`[LiveKitVoice] Frame upload loop stopped (sent ${frameCount} frames)`);
     };
   }, [connectionState, captureFrame, roomName]);
 
