@@ -176,24 +176,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      // The app's deep link scheme — iOS/Android intercepts this to reopen the app
-      const appRedirectUri = AuthSession.makeRedirectUri({
+      // Generate redirect URI that works in both Expo Go and standalone builds.
+      // Expo Go: returns exp://192.168.x.x:8081/--/auth/callback
+      // Standalone: returns arrival://auth/callback
+      const redirectUri = AuthSession.makeRedirectUri({
         scheme: 'arrival',
         path: 'auth/callback',
       });
 
-      // Tell Supabase to redirect to the website's auth-callback page,
-      // which then forwards tokens to the app via deep link (arrival://)
-      const siteUrl = process.env.EXPO_PUBLIC_SITE_URL || 'https://arrivalcompany.com';
-      const webRedirect = `${siteUrl}/auth-callback`;
+      console.log('[Auth] Google OAuth — redirect URI:', redirectUri);
 
-      console.log('[Auth] Google OAuth — app scheme:', appRedirectUri, '| web redirect:', webRedirect);
-
-      // Use Supabase's signInWithOAuth to get the authorization URL
+      // Tell Supabase to redirect directly to the app (not via website).
+      // This avoids the middleman auth-callback.html which fails in Expo Go
+      // because the arrival:// custom scheme isn't registered there.
+      // IMPORTANT: This redirect URI must be whitelisted in Supabase Auth settings:
+      //   - arrival://auth/callback (for production builds)
+      //   - exp://* (for Expo Go development — add as wildcard)
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: webRedirect,
+          redirectTo: redirectUri,
           skipBrowserRedirect: true,
           queryParams: {
             prompt: 'select_account',
@@ -206,10 +208,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { error: error?.message || 'Failed to start Google sign-in' };
       }
 
-      // Open the browser for Google OAuth
-      // Listen for the app deep link (arrival://auth/callback) which the
-      // website's auth-callback.html redirects to after receiving tokens
-      const result = await WebBrowser.openAuthSessionAsync(data.url, appRedirectUri);
+      // Open system browser for Google OAuth.
+      // openAuthSessionAsync intercepts the redirect back to redirectUri
+      // and returns the full URL with tokens in the hash fragment.
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
 
       if (result.type !== 'success') {
         console.log('[Auth] Google OAuth cancelled or failed:', result.type);
