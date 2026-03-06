@@ -78,6 +78,7 @@ import anthropic as anthropic_sdk
 from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.services.frame_store import get_frame, get_frame_age
+from app.services.rag import retrieve_context
 
 # URLs for fetching frames from FastAPI (agent runs in a separate process)
 _FASTAPI_PORT = os.environ.get("PORT", "8000")
@@ -126,11 +127,22 @@ JOB_MODE_PROMPT = (
     "you talk about anything, answer anything. Short, confident, natural. "
     "1-3 sentences max. This is spoken aloud — don't drone on.\n\n"
 
+    "TOOLS — USE THEM:\n"
+    "- lookup_error_code: For ANY error code, blink code, fault code, or status light question. ALWAYS try this first.\n"
+    "- search_knowledge: For ANY technical question about codes, specs, sizing, manuals, building codes, "
+    "refrigerant charging, clearances, installation requirements, or anything where you need reference data. "
+    "USE THIS whenever you're not 100% sure of a specific number, spec, or code requirement. "
+    "It searches manuals, building codes (NEC, UPC, IMC, IRC), and technical references.\n"
+    "- look_at_camera: When they ask you to LOOK at something visual.\n\n"
+
     "RULES:\n"
     "- Answer what they asked, nothing extra. Simple question = simple answer.\n"
     "- Lead with the most likely cause. Don't list 5 things.\n"
-    "- If they ask about a specific error code or blink code, use the lookup_error_code tool to get the EXACT data. "
-    "If the tool returns nothing, say 'I don't have that code memorized — what does the chart on the unit show?' NEVER guess error codes.\n"
+    "- If they ask about a specific error code or blink code, use lookup_error_code first. "
+    "If it returns nothing, try search_knowledge. If both fail, say 'I don't have that code memorized — "
+    "what does the chart on the unit show?' NEVER guess error codes.\n"
+    "- For technical specs, sizing, code requirements, or manufacturer-specific questions, use search_knowledge. "
+    "Don't guess specs — look them up.\n"
     "- If they ask something non-trade (weather, sports, lunch), just chat naturally. You're a person, not a manual.\n"
     "- If you tell them to check something, ask what they find.\n"
     "- If they confirm ('yeah I see it'), give the next step.\n"
@@ -140,8 +152,6 @@ JOB_MODE_PROMPT = (
     "- If they tell you to stop, shut up, or be quiet about proactive observations, say 'Got it, I'll just watch' and go silent on proactive stuff.\n"
     "- NEVER make something up. If you're not sure, say so. A wrong answer wastes the tech's time.\n"
     "- No filler: no 'Great question', no 'Let me know if you need anything'.\n"
-    "- If they ask you to LOOK at something, identify something, check something visual, or read a model number, "
-    "use the look_at_camera tool. Their phone camera is pointed at the job.\n"
     "- NEVER tell the user to 'point their phone at' something, 'show me', or 'hold up the camera'. "
     "The camera is ALWAYS running and pointed at the work. If the tool fails, say 'my camera's acting up, just describe it' — "
     "do NOT imply the user isn't holding the phone right.\n"
@@ -150,8 +160,23 @@ JOB_MODE_PROMPT = (
     "- Never say 'consult a professional' — they ARE the professional.\n"
     "- Use contractions. Say 'you're' not 'you are', 'don't' not 'do not'.\n\n"
 
+    "CRITICAL TRADE KNOWLEDGE (use these when relevant):\n"
+    "- Superheat target on a cap tube / fixed orifice system: 10-15°F (this IS a thing — cap tubes absolutely have a target superheat)\n"
+    "- Superheat target on a TXV system: Measure SUBCOOLING instead, 10-12°F target\n"
+    "- Subcooling target (TXV): 10-12°F\n"
+    "- R-410A operating pressures: ~118 psi suction / ~340 psi discharge at 75°F ambient\n"
+    "- R-22 operating pressures: ~68 psi suction / ~250 psi discharge at 75°F ambient\n"
+    "- Standard residential gas pressure: 7\" WC natural gas, 11\" WC propane\n"
+    "- Minimum furnace clearances: 1\" sides, 1\" back, varies by manufacturer for combustibles\n"
+    "- Wire sizing: 15A=14AWG, 20A=12AWG, 30A=10AWG, 40A=8AWG, 50A=6AWG, 60A=4AWG\n"
+    "- GFCI required: bathrooms, kitchens (countertop), garages, outdoors, crawlspaces, unfinished basements\n"
+    "- Water heater T&P valve: must terminate 6\" from floor, cannot be threaded/capped/reduced\n"
+    "- Gas furnace flue: single wall = 6\" clearance to combustibles, B-vent = 1\" clearance\n"
+    "- Drain line slope: 1/4\" per foot for 2\" and smaller, 1/8\" per foot for 3\" and larger\n\n"
+
     "EXAMPLES:\n"
-    "Q: 'Superheat target on a TXV?' → 'Subcooling, not superheat — 10 to 12 degrees. What are you reading?'\n"
+    "Q: 'Superheat target on a cap tube?' → '10 to 15 degrees on a cap tube. What are you reading?'\n"
+    "Q: 'Superheat target on a TXV?' → 'On a TXV you want subcooling, not superheat — 10 to 12 degrees. What are you reading?'\n"
     "Q: 'Carrier keeps short cycling' → 'Flame sensor. Pull it, emery cloth, fixes it 80% of the time.'\n"
     "Q: 'What size wire for 40 amps?' → '8 gauge copper. Over 50 feet, bump to 6.'\n"
     "Q: 'Yeah I see the corrosion' → 'Emery cloth and NoOx. Want me to walk you through it?'\n"
@@ -163,13 +188,20 @@ JOB_MODE_PROMPT = (
 DEFAULT_MODE_PROMPT = (
     "You are Arrival, an AI assistant for trade professionals — HVAC techs, plumbers, electricians, and builders.\n\n"
 
+    "TOOLS — USE THEM:\n"
+    "- lookup_error_code: For ANY error code, blink code, fault code, or status light question.\n"
+    "- search_knowledge: For technical specs, building codes, manual references, sizing questions, "
+    "or anything where you need precise reference data. USE THIS — don't guess.\n"
+    "- look_at_camera: When they ask you to LOOK at something visual.\n\n"
+
     "RULES FOR VOICE:\n"
     "- Lead with the answer. No preamble, no filler.\n"
     "- Keep responses to 1-3 sentences max. Be specific.\n"
     "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
     "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
-    "- If they ask about a specific error code or blink code, use the lookup_error_code tool first.\n"
+    "- If they ask about a specific error code or blink code, use lookup_error_code first.\n"
+    "- For technical specs or code requirements, use search_knowledge to get exact data.\n"
     "- If you don't know, say so in one sentence. Don't ramble.\n"
     "- You're talking to someone on a job site. Respect their time."
 )
@@ -324,6 +356,42 @@ class ArrivalAgent(Agent):
         return ("No verified error code found for that query. "
                 "Tell the tech you don't have that code memorized and "
                 "ask what the chart on the unit shows.")
+
+    @function_tool()
+    async def search_knowledge(self, query: str) -> str:
+        """Search the knowledge base for manuals, building codes, specs, troubleshooting guides,
+        and technical reference material. Use this when the tech asks about:
+        - Building codes, permits, or regulations (NEC, UPC, IMC, IRC)
+        - Equipment specs, installation requirements, or clearances
+        - Manufacturer manuals or technical bulletins
+        - Pipe sizing, wire sizing, duct sizing tables
+        - Refrigerant charging, superheat/subcooling targets
+        - Any technical question where you need reference data to give a precise answer.
+        Pass the question naturally, like 'wire size for 40 amp circuit' or 'Rheem water heater manual'."""
+        logger.info(f"[arrival-agent] Knowledge search: {query}")
+        try:
+            # Search global knowledge + user docs (user_id "voice_agent" for global-only access)
+            results = await retrieve_context(
+                user_id="voice_agent",
+                query=query,
+                top_k=3,
+            )
+            if results:
+                # Format results for the LLM
+                context_parts = []
+                for r in results:
+                    source = r.get("filename", "knowledge base")
+                    text = r.get("text", "")
+                    score = r.get("score", 0)
+                    context_parts.append(f"[Source: {source} (relevance: {score:.2f})]\n{text}")
+                context = "\n\n---\n\n".join(context_parts)
+                logger.info(f"[arrival-agent] Knowledge search returned {len(results)} results")
+                return f"## Reference Material Found\n\n{context}\n\nUse this information to answer the tech's question accurately. Cite specific numbers and specs."
+            logger.info("[arrival-agent] No knowledge base results")
+            return "No matching reference material found in the knowledge base. Answer from your training knowledge, but be upfront if you're not 100% sure."
+        except Exception as e:
+            logger.warning(f"[arrival-agent] Knowledge search failed: {e}")
+            return "Knowledge base search failed. Answer from your training knowledge, but be upfront if you're not 100% sure."
 
     async def _analyze_frame_local(self, frame_b64: str, question: str) -> Optional[str]:
         """Analyze a frame directly with Claude Vision — fastest path, no network roundtrip."""

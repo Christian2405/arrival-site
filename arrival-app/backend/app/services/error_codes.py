@@ -959,6 +959,70 @@ AO_SMITH_BLINKS = {
     },
 }
 
+RHEEM_WATER_HEATER_BLINKS = {
+    "1": {
+        "meaning": "Normal operation — pilot is lit and system is functioning correctly.",
+        "causes": ["System operating normally — status light confirms pilot flame detected"],
+        "action": "No action needed. One blink indicates normal operation.",
+    },
+    "2": {
+        "meaning": "Thermopile voltage low — pilot is lit but not generating enough voltage to open gas valve.",
+        "causes": [
+            "Weak or failing thermopile (most common)",
+            "Pilot flame not properly hitting thermopile tip",
+            "Dirty or corroded thermopile connections",
+            "Bad gas control valve not reading thermopile voltage",
+        ],
+        "action": "Measure thermopile voltage: should be >400mV open circuit, >250mV under load. Clean thermopile tip and ensure pilot flame envelopes it. If voltage is still low, replace thermopile. If voltage is good but valve won't open, replace gas control valve.",
+    },
+    "3": {
+        "meaning": "Thermopile voltage low with WV circuit closed — likely gas valve failure.",
+        "causes": [
+            "Internal gas control valve failure (most common for this code)",
+            "Wiring fault between thermopile and gas valve",
+            "Corroded wire connections at gas valve terminals",
+        ],
+        "action": "This usually means the gas control valve has failed internally. Check thermopile voltage — if >250mV under load but WV circuit stays closed, replace the gas control valve.",
+    },
+    "4": {
+        "meaning": "Over temperature — ECO (Emergency Cut Off) tripped, water exceeded safe temperature.",
+        "causes": [
+            "Thermostat set too high",
+            "Sediment buildup on tank bottom creating hot spots",
+            "Gas control valve thermostat failure (running away)",
+            "Gas control valve stuck open, over-firing",
+        ],
+        "action": "Turn off gas, let tank cool. Check thermostat setting (should be 120°F residential). Flush tank to remove sediment. If ECO trips again at normal setting, gas control valve thermostat has failed — replace it. Do NOT just reset ECO without finding cause.",
+    },
+    "5": {
+        "meaning": "Temperature sensor failure — sensor reading out of range.",
+        "causes": [
+            "Failed temperature sensor / thermistor (open or shorted)",
+            "Wiring issue between sensor and gas control valve",
+            "Corroded sensor connections",
+        ],
+        "action": "Check sensor wiring connections for corrosion. Measure sensor resistance and compare to manufacturer spec. If out of range, replace temperature sensor.",
+    },
+    "7": {
+        "meaning": "Gas control valve failure — internal electronic or mechanical malfunction.",
+        "causes": [
+            "Internal gas control valve malfunction (solenoid, electronics, or mechanical)",
+            "Power surge or electrical event damaged valve electronics",
+            "Failed internal safety circuit",
+        ],
+        "action": "Replace the gas control valve. 7 blinks indicates an internal malfunction that cannot be field-repaired. Verify gas supply is off before replacing.",
+    },
+    "8": {
+        "meaning": "Power supply issue — inadequate voltage to gas control electronics.",
+        "causes": [
+            "Inadequate thermopile voltage to power electronic gas valve",
+            "Loose or corroded wiring connections",
+            "Failing thermopile not generating enough power under load",
+        ],
+        "action": "Measure thermopile millivolt output under load. Should be >250mV. Check all wire connections for corrosion. If thermopile output is good, gas control valve may need replacement.",
+    },
+}
+
 BRADFORD_WHITE_WATER_HEATER_BLINKS = {
     "1": {
         "meaning": "Normal operation — system is functioning correctly.",
@@ -1757,6 +1821,7 @@ BRAND_ALIASES = {
 ERROR_CODE_DB = {
     "rheem": {
         "furnace": RHEEM_FURNACE_BLINKS,
+        "water heater": RHEEM_WATER_HEATER_BLINKS,
     },
     "carrier": {
         "furnace": CARRIER_FURNACE_CODES,
@@ -1808,6 +1873,9 @@ EQUIPMENT_ALIASES = {
     "tankless": "tankless",
     "tankless water heater": "tankless",
     "water heater": "water heater",
+    "hot water heater": "water heater",
+    "hot water tank": "water heater",
+    "water tank": "water heater",
     "mini split": "mini split",
     "mini-split": "mini split",
     "minisplit": "mini split",
@@ -1816,6 +1884,8 @@ EQUIPMENT_ALIASES = {
     "ac": "air conditioner",
     "a/c": "air conditioner",
     "heat pump": "heat pump",
+    "boiler": "boiler",
+    "air handler": "air handler",
 }
 
 # Patterns to extract error codes from natural language queries
