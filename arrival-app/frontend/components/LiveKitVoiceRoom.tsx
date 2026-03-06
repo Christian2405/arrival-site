@@ -270,11 +270,16 @@ function RoomContent({
       try {
         const frame = await captureFrame();
         if (frame && room.localParticipant) {
-          const data = strToBytes(JSON.stringify({ type: 'camera_frame', image: frame }));
+          // Truncate frame if too large (data channel limit ~256KB)
+          const maxB64Len = 180000; // ~135KB decoded
+          const trimmedFrame = frame.length > maxB64Len ? frame.substring(0, maxB64Len) : frame;
+          const payload = JSON.stringify({ type: 'camera_frame', image: trimmedFrame });
+          const data = strToBytes(payload);
           await room.localParticipant.publishData(data, { reliable: true });
+          console.log(`[LiveKitVoice] Camera frame sent (${Math.round(data.length / 1024)}KB)`);
         }
-      } catch (e) {
-        // Silent fail — frame sending is best-effort
+      } catch (e: any) {
+        console.warn(`[LiveKitVoice] Frame send failed: ${e?.message || e}`);
       }
     };
 

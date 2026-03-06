@@ -308,13 +308,13 @@ async def entrypoint(ctx: JobContext):
 
         # Listen for camera frames from the mobile app via data channel
         @ctx.room.on("data_received")
-        def on_data(data: bytes, participant, kind, topic):
+        def on_data(data_packet):
             try:
-                payload = json.loads(data.decode("utf-8"))
+                payload = json.loads(data_packet.data.decode("utf-8"))
                 if payload.get("type") == "camera_frame" and payload.get("image"):
                     agent.update_camera_frame(payload["image"])
-                    logger.debug("[arrival-agent] 📷 Camera frame received")
-            except (json.JSONDecodeError, UnicodeDecodeError):
+                    logger.info("[arrival-agent] Camera frame received (%d bytes)", len(payload["image"]))
+            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
                 pass  # Not a camera frame — ignore
 
         logger.info("[arrival-agent] ✓ Camera data channel listener registered")
