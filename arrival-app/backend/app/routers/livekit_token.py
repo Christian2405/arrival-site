@@ -16,6 +16,7 @@ from livekit import api
 
 from app import config
 from app.middleware.auth import decode_jwt_token
+from app.services.frame_store import store_frame
 
 logger = logging.getLogger(__name__)
 
@@ -168,3 +169,21 @@ async def create_livekit_token(req: TokenRequest, request: Request):
         ws_url=config.LIVEKIT_URL,
         room_name=room_name,
     )
+
+
+class FrameUpload(BaseModel):
+    room_name: str
+    frame: str  # base64 JPEG
+
+
+@router.post("/livekit-frame")
+async def upload_frame(req: FrameUpload, request: Request):
+    """Upload a camera frame for the agent to analyze.
+    Uses HTTP instead of WebRTC data channel for reliability."""
+    # Light auth check — just verify bearer token exists
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing auth token")
+
+    store_frame(req.room_name, req.frame)
+    return {"ok": True}

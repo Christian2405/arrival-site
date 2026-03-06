@@ -69,6 +69,7 @@ except ImportError:
 
 from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
+from app.services.frame_store import get_frame, get_frame_age
 
 logger = logging.getLogger(__name__)
 
@@ -154,9 +155,10 @@ class ArrivalAgent(Agent):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Camera state
+        # Camera state — frames come from data channel OR HTTP frame store
         self._latest_frame: Optional[str] = None
         self._frame_received_at: float = 0
+        self._room_name: str = ""  # Set by entrypoint for HTTP frame store lookup
         # Proactive vision state
         self._last_analyzed_hash: str = ""
         self._recent_observations: list[str] = []
@@ -165,9 +167,22 @@ class ArrivalAgent(Agent):
         self._proactive_enabled: bool = True
 
     def update_camera_frame(self, frame_b64: str):
-        """Store the latest camera frame from the mobile app."""
+        """Store the latest camera frame from the mobile app (data channel path)."""
         self._latest_frame = frame_b64
         self._frame_received_at = time.time()
+
+    def get_current_frame(self) -> Optional[str]:
+        """Get the best available frame — checks data channel first, then HTTP store."""
+        # Data channel frame (if recent)
+        if self._latest_frame and (time.time() - self._frame_received_at) < 30:
+            return self._latest_frame
+        # HTTP frame store fallback
+        if self._room_name:
+            http_frame = get_frame(self._room_name)
+            if http_frame:
+                return http_frame
+        # Data channel frame even if old
+        return self._latest_frame
 
     def _frame_hash(self, frame: str) -> str:
         """Quick fingerprint — sample 100 positions in base64 string."""
@@ -204,14 +219,13 @@ class ArrivalAgent(Agent):
         """Look at what the user's phone camera sees. Use this when they ask you to
         look at something, identify something, check something, read a model number,
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
-        if not self._latest_frame:
-            logger.warning("[arrival-agent] look_at_camera called but no frame available")
+        frame = self.get_current_frame()
+        if not frame:
+            logger.warning("[arrival-agent] look_at_camera called but no frame available (data channel + HTTP both empty)")
             return ("I can't see anything right now — I'm not getting a camera feed. "
                     "Make sure the camera is on and pointed at what you want me to see.")
 
-        # Check frame freshness — if older than 30s, warn
-        frame_age = time.time() - self._frame_received_at
-        logger.info(f"[arrival-agent] Looking at camera frame (age: {frame_age:.0f}s, size: {len(self._latest_frame)} chars)")
+        logger.info(f"[arrival-agent] Looking at camera frame (size: {len(frame)} chars, room: {self._room_name})")
 
         try:
             import anthropic as anthropic_sdk
@@ -227,7 +241,7 @@ class ArrivalAgent(Agent):
                             "source": {
                                 "type": "base64",
                                 "media_type": "image/jpeg",
-                                "data": self._latest_frame,
+                                "data": frame,
                             },
                         },
                         {
@@ -320,7 +334,9 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             # Skip if proactive disabled or no frame yet
             if not agent._proactive_enabled:
                 continue
-            if not agent._latest_frame:
+
+            frame = agent.get_current_frame()
+            if not frame:
                 continue
 
             now = time.time()
@@ -329,9 +345,6 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             cooldown = PROACTIVE_PUSHBACK_COOLDOWN if agent._user_pushback_count > 2 else PROACTIVE_MIN_COOLDOWN
             if now - agent._last_proactive_time < cooldown:
                 continue
-
-            # Frame change check — skip if nothing changed (unless force interval elapsed)
-            frame = agent._latest_frame
             force = (now - last_analysis_time) > PROACTIVE_FORCE_INTERVAL
             if not force and not agent._frame_changed(frame):
                 continue
@@ -467,6 +480,9 @@ async def entrypoint(ctx: JobContext):
             min_endpointing_delay=0.5,
             max_endpointing_delay=1.5,
         )
+
+        # Set room name so agent can look up frames from HTTP store
+        agent._room_name = room_name
 
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")

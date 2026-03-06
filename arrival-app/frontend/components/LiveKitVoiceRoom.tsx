@@ -20,21 +20,16 @@ import {
   AudioSession,
   useConnectionState,
   useParticipants,
-  useRoomContext,
   registerGlobals,
 } from '@livekit/react-native';
-import { ConnectionState, RoomEvent } from 'livekit-client';
+import { ConnectionState } from 'livekit-client';
 import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
+import { supabase } from '../services/supabase';
+
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 // Register LiveKit globals — must be called once before any LK usage
 registerGlobals();
-
-/** Convert a string to Uint8Array (ASCII-safe, no TextEncoder needed) */
-function strToBytes(str: string): Uint8Array {
-  const buf = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) buf[i] = str.charCodeAt(i) & 0xff;
-  return buf;
-}
 
 export type AgentVoiceState = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
@@ -228,6 +223,7 @@ export default function LiveKitVoiceRoom({
         onRetry={retry}
         unmountedRef={unmounted}
         captureFrame={captureFrame}
+        roomName={session.roomName}
       />
     </LiveKitRoom>
   );
@@ -245,6 +241,7 @@ function RoomContent({
   onRetry,
   unmountedRef,
   captureFrame,
+  roomName,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onAgentTranscript?: (text: string, isFinal: boolean) => void;
@@ -252,46 +249,60 @@ function RoomContent({
   onRetry: () => void;
   unmountedRef: React.MutableRefObject<boolean>;
   captureFrame?: () => Promise<string | undefined>;
+  roomName?: string;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
-  const room = useRoomContext();
   const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
   const [roomError, setRoomError] = useState<string | null>(null);
 
-  // Send camera frames to agent via data channel (every 5s when connected)
+  // Send camera frames to agent via HTTP (every 5s when connected)
+  // HTTP is more reliable than WebRTC data channels for large image payloads
   useEffect(() => {
-    if (connectionState !== ConnectionState.Connected || !captureFrame || !room) return;
+    if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) return;
 
     let active = true;
     const sendFrame = async () => {
       if (!active) return;
       try {
         const frame = await captureFrame();
-        if (frame && room.localParticipant) {
-          // Truncate frame if too large (data channel limit ~256KB)
-          const maxB64Len = 180000; // ~135KB decoded
-          const trimmedFrame = frame.length > maxB64Len ? frame.substring(0, maxB64Len) : frame;
-          const payload = JSON.stringify({ type: 'camera_frame', image: trimmedFrame });
-          const data = strToBytes(payload);
-          await room.localParticipant.publishData(data, { reliable: true });
-          console.log(`[LiveKitVoice] Camera frame sent (${Math.round(data.length / 1024)}KB)`);
+        if (!frame) return;
+
+        // Get auth token
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+
+        // POST frame to backend HTTP endpoint
+        const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ room_name: roomName, frame }),
+        });
+        if (resp.ok) {
+          console.log(`[LiveKitVoice] Camera frame uploaded (${Math.round(frame.length / 1024)}KB)`);
+        } else {
+          console.warn(`[LiveKitVoice] Frame upload failed: ${resp.status}`);
         }
       } catch (e: any) {
-        console.warn(`[LiveKitVoice] Frame send failed: ${e?.message || e}`);
+        console.warn(`[LiveKitVoice] Frame upload error: ${e?.message || e}`);
       }
     };
 
-    // Send initial frame immediately, then every 5 seconds
-    sendFrame();
+    // Send initial frame after 2s, then every 5 seconds
+    const initialTimeout = setTimeout(sendFrame, 2000);
     const interval = setInterval(sendFrame, 5000);
 
     return () => {
       active = false;
+      clearTimeout(initialTimeout);
       clearInterval(interval);
     };
-  }, [connectionState, captureFrame, room]);
+  }, [connectionState, captureFrame, roomName]);
 
   // Map connection state to agent state
   useEffect(() => {
