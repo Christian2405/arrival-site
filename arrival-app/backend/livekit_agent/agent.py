@@ -1,7 +1,7 @@
 """
-Arrival AI — LiveKit Voice Agent
+Arrival AI — LiveKit Voice Agent (Proactive Job Mode)
 
-Full-duplex voice agent for trade workers.
+Full-duplex voice agent for trade workers with proactive camera vision.
 
 Pipeline:
   - Silero VAD (ML-based, works next to compressors)
@@ -10,6 +10,7 @@ Pipeline:
   - ElevenLabs Flash v2.5 TTS (<300ms to first audio)
   - LiveKit WebRTC transport (full-duplex, <1s end-to-end)
   - MultilingualModel turn detection (semantic, not silence-based)
+  - Proactive Vision: background loop analyzes camera and speaks up
 
 Run:
   python -m livekit_agent.agent start
@@ -19,10 +20,12 @@ Requires env vars:
   ANTHROPIC_API_KEY, DEEPGRAM_API_KEY, ELEVENLABS_API_KEY
 """
 
+import asyncio
 import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -71,12 +74,21 @@ logger = logging.getLogger(__name__)
 
 # Startup banner — visible in Render logs for diagnostics
 logger.info("[arrival-agent] ============================")
-logger.info("[arrival-agent] LiveKit Voice Agent Loading")
+logger.info("[arrival-agent] LiveKit Voice Agent Loading (Proactive Vision)")
 logger.info(f"[arrival-agent] LIVEKIT_URL: {config.LIVEKIT_URL[:40] if config.LIVEKIT_URL else '(NOT SET)'}")
 logger.info(f"[arrival-agent] DEEPGRAM: {'set' if config.DEEPGRAM_API_KEY else 'NOT SET'}")
 logger.info(f"[arrival-agent] ANTHROPIC: {'set' if config.ANTHROPIC_API_KEY else 'NOT SET'}")
 logger.info(f"[arrival-agent] ELEVENLABS: {'set' if config.ELEVENLABS_API_KEY else 'NOT SET'}")
 logger.info("[arrival-agent] ============================")
+
+# ---------------------------------------------------------------------------
+# Proactive vision config
+# ---------------------------------------------------------------------------
+PROACTIVE_CHECK_INTERVAL = 6   # seconds between vision checks
+PROACTIVE_MIN_COOLDOWN = 12    # min seconds between proactive speech
+PROACTIVE_PUSHBACK_COOLDOWN = 60  # cooldown after user pushes back
+PROACTIVE_FORCE_INTERVAL = 30  # re-analyze even if frame unchanged
+FRAME_CHANGE_THRESHOLD = 10    # out of 100 sampled positions
 
 # ---------------------------------------------------------------------------
 # Voice prompts
@@ -95,9 +107,10 @@ JOB_MODE_PROMPT = (
     "- If they ask something non-trade (weather, sports, lunch), just chat naturally. You're a person, not a manual.\n"
     "- If you tell them to check something, ask what they find.\n"
     "- If they confirm ('yeah I see it'), give the next step.\n"
-    "- If they say 'it's fine' or 'no' or push back, DROP IT IMMEDIATELY. Say 'Fair enough' or 'Got it' and move on.\n"
+    "- If they say 'it's fine' or 'no' or push back, DROP IT IMMEDIATELY. Say 'Fair enough' or 'Got it, I'll watch quietly' and move on.\n"
     "- If they challenge something you said ('what are you talking about', 'there's no leak', 'that's wrong'), "
     "IMMEDIATELY back off. Say 'My bad' or 'Alright, scratch that'. NEVER double down. NEVER insist.\n"
+    "- If they tell you to stop, shut up, or be quiet about proactive observations, say 'Got it, I'll just watch' and go silent on proactive stuff.\n"
     "- NEVER make something up. If you're not sure, say so. A wrong answer wastes the tech's time.\n"
     "- No filler: no 'Great question', no 'Let me know if you need anything'.\n"
     "- If they ask you to LOOK at something, identify something, check something visual, or read a model number, "
@@ -133,19 +146,43 @@ DEFAULT_MODE_PROMPT = (
 
 
 # ---------------------------------------------------------------------------
-# Agent with error code lookup tool
+# Agent with tools + proactive vision state
 # ---------------------------------------------------------------------------
 
 class ArrivalAgent(Agent):
-    """Trade worker voice agent with error code lookup and camera vision."""
+    """Trade worker voice agent with error code lookup, camera vision, and proactive monitoring."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._latest_frame: Optional[str] = None  # base64 JPEG from phone camera
+        # Camera state
+        self._latest_frame: Optional[str] = None
+        self._frame_received_at: float = 0
+        # Proactive vision state
+        self._last_analyzed_hash: str = ""
+        self._recent_observations: list[str] = []
+        self._last_proactive_time: float = 0
+        self._user_pushback_count: int = 0
+        self._proactive_enabled: bool = True
 
     def update_camera_frame(self, frame_b64: str):
         """Store the latest camera frame from the mobile app."""
         self._latest_frame = frame_b64
+        self._frame_received_at = time.time()
+
+    def _frame_hash(self, frame: str) -> str:
+        """Quick fingerprint — sample 100 positions in base64 string."""
+        if len(frame) < 200:
+            return frame
+        step = len(frame) // 100
+        return "".join(frame[i] for i in range(0, len(frame), step))[:100]
+
+    def _frame_changed(self, frame: str) -> bool:
+        """Check if frame differs significantly from last analyzed frame."""
+        new_hash = self._frame_hash(frame)
+        if not self._last_analyzed_hash:
+            return True
+        diff = sum(a != b for a, b in zip(new_hash, self._last_analyzed_hash))
+        return diff > FRAME_CHANGE_THRESHOLD
 
     @function_tool()
     async def lookup_error_code(self, query: str) -> str:
@@ -168,10 +205,14 @@ class ArrivalAgent(Agent):
         look at something, identify something, check something, read a model number,
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
         if not self._latest_frame:
-            return ("I can't see anything right now — the camera feed isn't available. "
-                    "Ask the tech to make sure the camera is pointed at what they want you to see.")
+            logger.warning("[arrival-agent] look_at_camera called but no frame available")
+            return ("I can't see anything right now — I'm not getting a camera feed. "
+                    "Make sure the camera is on and pointed at what you want me to see.")
 
-        logger.info("[arrival-agent] Looking at camera frame...")
+        # Check frame freshness — if older than 30s, warn
+        frame_age = time.time() - self._frame_received_at
+        logger.info(f"[arrival-agent] Looking at camera frame (age: {frame_age:.0f}s, size: {len(self._latest_frame)} chars)")
+
         try:
             import anthropic as anthropic_sdk
             client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
@@ -201,11 +242,135 @@ class ArrivalAgent(Agent):
                 }],
             )
             result_text = response.content[0].text
-            logger.info(f"[arrival-agent] Camera analysis: {result_text[:80]}...")
+            logger.info(f"[arrival-agent] Camera analysis: {result_text[:100]}...")
             return result_text
         except Exception as e:
             logger.error(f"[arrival-agent] Camera analysis failed: {e}")
-            return "I tried to look but something went wrong with the camera. Ask them to describe what they see."
+            return "I tried to look but something went wrong. Can you describe what you're seeing?"
+
+
+# ---------------------------------------------------------------------------
+# Proactive Vision — background analysis loop
+# ---------------------------------------------------------------------------
+
+async def analyze_frame_for_alert(agent: ArrivalAgent, frame_b64: str) -> Optional[str]:
+    """Analyze a camera frame and return an observation if worth speaking about, else None."""
+    import anthropic as anthropic_sdk
+    client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+
+    # Build context from recent observations to avoid repeats
+    context = ""
+    if agent._recent_observations:
+        recent = "; ".join(agent._recent_observations[-3:])
+        context = f"\nYou already mentioned: {recent}. Do NOT repeat these."
+
+    response = await client.messages.create(
+        model=config.ANTHROPIC_VOICE_MODEL,  # Haiku for speed + cost
+        max_tokens=80,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        "You're a 50-year trade veteran watching a job site through a phone camera. "
+                        "Is there anything worth speaking up about RIGHT NOW?\n\n"
+                        "SPEAK UP about: safety hazards (exposed wires, flame, water spray, gas leak signs), "
+                        "visible problems (wrong fitting, corroded connections, code violations, damaged insulation), "
+                        "readable model/serial numbers or data plates the tech might need.\n\n"
+                        "STAY QUIET about: normal equipment, tools lying around, general scene, "
+                        "things that look fine, hands, clothing, background.\n\n"
+                        f"{context}\n\n"
+                        "If something is worth mentioning, respond with ONE short sentence a veteran would say "
+                        "out loud to the tech next to him. Keep it casual and direct.\n"
+                        "If nothing notable, respond with exactly: NOTHING"
+                    ),
+                },
+            ],
+        }],
+    )
+    result = response.content[0].text.strip()
+
+    # Filter out non-observations
+    if result.upper() == "NOTHING" or len(result) < 5:
+        return None
+    # Sometimes the model says "Nothing notable" or similar
+    if "nothing" in result.lower() and len(result) < 30:
+        return None
+
+    return result
+
+
+async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
+    """Background task: continuously analyze camera frames and speak up when warranted."""
+    logger.info("[proactive] Monitor started — waiting for camera frames...")
+    last_analysis_time = 0.0
+
+    # Wait a bit before starting proactive checks (let the greeting finish)
+    await asyncio.sleep(5)
+
+    while True:
+        try:
+            await asyncio.sleep(PROACTIVE_CHECK_INTERVAL)
+
+            # Skip if proactive disabled or no frame yet
+            if not agent._proactive_enabled:
+                continue
+            if not agent._latest_frame:
+                continue
+
+            now = time.time()
+
+            # Cooldown check — don't spam the tech
+            cooldown = PROACTIVE_PUSHBACK_COOLDOWN if agent._user_pushback_count > 2 else PROACTIVE_MIN_COOLDOWN
+            if now - agent._last_proactive_time < cooldown:
+                continue
+
+            # Frame change check — skip if nothing changed (unless force interval elapsed)
+            frame = agent._latest_frame
+            force = (now - last_analysis_time) > PROACTIVE_FORCE_INTERVAL
+            if not force and not agent._frame_changed(frame):
+                continue
+
+            # Update hash and timestamp
+            agent._last_analyzed_hash = agent._frame_hash(frame)
+            last_analysis_time = now
+
+            # Analyze frame with Claude Vision
+            logger.info("[proactive] Analyzing frame...")
+            observation = await analyze_frame_for_alert(agent, frame)
+
+            if observation:
+                # Check for repeats
+                is_repeat = any(
+                    obs.lower() in observation.lower() or observation.lower() in obs.lower()
+                    for obs in agent._recent_observations[-3:]
+                )
+                if is_repeat:
+                    logger.info(f"[proactive] Skipping repeat: {observation[:60]}...")
+                    continue
+
+                logger.info(f"[proactive] ALERT: {observation}")
+                await session.generate_reply(
+                    instructions=f"You just noticed something while watching the camera. Tell the tech briefly and casually: {observation}"
+                )
+                agent._last_proactive_time = now
+                agent._recent_observations.append(observation)
+                if len(agent._recent_observations) > 5:
+                    agent._recent_observations.pop(0)
+            else:
+                logger.debug("[proactive] Nothing notable in frame")
+
+        except asyncio.CancelledError:
+            logger.info("[proactive] Monitor cancelled — shutting down")
+            break
+        except Exception as e:
+            logger.warning(f"[proactive] Analysis error: {e}")
+            await asyncio.sleep(5)  # Back off on error
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +460,7 @@ async def entrypoint(ctx: JobContext):
         session = AgentSession(**session_kwargs)
         logger.info("[arrival-agent] ✓ AgentSession created")
 
-        # Create agent with error code lookup tool
+        # Create agent with tools
         agent = ArrivalAgent(
             instructions=prompt,
             allow_interruptions=True,
@@ -313,15 +478,21 @@ async def entrypoint(ctx: JobContext):
                 payload = json.loads(data_packet.data.decode("utf-8"))
                 if payload.get("type") == "camera_frame" and payload.get("image"):
                     agent.update_camera_frame(payload["image"])
-                    logger.info("[arrival-agent] Camera frame received (%d bytes)", len(payload["image"]))
-            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
-                pass  # Not a camera frame — ignore
+                    logger.info("[arrival-agent] Camera frame received (%d chars)", len(payload["image"]))
+            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError) as e:
+                logger.debug(f"[arrival-agent] Data channel parse error: {e}")
 
         logger.info("[arrival-agent] ✓ Camera data channel listener registered")
 
-        # Greet to confirm the full pipeline works (STT→LLM→TTS→audio)
+        # Start proactive vision monitor (job mode only)
+        monitor_task = None
+        if mode == "job":
+            monitor_task = asyncio.create_task(proactive_monitor(agent, session))
+            logger.info("[arrival-agent] ✓ Proactive vision monitor started")
+
+        # Greet to confirm the full pipeline works
         await session.generate_reply(
-            instructions="Say exactly: 'Hey, I'm here.' Nothing else."
+            instructions="Say exactly: 'Hey, I'm here. I can see what you're looking at.' Nothing else."
         )
         logger.info("[arrival-agent] ✓ Greeting sent")
 
