@@ -172,16 +172,27 @@ class ArrivalAgent(Agent):
         self._frame_received_at = time.time()
 
     def get_current_frame(self) -> Optional[str]:
-        """Get the best available frame — checks data channel first, then HTTP store."""
+        """Get the best available frame — checks data channel first, then file store."""
         # Data channel frame (if recent)
         if self._latest_frame and (time.time() - self._frame_received_at) < 30:
+            logger.info(f"[arrival-agent] Using data channel frame ({len(self._latest_frame)} chars, age={time.time() - self._frame_received_at:.0f}s)")
             return self._latest_frame
-        # HTTP frame store fallback
+        # File-based frame store (shared with FastAPI via /tmp)
         if self._room_name:
             http_frame = get_frame(self._room_name)
             if http_frame:
+                age = get_frame_age(self._room_name)
+                logger.info(f"[arrival-agent] Using file store frame ({len(http_frame)} chars, age={age:.0f}s, room={self._room_name})")
                 return http_frame
+            else:
+                logger.warning(f"[arrival-agent] No frame in file store for room={self._room_name}")
+        else:
+            logger.warning("[arrival-agent] No room_name set — can't check file store")
         # Data channel frame even if old
+        if self._latest_frame:
+            logger.info(f"[arrival-agent] Using stale data channel frame (age={time.time() - self._frame_received_at:.0f}s)")
+        else:
+            logger.warning("[arrival-agent] No frame available from any source")
         return self._latest_frame
 
     def _frame_hash(self, frame: str) -> str:

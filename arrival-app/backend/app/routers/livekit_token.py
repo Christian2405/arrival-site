@@ -186,4 +186,5 @@ async def upload_frame(req: FrameUpload, request: Request):
         raise HTTPException(status_code=401, detail="Missing auth token")
 
     store_frame(req.room_name, req.frame)
+    logger.info(f"[livekit-frame] Stored frame for room={req.room_name} ({len(req.frame)} chars)")
     return {"ok": True}
