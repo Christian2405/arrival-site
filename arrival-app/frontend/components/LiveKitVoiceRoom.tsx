@@ -5,12 +5,15 @@
  * - Connects to a LiveKit room with auto-retry (up to 3 attempts)
  * - Publishes the user's microphone audio
  * - Receives and plays agent audio via WebRTC (full-duplex)
+ * - Handles vision requests from the agent via data channel
  * - Handles disconnect/reconnect gracefully
  * - Handles cleanup on unmount
  *
- * The heavy lifting (STT, LLM, TTS, turn detection, interruption)
- * all happens server-side in the LiveKit agent. This client just
- * streams audio and shows status.
+ * Vision Architecture (data channel mediated):
+ * Agent sends "vision_request" via data channel → This component captures a
+ * fresh frame from the camera → Calls /api/analyze-frame with the frame →
+ * Sends the text analysis back to the agent via data channel.
+ * This avoids all cross-process issues between the agent and FastAPI.
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -20,9 +23,10 @@ import {
   AudioSession,
   useConnectionState,
   useParticipants,
+  useRoomContext,
   registerGlobals,
 } from '@livekit/react-native';
-import { ConnectionState } from 'livekit-client';
+import { ConnectionState, RoomEvent } from 'livekit-client';
 import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
 import { supabase } from '../services/supabase';
 
@@ -231,8 +235,10 @@ export default function LiveKitVoiceRoom({
 
 /**
  * Inner component that has access to room context.
- * Tracks whether we ever successfully connected to distinguish
- * "never connected" from "was connected then disconnected".
+ * Handles:
+ * - Connection state tracking
+ * - Frame upload loop (every 5s)
+ * - Vision request handling from agent (data channel)
  */
 function RoomContent({
   onStateChange,
@@ -253,46 +259,169 @@ function RoomContent({
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
+  const room = useRoomContext();
   const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
   const [roomError, setRoomError] = useState<string | null>(null);
+  // Track captureFrame in a ref so the data listener always has the latest
+  const captureFrameRef = useRef(captureFrame);
+  captureFrameRef.current = captureFrame;
+  const roomNameRef = useRef(roomName);
+  roomNameRef.current = roomName;
 
-  // Send camera frames to agent via HTTP (every 5s when connected)
-  // HTTP is more reliable than WebRTC data channels for large image payloads
+  // -----------------------------------------------------------------------
+  // Vision request handler — agent asks us to capture + analyze via data channel
+  // -----------------------------------------------------------------------
   useEffect(() => {
-    console.log(`[LiveKitVoice] Frame upload effect: conn=${connectionState} hasCapture=${!!captureFrame} room=${roomName || 'none'}`);
+    if (connectionState !== ConnectionState.Connected || !room) return;
+
+    const handleDataReceived = async (
+      payload: Uint8Array,
+      participant: any,
+      _kind?: any,
+      _topic?: string,
+    ) => {
+      // Ignore our own messages
+      if (participant?.isLocal) return;
+
+      try {
+        const text = new TextDecoder().decode(payload);
+        const msg = JSON.parse(text);
+
+        if (msg.type === 'vision_request') {
+          console.log(`[LiveKitVoice] ★ Agent requested vision analysis: "${msg.question?.substring(0, 60)}..."`);
+
+          // Step 1: Capture a fresh frame from the camera
+          let frame: string | undefined;
+          if (captureFrameRef.current) {
+            try {
+              frame = await captureFrameRef.current();
+              if (frame) {
+                console.log(`[LiveKitVoice] Frame captured for vision (${Math.round(frame.length / 1024)}KB)`);
+              } else {
+                console.warn('[LiveKitVoice] captureFrame returned empty for vision request');
+              }
+            } catch (e: any) {
+              console.error('[LiveKitVoice] Frame capture failed for vision:', e?.message);
+            }
+          } else {
+            console.warn('[LiveKitVoice] No captureFrame function available');
+          }
+
+          // Step 2: Get auth token
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          if (!token) {
+            console.warn('[LiveKitVoice] No auth token for vision request');
+            // Send error back to agent
+            const errorMsg = JSON.stringify({ type: 'vision_error', error: 'No auth token' });
+            try {
+              await room.localParticipant.publishData(
+                new TextEncoder().encode(errorMsg),
+                { reliable: true },
+              );
+            } catch {}
+            return;
+          }
+
+          // Step 3: Call /api/analyze-frame with inline frame (bypasses frame store)
+          const analyzeUrl = `${BACKEND_URL}/api/analyze-frame`;
+          const currentRoomName = msg.room_name || roomNameRef.current || '';
+          console.log(`[LiveKitVoice] Calling ${analyzeUrl} (room=${currentRoomName})`);
+
+          try {
+            const resp = await fetch(analyzeUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                room_name: currentRoomName,
+                question: msg.question || 'What do you see?',
+                frame: frame || undefined,  // Send fresh frame inline if we have one
+              }),
+            });
+
+            if (resp.ok) {
+              const result = await resp.json();
+              const analysis = result.analysis || '';
+              console.log(`[LiveKitVoice] ✓ Vision analysis received (${analysis.length} chars)`);
+
+              // Step 4: Send result back to agent via data channel
+              const resultMsg = JSON.stringify({
+                type: 'vision_result',
+                analysis: analysis,
+              });
+              await room.localParticipant.publishData(
+                new TextEncoder().encode(resultMsg),
+                { reliable: true },
+              );
+              console.log('[LiveKitVoice] ✓ Vision result sent to agent');
+            } else {
+              const errorText = await resp.text().catch(() => '');
+              console.error(`[LiveKitVoice] Vision API failed: ${resp.status} ${errorText}`);
+
+              // Send error back to agent so it doesn't hang
+              const errorMsg = JSON.stringify({
+                type: 'vision_error',
+                error: `API ${resp.status}: ${errorText.substring(0, 100)}`,
+              });
+              await room.localParticipant.publishData(
+                new TextEncoder().encode(errorMsg),
+                { reliable: true },
+              );
+            }
+          } catch (e: any) {
+            console.error(`[LiveKitVoice] Vision request failed: ${e?.message}`);
+            // Send error back to agent
+            const errorMsg = JSON.stringify({
+              type: 'vision_error',
+              error: e?.message || 'Network error',
+            });
+            try {
+              await room.localParticipant.publishData(
+                new TextEncoder().encode(errorMsg),
+                { reliable: true },
+              );
+            } catch {}
+          }
+        }
+      } catch {
+        // Not JSON or not a vision request — ignore
+      }
+    };
+
+    room.on(RoomEvent.DataReceived, handleDataReceived);
+    console.log('[LiveKitVoice] ✓ Vision request handler registered');
+
+    return () => {
+      room.off(RoomEvent.DataReceived, handleDataReceived);
+    };
+  }, [connectionState, room]);
+
+  // -----------------------------------------------------------------------
+  // Frame upload loop — sends camera frames to backend every 5s (for frame store)
+  // -----------------------------------------------------------------------
+  useEffect(() => {
     if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
-      console.log('[LiveKitVoice] Frame upload skipped — missing deps');
       return;
     }
 
-    console.log('[LiveKitVoice] ✓ Starting frame upload loop');
     let active = true;
     let frameCount = 0;
 
     const sendFrame = async () => {
       if (!active) return;
       try {
-        console.log('[LiveKitVoice] Capturing frame...');
         const frame = await captureFrame();
-        if (!frame) {
-          console.warn('[LiveKitVoice] captureFrame() returned empty — camera not ready?');
-          return;
-        }
-        console.log(`[LiveKitVoice] Frame captured (${Math.round(frame.length / 1024)}KB)`);
+        if (!frame) return;
 
-        // Get auth token
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) {
-          console.warn('[LiveKitVoice] No auth token — skipping frame upload');
-          return;
-        }
+        if (!token) return;
 
-        // POST frame to backend HTTP endpoint
-        const url = `${BACKEND_URL}/api/livekit-frame`;
-        console.log(`[LiveKitVoice] POSTing frame to ${url} room=${roomName}`);
-        const resp = await fetch(url, {
+        const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -302,10 +431,7 @@ function RoomContent({
         });
         frameCount++;
         if (resp.ok) {
-          console.log(`[LiveKitVoice] ✓ Frame #${frameCount} uploaded (${Math.round(frame.length / 1024)}KB)`);
-        } else {
-          const errorText = await resp.text().catch(() => '');
-          console.warn(`[LiveKitVoice] Frame upload failed: ${resp.status} ${errorText}`);
+          console.log(`[LiveKitVoice] Frame #${frameCount} uploaded (${Math.round(frame.length / 1024)}KB)`);
         }
       } catch (e: any) {
         console.warn(`[LiveKitVoice] Frame upload error: ${e?.message || e}`);
@@ -320,11 +446,12 @@ function RoomContent({
       active = false;
       clearTimeout(initialTimeout);
       clearInterval(interval);
-      console.log(`[LiveKitVoice] Frame upload loop stopped (sent ${frameCount} frames)`);
     };
   }, [connectionState, captureFrame, roomName]);
 
-  // Map connection state to agent state
+  // -----------------------------------------------------------------------
+  // Connection state tracking
+  // -----------------------------------------------------------------------
   useEffect(() => {
     console.log(`[LiveKitVoice] Connection state: ${connectionState}`);
 
@@ -368,15 +495,9 @@ function RoomContent({
   useEffect(() => {
     const remoteCount = participants.filter(p => !p.isLocal).length;
     console.log(`[LiveKitVoice] Participants: ${participants.length} total, ${remoteCount} remote`);
-    participants.forEach(p => {
-      if (!p.isLocal) {
-        console.log(`[LiveKitVoice] Remote participant: ${p.identity} (${p.name || 'unnamed'})`);
-      }
-    });
   }, [participants]);
 
-  // Check if agent is in the room — accept any non-local participant as the agent
-  // LiveKit Agents SDK may use different identity formats (agent-xxx, or custom)
+  // Check if agent is in the room
   const agentConnected = participants.some(p => !p.isLocal);
 
   // Room-level error with retry
@@ -420,8 +541,6 @@ function RoomContent({
   }
 
   // Connected and agent is present — voice is live
-  // The actual audio streaming happens automatically via WebRTC
-  // No UI needed for the voice part — it's all handled by LiveKit
   return null;
 }
 

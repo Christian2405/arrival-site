@@ -205,16 +205,20 @@ async def get_frame_api(room_name: str):
 class AnalyzeRequest(BaseModel):
     room_name: str
     question: str = "What do you see?"
+    frame: str | None = None  # Optional inline frame (base64 JPEG) — bypasses frame store
 
 
 @router.post("/analyze-frame")
 async def analyze_frame(req: AnalyzeRequest):
     """Analyze a camera frame using Claude Vision.
-    Called by the LiveKit agent — runs IN the FastAPI process which already
-    has the frame in memory. No cross-process frame transfer needed."""
+    Accepts an inline frame (from frontend) or reads from the frame store.
+    Called by the LiveKit agent or the mobile frontend."""
     import anthropic as anthropic_sdk
 
-    frame = get_frame(req.room_name)
+    # Use inline frame if provided, otherwise read from store
+    frame = req.frame
+    if not frame:
+        frame = get_frame(req.room_name)
     if not frame:
         age = get_frame_age(req.room_name)
         raise HTTPException(

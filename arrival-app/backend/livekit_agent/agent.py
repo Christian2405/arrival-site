@@ -12,6 +12,11 @@ Pipeline:
   - MultilingualModel turn detection (semantic, not silence-based)
   - Proactive Vision: background loop analyzes camera and speaks up
 
+Vision Architecture (data channel mediated):
+  Agent sends "vision_request" via data channel → Frontend captures frame →
+  Frontend calls /api/analyze-frame → Frontend sends "vision_result" back.
+  This avoids ALL cross-process communication issues between agent and FastAPI.
+
 Run:
   python -m livekit_agent.agent start
 
@@ -84,7 +89,7 @@ logger = logging.getLogger(__name__)
 
 # Startup banner — visible in Render logs for diagnostics
 logger.info("[arrival-agent] ============================")
-logger.info("[arrival-agent] LiveKit Voice Agent Loading (Proactive Vision)")
+logger.info("[arrival-agent] LiveKit Voice Agent Loading (Data Channel Vision)")
 logger.info(f"[arrival-agent] LIVEKIT_URL: {config.LIVEKIT_URL[:40] if config.LIVEKIT_URL else '(NOT SET)'}")
 logger.info(f"[arrival-agent] DEEPGRAM: {'set' if config.DEEPGRAM_API_KEY else 'NOT SET'}")
 logger.info(f"[arrival-agent] ANTHROPIC: {'set' if config.ANTHROPIC_API_KEY else 'NOT SET'}")
@@ -94,10 +99,9 @@ logger.info("[arrival-agent] ============================")
 # ---------------------------------------------------------------------------
 # Proactive vision config
 # ---------------------------------------------------------------------------
-PROACTIVE_CHECK_INTERVAL = 6   # seconds between vision checks
-PROACTIVE_MIN_COOLDOWN = 12    # min seconds between proactive speech
+PROACTIVE_CHECK_INTERVAL = 8   # seconds between vision checks
+PROACTIVE_MIN_COOLDOWN = 15    # min seconds between proactive speech
 PROACTIVE_PUSHBACK_COOLDOWN = 60  # cooldown after user pushes back
-PROACTIVE_FORCE_INTERVAL = 30  # re-analyze even if frame unchanged
 FRAME_CHANGE_THRESHOLD = 10    # out of 100 sampled positions
 
 # ---------------------------------------------------------------------------
@@ -168,6 +172,10 @@ class ArrivalAgent(Agent):
         self._latest_frame: Optional[str] = None
         self._frame_received_at: float = 0
         self._room_name: str = ""  # Set by entrypoint for HTTP frame store lookup
+        self._room = None  # LiveKit Room reference — for data channel messaging
+        # Data channel vision — frontend-mediated analysis (PRIMARY method)
+        self._pending_vision_result: Optional[str] = None
+        self._vision_event: Optional[asyncio.Event] = None
         # Proactive vision state
         self._last_analyzed_hash: str = ""
         self._recent_observations: list[str] = []
@@ -180,8 +188,55 @@ class ArrivalAgent(Agent):
         self._latest_frame = frame_b64
         self._frame_received_at = time.time()
 
+    def on_vision_result(self, analysis: str):
+        """Called when the frontend sends back a vision analysis result via data channel."""
+        logger.info(f"[arrival-agent] ✓ Vision result from frontend ({len(analysis)} chars): {analysis[:80]}...")
+        self._pending_vision_result = analysis
+        if self._vision_event:
+            self._vision_event.set()
+
+    async def _request_vision_via_frontend(self, question: str) -> Optional[str]:
+        """Ask the frontend to capture a frame, analyze it via API, and send back the result.
+        This is the most reliable path — the phone can always talk to the backend."""
+        if not self._room:
+            logger.warning("[arrival-agent] No room reference — can't request vision from frontend")
+            return None
+
+        # Clear any stale result
+        self._pending_vision_result = None
+        self._vision_event = asyncio.Event()
+
+        # Send request to frontend via data channel
+        request_msg = json.dumps({
+            "type": "vision_request",
+            "question": question,
+            "room_name": self._room_name,
+        })
+        try:
+            await self._room.local_participant.publish_data(
+                request_msg.encode("utf-8"),
+                reliable=True,
+            )
+            logger.info(f"[arrival-agent] Sent vision_request to frontend: {question[:60]}...")
+        except Exception as e:
+            logger.error(f"[arrival-agent] Failed to send vision_request: {e}")
+            return None
+
+        # Wait for frontend to capture, analyze, and send back result
+        # Budget: ~2s capture + ~5s API call + ~1s latency = ~8s typical
+        try:
+            await asyncio.wait_for(self._vision_event.wait(), timeout=20.0)
+            result = self._pending_vision_result
+            self._pending_vision_result = None
+            self._vision_event = None
+            return result
+        except asyncio.TimeoutError:
+            logger.warning("[arrival-agent] Vision request to frontend timed out (20s)")
+            self._vision_event = None
+            return None
+
     async def get_current_frame(self) -> Optional[str]:
-        """Get the best available frame — tries HTTP API, file store, and data channel."""
+        """Get the best available frame — tries data channel, HTTP, file store."""
         # 1. Data channel frame (if recent) — fastest, no I/O
         if self._latest_frame and (time.time() - self._frame_received_at) < 30:
             logger.info(f"[arrival-agent] Using data channel frame ({len(self._latest_frame)} chars)")
@@ -198,35 +253,29 @@ class ArrivalAgent(Agent):
             if file_frame:
                 logger.info(f"[arrival-agent] Using file store frame ({len(file_frame)} chars)")
                 return file_frame
-            logger.warning(f"[arrival-agent] No frame from any HTTP or file source for room={self._room_name}")
-        else:
-            logger.warning("[arrival-agent] No room_name set — can't fetch frames")
 
         # 4. Stale data channel frame as last resort
         if self._latest_frame:
-            logger.info(f"[arrival-agent] Using stale data channel frame")
-        else:
-            logger.warning("[arrival-agent] ✗ No frame from ANY source")
+            logger.info("[arrival-agent] Using stale data channel frame")
         return self._latest_frame
 
     async def _fetch_frame_async(self, room_name: str) -> Optional[str]:
         """Fetch frame via async HTTP — doesn't block the LiveKit event loop."""
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            for url_template in _FRAME_URLS:
-                url = url_template.format(room=room_name)
-                try:
-                    resp = await client.get(url)
-                    if resp.status_code == 200:
-                        frame = resp.json().get("frame")
-                        if frame:
-                            logger.info(f"[arrival-agent] ✓ Frame via HTTP ({len(frame)} chars) from {url[:50]}")
-                            return frame
-                    elif resp.status_code == 404:
-                        logger.debug(f"[arrival-agent] No frame (404) at {url[:50]}")
-                    else:
-                        logger.warning(f"[arrival-agent] Frame fetch {resp.status_code} from {url[:50]}")
-                except Exception as e:
-                    logger.warning(f"[arrival-agent] Frame fetch failed ({url[:50]}): {type(e).__name__}: {e}")
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                for url_template in _FRAME_URLS:
+                    url = url_template.format(room=room_name)
+                    try:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            frame = resp.json().get("frame")
+                            if frame:
+                                logger.info(f"[arrival-agent] ✓ Frame via HTTP ({len(frame)} chars)")
+                                return frame
+                    except Exception as e:
+                        logger.debug(f"[arrival-agent] Frame fetch failed ({url[:40]}): {e}")
+        except Exception as e:
+            logger.debug(f"[arrival-agent] HTTP client error: {e}")
         return None
 
     def _frame_hash(self, frame: str) -> str:
@@ -264,19 +313,30 @@ class ArrivalAgent(Agent):
         """Look at what the user's phone camera sees. Use this when they ask you to
         look at something, identify something, check something, read a model number,
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
-        logger.info(f"[arrival-agent] look_at_camera called — room={self._room_name}, question={question[:60]}")
+        logger.info(f"[arrival-agent] ★ look_at_camera called — room={self._room_name}, q={question[:60]}")
 
-        # Call FastAPI's analyze endpoint — it has the frame in its process,
-        # does the Claude Vision call, and returns just the text analysis.
-        # This avoids transferring large base64 images across processes.
-        analysis = await self._analyze_via_api(self._room_name, question)
-        if analysis:
-            return analysis
+        # METHOD 1: Ask frontend to capture + analyze (most reliable)
+        # The phone can always talk to the backend — no cross-process issues.
+        logger.info("[arrival-agent] Trying METHOD 1: frontend data channel...")
+        result = await self._request_vision_via_frontend(question)
+        if result:
+            logger.info(f"[arrival-agent] ✓ METHOD 1 SUCCESS: {result[:80]}...")
+            return result
+        logger.warning("[arrival-agent] METHOD 1 failed — trying METHOD 2...")
 
-        # Fallback: try getting frame directly (data channel or file store)
+        # METHOD 2: Direct API call from agent to FastAPI
+        logger.info("[arrival-agent] Trying METHOD 2: direct API call...")
+        result = await self._analyze_via_api(self._room_name, question)
+        if result:
+            logger.info(f"[arrival-agent] ✓ METHOD 2 SUCCESS: {result[:80]}...")
+            return result
+        logger.warning("[arrival-agent] METHOD 2 failed — trying METHOD 3...")
+
+        # METHOD 3: Get frame directly and analyze locally
+        logger.info("[arrival-agent] Trying METHOD 3: local frame + vision...")
         frame = await self.get_current_frame()
         if frame:
-            logger.info(f"[arrival-agent] Got frame via fallback ({len(frame)} chars), doing vision locally")
+            logger.info(f"[arrival-agent] Got frame ({len(frame)} chars), analyzing locally...")
             try:
                 import anthropic as anthropic_sdk
                 client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
@@ -299,13 +359,15 @@ class ArrivalAgent(Agent):
                         ],
                     }],
                 )
+                logger.info(f"[arrival-agent] ✓ METHOD 3 SUCCESS")
                 return response.content[0].text
             except Exception as e:
-                logger.error(f"[arrival-agent] Local vision failed: {e}")
+                logger.error(f"[arrival-agent] METHOD 3 vision API failed: {e}")
 
-        logger.error(f"[arrival-agent] ✗ VISION COMPLETELY FAILED — room={self._room_name}")
-        return ("I can't see anything right now — I'm not getting a camera feed. "
-                "Make sure the camera is on and pointed at what you want me to see.")
+        # ALL METHODS FAILED
+        logger.error(f"[arrival-agent] ✗ ALL VISION METHODS FAILED — room={self._room_name}")
+        return ("I'm having trouble seeing your camera right now. "
+                "Try asking again in a few seconds — the camera feed might need a moment to connect.")
 
     async def _analyze_via_api(self, room_name: str, question: str) -> Optional[str]:
         """Ask FastAPI to analyze the frame — it has the frame in its own process."""
@@ -315,7 +377,7 @@ class ArrivalAgent(Agent):
         ]
         for url in urls:
             try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
+                async with httpx.AsyncClient(timeout=12.0) as client:
                     resp = await client.post(url, json={
                         "room_name": room_name,
                         "question": question,
@@ -325,10 +387,8 @@ class ArrivalAgent(Agent):
                         if result:
                             logger.info(f"[arrival-agent] ✓ Vision via API ({url[:40]}): {result[:60]}...")
                             return result
-                    elif resp.status_code == 404:
-                        logger.warning(f"[arrival-agent] No frame at API ({url[:40]}): {resp.text[:100]}")
                     else:
-                        logger.warning(f"[arrival-agent] API error {resp.status_code} ({url[:40]}): {resp.text[:100]}")
+                        logger.warning(f"[arrival-agent] API {resp.status_code} ({url[:40]}): {resp.text[:100]}")
             except Exception as e:
                 logger.warning(f"[arrival-agent] API call failed ({url[:40]}): {type(e).__name__}: {e}")
         return None
@@ -338,71 +398,18 @@ class ArrivalAgent(Agent):
 # Proactive Vision — background analysis loop
 # ---------------------------------------------------------------------------
 
-async def analyze_frame_for_alert(agent: ArrivalAgent, frame_b64: str) -> Optional[str]:
-    """Analyze a camera frame and return an observation if worth speaking about, else None."""
-    import anthropic as anthropic_sdk
-    client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-
-    # Build context from recent observations to avoid repeats
-    context = ""
-    if agent._recent_observations:
-        recent = "; ".join(agent._recent_observations[-3:])
-        context = f"\nYou already mentioned: {recent}. Do NOT repeat these."
-
-    response = await client.messages.create(
-        model=config.ANTHROPIC_VOICE_MODEL,  # Haiku for speed + cost
-        max_tokens=80,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
-                },
-                {
-                    "type": "text",
-                    "text": (
-                        "You're a 50-year trade veteran watching a job site through a phone camera. "
-                        "Is there anything worth speaking up about RIGHT NOW?\n\n"
-                        "SPEAK UP about: safety hazards (exposed wires, flame, water spray, gas leak signs), "
-                        "visible problems (wrong fitting, corroded connections, code violations, damaged insulation), "
-                        "readable model/serial numbers or data plates the tech might need.\n\n"
-                        "STAY QUIET about: normal equipment, tools lying around, general scene, "
-                        "things that look fine, hands, clothing, background.\n\n"
-                        f"{context}\n\n"
-                        "If something is worth mentioning, respond with ONE short sentence a veteran would say "
-                        "out loud to the tech next to him. Keep it casual and direct.\n"
-                        "If nothing notable, respond with exactly: NOTHING"
-                    ),
-                },
-            ],
-        }],
-    )
-    result = response.content[0].text.strip()
-
-    # Filter out non-observations
-    if result.upper() == "NOTHING" or len(result) < 5:
-        return None
-    # Sometimes the model says "Nothing notable" or similar
-    if "nothing" in result.lower() and len(result) < 30:
-        return None
-
-    return result
-
-
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
-    """Background task: continuously analyze camera frames and speak up when warranted."""
-    logger.info("[proactive] Monitor started — waiting for camera frames...")
-    last_analysis_time = 0.0
+    """Background task: periodically ask frontend to analyze camera and speak up when warranted."""
+    logger.info("[proactive] Monitor started — waiting for initial connection...")
 
-    # Wait a bit before starting proactive checks (let the greeting finish)
-    await asyncio.sleep(5)
+    # Wait for greeting to finish and things to stabilize
+    await asyncio.sleep(10)
 
     while True:
         try:
             await asyncio.sleep(PROACTIVE_CHECK_INTERVAL)
 
-            # Skip if proactive disabled or no frame yet
+            # Skip if proactive disabled
             if not agent._proactive_enabled:
                 continue
 
@@ -413,23 +420,28 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if now - agent._last_proactive_time < cooldown:
                 continue
 
-            # Check if there's a frame available via the API
             if not agent._room_name:
                 continue
 
-            # Use the analyze API for proactive checks too
-            logger.info("[proactive] Checking frame via API...")
-            observation = await agent._analyze_via_api(
-                agent._room_name,
+            # Use frontend data channel for proactive analysis (same reliable path)
+            logger.debug("[proactive] Requesting proactive analysis...")
+            proactive_question = (
                 "Is there anything worth speaking up about RIGHT NOW? "
                 "Safety hazards, visible problems, readable model/serial numbers. "
                 "If nothing notable, respond with exactly: NOTHING"
             )
+            observation = await agent._request_vision_via_frontend(proactive_question)
+
+            # Fallback to API if frontend didn't respond
+            if not observation:
+                observation = await agent._analyze_via_api(
+                    agent._room_name, proactive_question
+                )
 
             # Filter out non-observations
-            if observation and "NOTHING" in observation.upper():
+            if observation and ("NOTHING" in observation.upper() or len(observation) < 5):
                 observation = None
-            if observation and len(observation) < 5:
+            if observation and "nothing" in observation.lower() and len(observation) < 30:
                 observation = None
 
             if observation:
@@ -439,10 +451,10 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     for obs in agent._recent_observations[-3:]
                 )
                 if is_repeat:
-                    logger.info(f"[proactive] Skipping repeat: {observation[:60]}...")
+                    logger.debug(f"[proactive] Skipping repeat: {observation[:60]}...")
                     continue
 
-                logger.info(f"[proactive] ALERT: {observation}")
+                logger.info(f"[proactive] ★ ALERT: {observation}")
                 await session.generate_reply(
                     instructions=f"You just noticed something while watching the camera. Tell the tech briefly and casually: {observation}"
                 )
@@ -450,15 +462,13 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                 agent._recent_observations.append(observation)
                 if len(agent._recent_observations) > 5:
                     agent._recent_observations.pop(0)
-            else:
-                logger.debug("[proactive] Nothing notable in frame")
 
         except asyncio.CancelledError:
             logger.info("[proactive] Monitor cancelled — shutting down")
             break
         except Exception as e:
-            logger.warning(f"[proactive] Analysis error: {e}")
-            await asyncio.sleep(5)  # Back off on error
+            logger.warning(f"[proactive] Error: {e}")
+            await asyncio.sleep(5)
 
 
 # ---------------------------------------------------------------------------
@@ -556,24 +566,49 @@ async def entrypoint(ctx: JobContext):
             max_endpointing_delay=1.5,
         )
 
-        # Set room name so agent can look up frames from HTTP store
+        # Set room name and room reference for data channel messaging
         agent._room_name = room_name
+        agent._room = ctx.room
 
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")
 
-        # Listen for camera frames from the mobile app via data channel
+        # Listen for data channel messages from the mobile app
         @ctx.room.on("data_received")
         def on_data(data_packet):
             try:
                 payload = json.loads(data_packet.data.decode("utf-8"))
-                if payload.get("type") == "camera_frame" and payload.get("image"):
+                msg_type = payload.get("type", "")
+
+                if msg_type == "camera_frame" and payload.get("image"):
+                    # Direct camera frame via data channel (rarely used now)
                     agent.update_camera_frame(payload["image"])
-                    logger.info("[arrival-agent] Camera frame received (%d chars)", len(payload["image"]))
+                    logger.debug("[arrival-agent] Camera frame via data channel (%d chars)", len(payload["image"]))
+
+                elif msg_type == "vision_result":
+                    # Frontend analyzed a frame and sent back the result
+                    analysis = payload.get("analysis", "")
+                    if analysis:
+                        agent.on_vision_result(analysis)
+                    else:
+                        logger.warning("[arrival-agent] Empty vision_result from frontend")
+                        # Still set the event so we don't hang forever
+                        agent._pending_vision_result = "Camera frame was unclear — try pointing it more directly."
+                        if agent._vision_event:
+                            agent._vision_event.set()
+
+                elif msg_type == "vision_error":
+                    # Frontend couldn't complete the vision analysis
+                    error_msg = payload.get("error", "unknown error")
+                    logger.warning(f"[arrival-agent] Vision error from frontend: {error_msg}")
+                    agent._pending_vision_result = None
+                    if agent._vision_event:
+                        agent._vision_event.set()
+
             except (json.JSONDecodeError, UnicodeDecodeError, AttributeError) as e:
                 logger.debug(f"[arrival-agent] Data channel parse error: {e}")
 
-        logger.info("[arrival-agent] ✓ Camera data channel listener registered")
+        logger.info("[arrival-agent] ✓ Data channel listener registered (camera + vision)")
 
         # Start proactive vision monitor (job mode only)
         monitor_task = None
@@ -581,38 +616,11 @@ async def entrypoint(ctx: JobContext):
             monitor_task = asyncio.create_task(proactive_monitor(agent, session))
             logger.info("[arrival-agent] ✓ Proactive vision monitor started")
 
-        # Wait for first frame to arrive (frontend sends after 2s)
-        await asyncio.sleep(4)
-
-        # Self-test: can we reach FastAPI and get a frame?
-        vision_ok = False
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as test_client:
-                # Try localhost first
-                for base_url in [f"http://127.0.0.1:{_FASTAPI_PORT}", "https://arrival-backend-81x7.onrender.com"]:
-                    try:
-                        r = await test_client.get(f"{base_url}/api/livekit-frame-debug/{room_name}")
-                        if r.status_code == 200:
-                            data = r.json()
-                            logger.info(f"[arrival-agent] Self-test via {base_url[:30]}: {data}")
-                            if data.get("frame_found"):
-                                vision_ok = True
-                                break
-                    except Exception as e:
-                        logger.warning(f"[arrival-agent] Self-test failed ({base_url[:30]}): {e}")
-        except Exception as e:
-            logger.error(f"[arrival-agent] Self-test error: {e}")
-
-        if vision_ok:
-            logger.info(f"[arrival-agent] ✓ VISION SELF-TEST PASSED")
-            await session.generate_reply(
-                instructions="Say exactly: 'Hey, I can see your camera. What are we working on?' Nothing else."
-            )
-        else:
-            logger.error(f"[arrival-agent] ✗ VISION SELF-TEST FAILED — room={room_name}")
-            await session.generate_reply(
-                instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
-            )
+        # Greeting — don't lie about vision, just say hi
+        await asyncio.sleep(2)
+        await session.generate_reply(
+            instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
+        )
         logger.info("[arrival-agent] ✓ Greeting sent")
 
     except Exception as e:
