@@ -16,7 +16,7 @@ from livekit import api
 
 from app import config
 from app.middleware.auth import decode_jwt_token
-from app.services.frame_store import store_frame
+from app.services.frame_store import store_frame, get_frame, get_frame_age
 
 logger = logging.getLogger(__name__)
 
@@ -188,3 +188,29 @@ async def upload_frame(req: FrameUpload, request: Request):
     store_frame(req.room_name, req.frame)
     logger.info(f"[livekit-frame] Stored frame for room={req.room_name} ({len(req.frame)} chars)")
     return {"ok": True}
+
+
+@router.get("/livekit-frame-debug/{room_name}")
+async def frame_debug(room_name: str):
+    """Diagnostic: check if a frame exists in the file store for a room.
+    Tests the cross-process file store — if FastAPI wrote it, agent can read it."""
+    import os
+    frame = get_frame(room_name)
+    age = get_frame_age(room_name)
+
+    # Also list all frames in /tmp
+    frame_dir = "/tmp/arrival_frames"
+    files = []
+    try:
+        files = os.listdir(frame_dir)
+    except OSError:
+        pass
+
+    return {
+        "room_name": room_name,
+        "frame_found": frame is not None,
+        "frame_size": len(frame) if frame else 0,
+        "frame_age_seconds": round(age, 1) if age is not None else None,
+        "all_frame_files": files,
+        "frame_dir": frame_dir,
+    }

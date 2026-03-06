@@ -519,7 +519,7 @@ async def entrypoint(ctx: JobContext):
 
         # Greet to confirm the full pipeline works
         await session.generate_reply(
-            instructions="Say exactly: 'Hey, I'm here. I can see what you're looking at.' Nothing else."
+            instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
         )
         logger.info("[arrival-agent] ✓ Greeting sent")
 
