@@ -324,8 +324,8 @@ function RoomContent({
             return;
           }
 
-          // Step 3: Call /api/analyze-frame with inline frame (bypasses frame store)
-          const analyzeUrl = `${BACKEND_URL}/api/analyze-frame`;
+          // Step 3: Call /api/livekit-analyze with inline frame (bypasses frame store)
+          const analyzeUrl = `${BACKEND_URL}/api/livekit-analyze`;
           const currentRoomName = msg.room_name || roomNameRef.current || '';
           console.log(`[LiveKitVoice] Calling ${analyzeUrl} (room=${currentRoomName})`);
 

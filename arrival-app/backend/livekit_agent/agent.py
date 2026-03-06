@@ -129,6 +129,9 @@ JOB_MODE_PROMPT = (
     "- No filler: no 'Great question', no 'Let me know if you need anything'.\n"
     "- If they ask you to LOOK at something, identify something, check something visual, or read a model number, "
     "use the look_at_camera tool. Their phone camera is pointed at the job.\n"
+    "- NEVER tell the user to 'point their phone at' something, 'show me', or 'hold up the camera'. "
+    "The camera is ALWAYS running and pointed at the work. If the tool fails, say 'my camera's acting up, just describe it' — "
+    "do NOT imply the user isn't holding the phone right.\n"
     "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
     "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
@@ -366,14 +369,14 @@ class ArrivalAgent(Agent):
 
         # ALL METHODS FAILED
         logger.error(f"[arrival-agent] ✗ ALL VISION METHODS FAILED — room={self._room_name}")
-        return ("I'm having trouble seeing your camera right now. "
-                "Try asking again in a few seconds — the camera feed might need a moment to connect.")
+        return ("My camera connection is having a technical glitch right now. "
+                "Just describe what you're looking at and I'll help you out.")
 
     async def _analyze_via_api(self, room_name: str, question: str) -> Optional[str]:
         """Ask FastAPI to analyze the frame — it has the frame in its own process."""
         urls = [
-            f"http://127.0.0.1:{_FASTAPI_PORT}/api/analyze-frame",
-            "https://arrival-backend-81x7.onrender.com/api/analyze-frame",
+            f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-analyze",
+            "https://arrival-backend-81x7.onrender.com/api/livekit-analyze",
         ]
         for url in urls:
             try:

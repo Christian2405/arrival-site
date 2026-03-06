@@ -208,11 +208,12 @@ class AnalyzeRequest(BaseModel):
     frame: str | None = None  # Optional inline frame (base64 JPEG) — bypasses frame store
 
 
-@router.post("/analyze-frame")
-async def analyze_frame(req: AnalyzeRequest):
+@router.post("/livekit-analyze")
+async def livekit_analyze_frame(req: AnalyzeRequest):
     """Analyze a camera frame using Claude Vision.
     Accepts an inline frame (from frontend) or reads from the frame store.
-    Called by the LiveKit agent or the mobile frontend."""
+    Called by the LiveKit agent or the mobile frontend.
+    NOTE: renamed from /analyze-frame to avoid conflict with analyze.py router."""
     import anthropic as anthropic_sdk
 
     # Use inline frame if provided, otherwise read from store
