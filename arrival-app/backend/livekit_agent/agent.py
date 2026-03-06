@@ -180,55 +180,53 @@ class ArrivalAgent(Agent):
         self._latest_frame = frame_b64
         self._frame_received_at = time.time()
 
-    def get_current_frame(self) -> Optional[str]:
+    async def get_current_frame(self) -> Optional[str]:
         """Get the best available frame — tries HTTP API, file store, and data channel."""
         # 1. Data channel frame (if recent) — fastest, no I/O
         if self._latest_frame and (time.time() - self._frame_received_at) < 30:
             logger.info(f"[arrival-agent] Using data channel frame ({len(self._latest_frame)} chars)")
             return self._latest_frame
 
-        # 2. HTTP from FastAPI — guaranteed cross-process (primary method)
+        # 2. Async HTTP from FastAPI — non-blocking, cross-process
         if self._room_name:
-            http_frame = self._fetch_frame_http(self._room_name)
+            http_frame = await self._fetch_frame_async(self._room_name)
             if http_frame:
-                logger.info(f"[arrival-agent] ✓ Got frame via HTTP ({len(http_frame)} chars, room={self._room_name})")
                 return http_frame
-            logger.warning(f"[arrival-agent] HTTP frame fetch returned nothing for room={self._room_name}")
 
-            # 3. File store fallback — in case HTTP fails
+            # 3. File store fallback
             file_frame = get_frame(self._room_name)
             if file_frame:
                 logger.info(f"[arrival-agent] Using file store frame ({len(file_frame)} chars)")
                 return file_frame
-            logger.warning(f"[arrival-agent] File store also empty for room={self._room_name}")
+            logger.warning(f"[arrival-agent] No frame from any HTTP or file source for room={self._room_name}")
         else:
             logger.warning("[arrival-agent] No room_name set — can't fetch frames")
 
         # 4. Stale data channel frame as last resort
         if self._latest_frame:
-            logger.info(f"[arrival-agent] Using stale data channel frame (age={time.time() - self._frame_received_at:.0f}s)")
+            logger.info(f"[arrival-agent] Using stale data channel frame")
         else:
-            logger.warning("[arrival-agent] ✗ No frame available from ANY source (HTTP, file, data channel)")
+            logger.warning("[arrival-agent] ✗ No frame from ANY source")
         return self._latest_frame
 
-    def _fetch_frame_http(self, room_name: str) -> Optional[str]:
-        """Fetch latest camera frame from FastAPI via HTTP.
-        Tries localhost first (fast), then public URL (guaranteed to work)."""
-        for url_template in _FRAME_URLS:
-            url = url_template.format(room=room_name)
-            try:
-                resp = httpx.get(url, timeout=5.0)
-                if resp.status_code == 200:
-                    frame = resp.json().get("frame")
-                    if frame:
-                        logger.info(f"[arrival-agent] ✓ Got frame via HTTP ({len(frame)} chars) from {url[:50]}")
-                        return frame
-                elif resp.status_code == 404:
-                    logger.debug(f"[arrival-agent] No frame (404) at {url[:50]}")
-                else:
-                    logger.warning(f"[arrival-agent] Frame fetch {resp.status_code} from {url[:50]}")
-            except Exception as e:
-                logger.warning(f"[arrival-agent] Frame fetch failed ({url[:50]}): {type(e).__name__}: {e}")
+    async def _fetch_frame_async(self, room_name: str) -> Optional[str]:
+        """Fetch frame via async HTTP — doesn't block the LiveKit event loop."""
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            for url_template in _FRAME_URLS:
+                url = url_template.format(room=room_name)
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        frame = resp.json().get("frame")
+                        if frame:
+                            logger.info(f"[arrival-agent] ✓ Frame via HTTP ({len(frame)} chars) from {url[:50]}")
+                            return frame
+                    elif resp.status_code == 404:
+                        logger.debug(f"[arrival-agent] No frame (404) at {url[:50]}")
+                    else:
+                        logger.warning(f"[arrival-agent] Frame fetch {resp.status_code} from {url[:50]}")
+                except Exception as e:
+                    logger.warning(f"[arrival-agent] Frame fetch failed ({url[:50]}): {type(e).__name__}: {e}")
         return None
 
     def _frame_hash(self, frame: str) -> str:
@@ -267,25 +265,28 @@ class ArrivalAgent(Agent):
         look at something, identify something, check something, read a model number,
         or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
         logger.info(f"[arrival-agent] look_at_camera called — room={self._room_name}, question={question[:60]}")
-        frame = self.get_current_frame()
+        frame = await self.get_current_frame()
         if not frame:
-            # Log detailed diagnostics
             logger.error(
-                f"[arrival-agent] ✗ VISION FAILED — no frame from any source. "
-                f"room_name={self._room_name!r}, port={_FASTAPI_PORT}, "
-                f"data_channel_frame={'yes' if self._latest_frame else 'no'}"
+                f"[arrival-agent] ✗ VISION FAILED — room={self._room_name!r}, port={_FASTAPI_PORT}"
             )
-            # Quick inline test — can we reach FastAPI at all?
-            try:
-                test_resp = httpx.get(f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-status", timeout=2.0)
-                logger.error(f"[arrival-agent] Localhost reachable: {test_resp.status_code}")
-            except Exception as e:
-                logger.error(f"[arrival-agent] Localhost NOT reachable: {e}")
-            try:
-                test_resp2 = httpx.get("https://arrival-backend-81x7.onrender.com/api/livekit-status", timeout=5.0)
-                logger.error(f"[arrival-agent] Public URL reachable: {test_resp2.status_code}")
-            except Exception as e2:
-                logger.error(f"[arrival-agent] Public URL NOT reachable: {e2}")
+            # Async connectivity diagnostics
+            async with httpx.AsyncClient(timeout=3.0) as diag:
+                for label, url in [
+                    ("localhost", f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-status"),
+                    ("public", "https://arrival-backend-81x7.onrender.com/api/livekit-status"),
+                ]:
+                    try:
+                        r = await diag.get(url)
+                        logger.error(f"[arrival-agent] {label} reachable: {r.status_code}")
+                    except Exception as e:
+                        logger.error(f"[arrival-agent] {label} NOT reachable: {e}")
+                # Also try fetching frame from public URL directly
+                try:
+                    r = await diag.get(f"https://arrival-backend-81x7.onrender.com/api/livekit-frame-debug/{self._room_name}")
+                    logger.error(f"[arrival-agent] Frame debug: {r.text[:200]}")
+                except Exception as e:
+                    logger.error(f"[arrival-agent] Frame debug failed: {e}")
 
             return ("I can't see anything right now — I'm not getting a camera feed. "
                     "Make sure the camera is on and pointed at what you want me to see.")
@@ -400,7 +401,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not agent._proactive_enabled:
                 continue
 
-            frame = agent.get_current_frame()
+            frame = await agent.get_current_frame()
             if not frame:
                 continue
 
@@ -571,10 +572,21 @@ async def entrypoint(ctx: JobContext):
             monitor_task = asyncio.create_task(proactive_monitor(agent, session))
             logger.info("[arrival-agent] ✓ Proactive vision monitor started")
 
-        # Greet to confirm the full pipeline works
-        await session.generate_reply(
-            instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
-        )
+        # Wait for first frame to arrive (frontend sends after 2s)
+        await asyncio.sleep(4)
+
+        # Self-test: can we get a camera frame?
+        test_frame = await agent.get_current_frame()
+        if test_frame:
+            logger.info(f"[arrival-agent] ✓ VISION SELF-TEST PASSED — got {len(test_frame)} chars")
+            await session.generate_reply(
+                instructions="Say exactly: 'Hey, I can see your camera. What are we working on?' Nothing else."
+            )
+        else:
+            logger.error(f"[arrival-agent] ✗ VISION SELF-TEST FAILED — room={room_name}")
+            await session.generate_reply(
+                instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
+            )
         logger.info("[arrival-agent] ✓ Greeting sent")
 
     except Exception as e:
