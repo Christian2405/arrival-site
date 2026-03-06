@@ -67,9 +67,14 @@ except ImportError:
         MultilingualModel = None
         print("[arrival-agent] WARNING: MultilingualModel not available")
 
+import urllib.request
+
 from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.services.frame_store import get_frame, get_frame_age
+
+# FastAPI port — agent fetches frames via HTTP from the FastAPI process
+_FASTAPI_PORT = os.environ.get("PORT", "8000")
 
 logger = logging.getLogger(__name__)
 
@@ -172,28 +177,54 @@ class ArrivalAgent(Agent):
         self._frame_received_at = time.time()
 
     def get_current_frame(self) -> Optional[str]:
-        """Get the best available frame — checks data channel first, then file store."""
-        # Data channel frame (if recent)
+        """Get the best available frame — tries HTTP API, file store, and data channel."""
+        # 1. Data channel frame (if recent) — fastest, no I/O
         if self._latest_frame and (time.time() - self._frame_received_at) < 30:
-            logger.info(f"[arrival-agent] Using data channel frame ({len(self._latest_frame)} chars, age={time.time() - self._frame_received_at:.0f}s)")
+            logger.info(f"[arrival-agent] Using data channel frame ({len(self._latest_frame)} chars)")
             return self._latest_frame
-        # File-based frame store (shared with FastAPI via /tmp)
+
+        # 2. HTTP from FastAPI — guaranteed cross-process (primary method)
         if self._room_name:
-            http_frame = get_frame(self._room_name)
+            http_frame = self._fetch_frame_http(self._room_name)
             if http_frame:
-                age = get_frame_age(self._room_name)
-                logger.info(f"[arrival-agent] Using file store frame ({len(http_frame)} chars, age={age:.0f}s, room={self._room_name})")
+                logger.info(f"[arrival-agent] ✓ Got frame via HTTP ({len(http_frame)} chars, room={self._room_name})")
                 return http_frame
-            else:
-                logger.warning(f"[arrival-agent] No frame in file store for room={self._room_name}")
+            logger.warning(f"[arrival-agent] HTTP frame fetch returned nothing for room={self._room_name}")
+
+            # 3. File store fallback — in case HTTP fails
+            file_frame = get_frame(self._room_name)
+            if file_frame:
+                logger.info(f"[arrival-agent] Using file store frame ({len(file_frame)} chars)")
+                return file_frame
+            logger.warning(f"[arrival-agent] File store also empty for room={self._room_name}")
         else:
-            logger.warning("[arrival-agent] No room_name set — can't check file store")
-        # Data channel frame even if old
+            logger.warning("[arrival-agent] No room_name set — can't fetch frames")
+
+        # 4. Stale data channel frame as last resort
         if self._latest_frame:
             logger.info(f"[arrival-agent] Using stale data channel frame (age={time.time() - self._frame_received_at:.0f}s)")
         else:
-            logger.warning("[arrival-agent] No frame available from any source")
+            logger.warning("[arrival-agent] ✗ No frame available from ANY source (HTTP, file, data channel)")
         return self._latest_frame
+
+    def _fetch_frame_http(self, room_name: str) -> Optional[str]:
+        """Fetch latest camera frame from FastAPI via HTTP localhost.
+        This works across process boundaries — no shared memory needed."""
+        url = f"http://localhost:{_FASTAPI_PORT}/api/livekit-frame/{room_name}"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read())
+                    return data.get("frame")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                logger.debug(f"[arrival-agent] No frame via HTTP (404) for room={room_name}")
+            else:
+                logger.warning(f"[arrival-agent] HTTP frame fetch error: {e.code} {e.reason}")
+        except Exception as e:
+            logger.warning(f"[arrival-agent] HTTP frame fetch failed: {type(e).__name__}: {e}")
+        return None
 
     def _frame_hash(self, frame: str) -> str:
         """Quick fingerprint — sample 100 positions in base64 string."""

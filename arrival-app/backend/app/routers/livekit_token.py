@@ -190,15 +190,25 @@ async def upload_frame(req: FrameUpload, request: Request):
     return {"ok": True}
 
 
+@router.get("/livekit-frame/{room_name}")
+async def get_frame_api(room_name: str):
+    """Get the latest camera frame for a room.
+    Used by the LiveKit agent (separate process) to fetch frames via HTTP.
+    This is more reliable than file-based sharing across process boundaries."""
+    frame = get_frame(room_name)
+    if not frame:
+        raise HTTPException(status_code=404, detail="No frame available")
+    age = get_frame_age(room_name)
+    return {"frame": frame, "age": round(age, 1) if age is not None else None}
+
+
 @router.get("/livekit-frame-debug/{room_name}")
 async def frame_debug(room_name: str):
-    """Diagnostic: check if a frame exists in the file store for a room.
-    Tests the cross-process file store — if FastAPI wrote it, agent can read it."""
+    """Diagnostic: check if a frame exists in the file store for a room."""
     import os
     frame = get_frame(room_name)
     age = get_frame_age(room_name)
 
-    # Also list all frames in /tmp
     frame_dir = "/tmp/arrival_frames"
     files = []
     try:
