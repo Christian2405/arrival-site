@@ -45,18 +45,19 @@ async def _keep_alive():
                 logger.warning(f"[keep-alive] Ping failed: {e}")
 
 
-async def _seed_building_codes():
-    """One-time task: index building code reference docs into Pinecone global_knowledge.
-    Runs on startup — skips if Pinecone isn't configured or docs already indexed."""
+async def _seed_knowledge_base():
+    """One-time task: index knowledge docs into Pinecone global_knowledge.
+    Scans knowledge/ root and knowledge/building_codes/ for .md files.
+    Runs on startup — skips if Pinecone isn't configured."""
     from app import config
     if not config.PINECONE_API_KEY:
-        logger.info("[seed] Pinecone not configured — skipping building codes seed")
+        logger.info("[seed] Pinecone not configured — skipping knowledge seed")
         return
 
     from pathlib import Path
-    codes_dir = Path(__file__).resolve().parent.parent / "knowledge" / "building_codes"
-    if not codes_dir.exists():
-        logger.info("[seed] No knowledge/building_codes directory — skipping")
+    knowledge_root = Path(__file__).resolve().parent.parent / "knowledge"
+    if not knowledge_root.exists():
+        logger.info("[seed] No knowledge/ directory — skipping")
         return
 
     from app.services.rag import extract_text_from_file, chunk_text_smart, chunk_text, _get_pinecone_index
@@ -64,11 +65,12 @@ async def _seed_building_codes():
     if not index:
         return
 
-    files = sorted(codes_dir.glob("*.md"))
+    # Collect .md files from root and all subdirectories
+    files = sorted(knowledge_root.rglob("*.md"))
     if not files:
         return
 
-    logger.info(f"[seed] Indexing {len(files)} building code docs into global_knowledge...")
+    logger.info(f"[seed] Indexing {len(files)} knowledge docs into global_knowledge...")
     total = 0
 
     for filepath in files:
@@ -109,9 +111,9 @@ async def _seed_building_codes():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — launches keep-alive + seeds building codes."""
+    """Startup/shutdown lifecycle — launches keep-alive + seeds knowledge base."""
     keep_alive_task = asyncio.create_task(_keep_alive())
-    seed_task = asyncio.create_task(_seed_building_codes())
+    seed_task = asyncio.create_task(_seed_knowledge_base())
     yield
     keep_alive_task.cancel()
     seed_task.cancel()

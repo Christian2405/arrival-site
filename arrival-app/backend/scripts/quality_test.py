@@ -773,6 +773,7 @@ async def run_test(count: int | None = None, csv_path: str | None = None):
     """Send each question through the AI and score the response."""
     from app.services.anthropic import chat_with_claude
     from app.services.error_codes import lookup_error_code, format_error_code_context
+    from app.services.diagnostic_flows import lookup_diagnostic_flow, format_diagnostic_context
 
     questions = QUESTIONS[:count] if count else QUESTIONS
     results = []
@@ -792,10 +793,17 @@ async def run_test(count: int | None = None, csv_path: str | None = None):
             error_code_result = lookup_error_code(q["question"])
             error_code_context = format_error_code_context(error_code_result) if error_code_result else None
 
+            # Run diagnostic flow lookup (same as production chat.py)
+            diagnostic_context = None
+            if not error_code_result:
+                diag_result = lookup_diagnostic_flow(q["question"])
+                if diag_result:
+                    diagnostic_context = format_diagnostic_context(diag_result)
+
             result = await chat_with_claude(
                 message=q["question"],
                 max_tokens=1024,
-                system_prompt_prefix=error_code_context or "",
+                system_prompt_prefix=error_code_context or diagnostic_context or "",
             )
             response = result.get("response", "")
             elapsed = time.time() - t0

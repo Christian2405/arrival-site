@@ -1761,6 +1761,2521 @@ FUJITSU_MINI_SPLIT_CODES = {
     },
 }
 
+NAVIEN_TANKLESS_CODES = {
+    "E003": {
+        "meaning": "Ignition failure — unit tried to light and couldn't.",
+        "causes": [
+            "Gas supply off or low gas pressure (most common)",
+            "Igniter failure or weak spark",
+            "Dirty or corroded flame rod",
+            "Condensate backup blocking exhaust",
+            "Improper venting — termination too close to obstruction",
+        ],
+        "action": "Verify gas is on and meter/regulator is supplying correct pressure. Check igniter for spark — pull the igniter and look for cracks or carbon buildup. Clean the flame rod with fine emery cloth. Check condensate trap and drain line for blockage. On newer Navien units, also check the inlet gas filter screen for debris.",
+    },
+    "E004": {
+        "meaning": "False flame detection — unit sees flame when there shouldn't be one.",
+        "causes": [
+            "Flame rod short to ground or touching heat exchanger",
+            "Residual flame from slow gas valve closure",
+            "PCB fault — flame detection circuit malfunction",
+        ],
+        "action": "SAFETY FIRST — shut off gas supply. Inspect flame rod for carbon bridging or contact with the burner/heat exchanger. Check flame rod wiring for shorts. If rod and wiring are clean, suspect the PCB.",
+    },
+    "E010": {
+        "meaning": "Abnormal exhaust temperature — likely blocked vent.",
+        "causes": [
+            "Blocked or partially obstructed vent termination (bird nests, ice, debris)",
+            "Vent pipe too long or too many elbows for the model",
+            "Exhaust temp sensor failure",
+            "Recirculation — exhaust being sucked back into intake",
+        ],
+        "action": "Inspect vent termination outside for blockage — ice dams in winter are very common on Navien units. Check total vent length against installation manual limits. Ensure intake and exhaust have proper separation. If vent is clear, check the exhaust thermistor resistance.",
+    },
+    "E012": {
+        "meaning": "Flame loss during operation — unit lit successfully but flame went out.",
+        "causes": [
+            "Wind blowing down the vent (intermittent issue)",
+            "Gas pressure dropping under load (undersized gas line)",
+            "Dirty flame rod losing signal as it gets hot",
+            "Condensate drain backup causing exhaust restriction",
+            "Loose wiring at flame rod connection",
+        ],
+        "action": "If intermittent, check outdoor vent termination for wind exposure — may need a wind guard. Check gas pressure at the unit while firing at full rate — should hold steady. Clean flame rod. Clear condensate trap. Check flame rod wire connection at the PCB.",
+    },
+    "E016": {
+        "meaning": "Overheating — overheat protection tripped.",
+        "causes": [
+            "Scale buildup in heat exchanger (hard water areas)",
+            "Low water flow through the unit",
+            "Circulation pump failure on recirculation systems",
+            "Inlet filter screen clogged",
+        ],
+        "action": "Flush the heat exchanger with descaling solution — white vinegar or commercial descaler, circulate for 45-60 minutes. Check the inlet water filter screen. If on a recirculation system, verify the pump is running and check for closed isolation valves. In hard water areas, this is almost always scale.",
+    },
+    "E030": {
+        "meaning": "Air/fuel ratio imbalance — combustion not within parameters.",
+        "causes": [
+            "Partially blocked vent or intake",
+            "High altitude installation without proper dip switch setting",
+            "Dirty or failing APS (air pressure sensor)",
+            "Gas pressure out of spec",
+            "Cracked heat exchanger (rare but serious)",
+        ],
+        "action": "Check venting first — look for partial obstruction, sagging vent pipe, or improper termination. Verify altitude dip switch settings match installation elevation. Check APS sensor for moisture or contamination. Verify gas pressure. Run combustion analysis if you have the equipment.",
+    },
+    "E021": {
+        "meaning": "Outlet water temperature sensor fault.",
+        "causes": [
+            "Failed outlet thermistor (open or shorted)",
+            "Loose connector at the sensor or PCB",
+            "Corroded sensor wiring from condensate exposure",
+        ],
+        "action": "Check the outlet temp sensor resistance with a meter — compare to the spec chart in the manual. Check the connector for corrosion or looseness. If the reading is out of range, replace the sensor.",
+    },
+    "E022": {
+        "meaning": "Inlet water temperature sensor fault.",
+        "causes": [
+            "Failed inlet thermistor (open or shorted)",
+            "Loose or corroded connector",
+            "Water damage to sensor wiring",
+        ],
+        "action": "Check inlet temp sensor resistance. Inspect connector at PCB. Same diagnostic process as E021 — just on the inlet side. Replace sensor if resistance is out of spec.",
+    },
+    "E027": {
+        "meaning": "Overvoltage — power supply issue.",
+        "causes": [
+            "Voltage at the outlet exceeding 130V",
+            "Power surge or unstable utility power",
+            "Bad surge protector or UPS causing voltage spikes",
+        ],
+        "action": "Check voltage at the outlet — Navien units are sensitive to overvoltage. Should be 120V +/- 10%. If voltage is high, check with the utility or install a voltage regulator. If the area has frequent surges, install a dedicated surge protector.",
+    },
+    "E028": {
+        "meaning": "Abnormal outlet water temperature detected — temp higher than expected.",
+        "causes": [
+            "Scale buildup reducing heat exchanger efficiency",
+            "Outlet temp sensor reading incorrectly",
+            "Internal bypass valve stuck",
+        ],
+        "action": "Flush the heat exchanger with descaler. Check outlet temp sensor against actual water temperature with a probe thermometer. If sensor reads correctly and heat exchanger is clean, check the bypass servo valve operation.",
+    },
+    "E032": {
+        "meaning": "Outgoing water temperature sensor misconnection.",
+        "causes": [
+            "Sensor plugged into the wrong port on the PCB",
+            "Sensors swapped during service or installation",
+            "Damaged connector",
+        ],
+        "action": "Verify sensor wiring matches the wiring diagram — inlet and outlet sensors may have been swapped. Check that each sensor connector is seated in the correct port on the PCB.",
+    },
+    "E034": {
+        "meaning": "Exhaust temperature sensor fault.",
+        "causes": [
+            "Failed exhaust thermistor",
+            "Connector melted or damaged from heat",
+            "Wiring damaged by high exhaust temps",
+        ],
+        "action": "Check exhaust temp sensor resistance. Inspect the sensor and its wiring for heat damage — these run hot and the connectors can melt over time. Replace sensor and inspect connector for damage.",
+    },
+    "E038": {
+        "meaning": "APS (air pressure sensor) fault.",
+        "causes": [
+            "Failed APS sensor",
+            "Moisture in the APS sensing tubes",
+            "Clogged or disconnected sensing tubes",
+            "Condensate in the sensor housing",
+        ],
+        "action": "Check APS sensor tubes for moisture or blockage — blow them out. Inspect the sensor for condensate intrusion. If the tubes are clear and dry, replace the APS sensor. On some models, the APS is on the fan assembly.",
+    },
+    "E046": {
+        "meaning": "Cascade communication error — multi-unit system communication failure.",
+        "causes": [
+            "Cascade cable loose or damaged between units",
+            "Incorrect cascade wiring (polarity reversed)",
+            "PCB failure on one unit in the cascade",
+            "Dip switch settings incorrect for cascade position",
+        ],
+        "action": "Check cascade communication cable connections between all units. Verify polarity is correct. Check dip switch settings on each unit — each must have a unique cascade address. Try disconnecting units one at a time to isolate the faulty one.",
+    },
+    "E047": {
+        "meaning": "Main PCB error — board-level fault.",
+        "causes": [
+            "PCB failure from power surge",
+            "Moisture damage to the PCB",
+            "Component failure on the board",
+        ],
+        "action": "Power cycle the unit — leave it off for 30 seconds. If code returns immediately, inspect the PCB for visible damage (burnt components, corrosion, water stains). Check for moisture inside the unit that could have reached the board. PCB replacement is likely needed.",
+    },
+    "E109": {
+        "meaning": "Fan motor fault — combustion blower not operating correctly.",
+        "causes": [
+            "Fan motor failure",
+            "Wiring issue to fan motor",
+            "Debris or buildup on fan blades causing imbalance",
+            "PCB not sending signal to fan",
+        ],
+        "action": "Listen for the fan — does it try to spin? Check voltage at the fan motor connector during a call for heat. Inspect fan blades for debris buildup. Check wiring from PCB to motor. If voltage is present but motor doesn't spin, replace the fan motor.",
+    },
+    "E110": {
+        "meaning": "Exhaust blockage detected — similar to E010 but specifically blockage.",
+        "causes": [
+            "Blocked vent termination (ice, debris, bird nest)",
+            "Vent pipe disconnected or separated at a joint",
+            "Condensate drain clogged causing backpressure",
+        ],
+        "action": "Go outside and check the vent termination first — this is the #1 cause. Inspect the entire vent run for separations or sags. Clear the condensate trap and drain line. In cold climates, ice buildup on the exhaust termination is extremely common with Navien units.",
+    },
+    "E302": {
+        "meaning": "Low water flow — not enough flow to activate the unit.",
+        "causes": [
+            "Flow sensor dirty or failing",
+            "Inlet filter screen clogged with debris",
+            "Closed or partially closed isolation valve",
+            "Recirculation pump not running or check valve stuck",
+            "Low water pressure from the street",
+        ],
+        "action": "Check the inlet filter screen first — remove and clean it. Verify all isolation valves are fully open. Check water pressure at the unit. If on a recirculation system, verify pump operation and check valve function. If all that checks out, the flow sensor may need replacement.",
+    },
+    "E407": {
+        "meaning": "Thermistor short — DHW (domestic hot water) temperature sensor shorted.",
+        "causes": [
+            "Shorted thermistor (internal failure)",
+            "Pinched or damaged sensor wire",
+            "Water intrusion into the sensor connector",
+        ],
+        "action": "Check thermistor resistance — a short will read near 0 ohms. Inspect wiring for pinch points or damage. Check connector for moisture. Replace the thermistor.",
+    },
+    "E421": {
+        "meaning": "Thermistor open — DHW temperature sensor open circuit.",
+        "causes": [
+            "Open thermistor (internal failure)",
+            "Broken wire or disconnected sensor",
+            "Corroded connector at PCB or sensor end",
+        ],
+        "action": "Check thermistor resistance — an open circuit reads infinite (OL on meter). Check wiring continuity from sensor to PCB. Inspect connectors for corrosion. Replace the thermistor if open.",
+    },
+    "E439": {
+        "meaning": "Abnormal PCB temperature — board is overheating.",
+        "causes": [
+            "Poor ventilation around the unit",
+            "Ambient temperature too high in the installation area",
+            "PCB component failure generating excess heat",
+        ],
+        "action": "Check the area around the unit for adequate ventilation. Navien units need clearance per the installation manual. If the area isn't hot and airflow is fine, the PCB may have a failing component and need replacement.",
+    },
+    "E515": {
+        "meaning": "Abnormal water flow — mixing valve issue.",
+        "causes": [
+            "Mixing valve motor stalled or failed",
+            "Mixing valve stuck due to scale or debris",
+            "Flow sensor reading inconsistent with valve position",
+        ],
+        "action": "Check mixing valve operation — try running in manual mode if available. Listen for the mixing valve motor. Scale buildup can jam the valve — may need to flush or replace the mixing valve assembly.",
+    },
+    "E517": {
+        "meaning": "Mixing valve motor fault — motor not responding.",
+        "causes": [
+            "Mixing valve motor failure",
+            "Wiring issue to mixing valve motor",
+            "PCB not sending control signal",
+        ],
+        "action": "Check for voltage at the mixing valve motor connector. If voltage present but motor doesn't move, replace the mixing valve motor. If no voltage, check wiring and PCB.",
+    },
+    "E590": {
+        "meaning": "Neutralizer fill alert — condensate neutralizer needs attention.",
+        "causes": [
+            "Neutralizer media depleted",
+            "Neutralizer cartridge needs replacement",
+            "Timer-based alert (not necessarily a malfunction)",
+        ],
+        "action": "This is a maintenance alert, not a fault. Replace or refill the condensate neutralizer media. Reset the alert per the manual — usually involves holding a button on the PCB.",
+    },
+    "E593": {
+        "meaning": "Neutralizer flow switch fault — condensate flow switch issue.",
+        "causes": [
+            "Condensate flow switch stuck or failed",
+            "Condensate drain line clogged",
+            "Neutralizer cartridge overfilled or blocked",
+        ],
+        "action": "Check the condensate drain line for clogs. Clean the flow switch. Verify the neutralizer isn't overfilled. If drain is clear and switch is clean, replace the flow switch.",
+    },
+    "E610": {
+        "meaning": "Abnormal combustion detected.",
+        "causes": [
+            "Vent system issue causing poor combustion",
+            "Gas pressure too high or too low",
+            "Dirty burner or clogged burner ports",
+            "Air intake restriction",
+        ],
+        "action": "Check venting for any obstruction or improper installation. Verify gas pressure matches the rating plate. Inspect the burner for debris or clogging. Run combustion analysis if possible. This code is serious — don't ignore it.",
+    },
+}
+
+NORITZ_TANKLESS_CODES = {
+    "10": {
+        "meaning": "Air supply or exhaust blockage — combustion air problem.",
+        "causes": [
+            "Blocked vent termination (bird nest, ice, leaves)",
+            "Vent pipe too long or too many elbows",
+            "Intake air supply restricted",
+            "Fan motor weakening",
+        ],
+        "action": "Check vent termination outside first. Verify vent length and number of elbows meets the manual spec. Ensure air intake isn't blocked. Check fan motor operation — if it sounds strained, measure amp draw against spec.",
+    },
+    "11": {
+        "meaning": "Ignition failure — no flame established.",
+        "causes": [
+            "Gas supply off or gas pressure too low",
+            "Igniter failure or weak spark",
+            "Dirty flame rod (most common in hard-water areas)",
+            "Gas line undersized — not enough BTU delivery",
+            "Condensate drain clogged causing exhaust backup",
+        ],
+        "action": "Verify gas is on and pressure is correct at the unit. Clean the flame rod with fine emery cloth. Check igniter for spark. Check condensate drain. If gas line was recently run, verify it's sized for the unit's BTU input.",
+    },
+    "12": {
+        "meaning": "Flame loss — unit ignited but flame went out.",
+        "causes": [
+            "Wind gusts blowing out the flame through the vent",
+            "Gas pressure fluctuation under load",
+            "Dirty flame rod losing signal",
+            "Loose flame rod wire connection",
+            "Vent issue causing intermittent exhaust restriction",
+        ],
+        "action": "If intermittent/windy-day issue, check vent termination for wind exposure. Check gas pressure at the unit while firing at full rate. Clean flame rod. Secure all wiring connections. Check for loose vent joints.",
+    },
+    "14": {
+        "meaning": "Thermal fuse tripped — overheat safety activated.",
+        "causes": [
+            "Overheat condition from scale buildup",
+            "Airflow restriction through the unit",
+            "Thermal fuse degraded (one-time use on some models)",
+        ],
+        "action": "This is a safety device — find the root cause before resetting. Check for scale buildup and flush if needed. Ensure proper clearances around the unit. On some Noritz models the thermal fuse is a one-shot device and must be replaced even after the cause is fixed.",
+    },
+    "16": {
+        "meaning": "Overheating — water temperature exceeded safe limits.",
+        "causes": [
+            "Scale buildup in heat exchanger (hard water)",
+            "Low water flow rate",
+            "Recirculation pump issue",
+            "Temperature setting too high",
+        ],
+        "action": "Flush the heat exchanger with descaling solution. Check water flow rate — minimum is usually 0.5 GPM. If on a recirculation system, verify pump and check valve operation. In hard water areas, set up an annual flushing schedule.",
+    },
+    "29": {
+        "meaning": "Condensate drain issue — condensate not draining properly.",
+        "causes": [
+            "Clogged condensate drain line",
+            "Condensate trap full or blocked",
+            "Neutralizer cartridge plugged",
+            "Drain line frozen (cold climates)",
+        ],
+        "action": "Clear the condensate drain line — blow it out with compressed air or flush with water. Clean the condensate trap. Check the neutralizer if equipped. In cold climates, check for frozen drain lines.",
+    },
+    "31": {
+        "meaning": "Inlet water temperature sensor fault.",
+        "causes": [
+            "Failed inlet thermistor",
+            "Loose or corroded sensor connector",
+            "Wiring damage",
+        ],
+        "action": "Check sensor resistance with a meter and compare to the spec chart. Inspect connector for corrosion. Replace sensor if out of spec.",
+    },
+    "32": {
+        "meaning": "Outgoing water temperature sensor fault.",
+        "causes": [
+            "Failed outlet thermistor",
+            "Loose connector",
+            "Corroded or water-damaged wiring",
+        ],
+        "action": "Check outlet temp sensor resistance. Inspect connector and wiring. Replace if out of spec. Same process as code 31 but on the outlet side.",
+    },
+    "33": {
+        "meaning": "Heat exchanger temperature sensor fault.",
+        "causes": [
+            "Failed heat exchanger thermistor",
+            "Sensor displaced from its mounting position",
+            "Connector issue",
+        ],
+        "action": "Check sensor resistance. Verify the sensor is properly seated in its well on the heat exchanger. Inspect connector at the PCB. Replace if readings are out of spec.",
+    },
+    "43": {
+        "meaning": "Abnormal discharge temperature — exhaust too hot.",
+        "causes": [
+            "Scale buildup causing inefficient heat transfer",
+            "Exhaust restriction",
+            "Fan motor running slowly",
+            "High gas pressure overfiring the unit",
+        ],
+        "action": "Flush the heat exchanger. Check the vent run for obstructions. Verify fan motor speed. Check gas pressure against the rating plate — overfiring causes high exhaust temps.",
+    },
+    "51": {
+        "meaning": "Gas solenoid valve fault — main gas valve issue.",
+        "causes": [
+            "Gas valve coil failure",
+            "Wiring issue to gas valve",
+            "PCB not sending signal",
+        ],
+        "action": "Check for voltage at the gas valve coils during ignition. If voltage present but valve doesn't open, replace the gas valve. If no voltage, check PCB output and wiring.",
+    },
+    "52": {
+        "meaning": "Modulating solenoid valve fault — proportional valve issue.",
+        "causes": [
+            "Modulating valve coil failure",
+            "Wiring fault",
+            "PCB modulation circuit failure",
+        ],
+        "action": "Check the modulating valve coil for continuity. Verify wiring between PCB and valve. If the coil is good and wiring intact, the PCB modulation output may be faulty.",
+    },
+    "57": {
+        "meaning": "Bypass valve fault — water bypass servo issue.",
+        "causes": [
+            "Bypass valve motor failure",
+            "Scale or debris jamming the valve",
+            "Wiring disconnected",
+        ],
+        "action": "Check for voltage/signal at the bypass valve motor. Try running the valve manually if accessible. Scale can jam these — flush the unit. If motor has power but doesn't move, replace it.",
+    },
+    "61": {
+        "meaning": "Fan motor fault — combustion blower issue.",
+        "causes": [
+            "Fan motor failure",
+            "Wiring issue",
+            "Debris on fan blades",
+            "PCB fan output failure",
+        ],
+        "action": "Check for voltage at the fan motor connector. Listen for the motor — does it hum but not spin? That indicates a seized bearing. Inspect blades for buildup. If voltage present and motor won't run, replace it.",
+    },
+    "70": {
+        "meaning": "PCB fault — main control board failure.",
+        "causes": [
+            "Power surge damage",
+            "Moisture intrusion",
+            "Component failure",
+        ],
+        "action": "Power cycle the unit (off for 30 seconds). If code returns, inspect PCB for visible damage. Check for moisture inside the unit. PCB replacement is likely needed — check for updated part numbers as Noritz has revised some boards.",
+    },
+    "71": {
+        "meaning": "Gas valve circuit fault — electrical issue in the gas valve wiring.",
+        "causes": [
+            "Open circuit in gas valve wiring",
+            "Gas valve relay on PCB failed",
+            "Gas valve coil burned open",
+        ],
+        "action": "Check gas valve coil resistance. Verify wiring continuity from PCB to gas valve. If coil and wiring are good, the PCB relay is likely failed.",
+    },
+    "72": {
+        "meaning": "Flame detection after shutoff — flame signal present when gas should be off.",
+        "causes": [
+            "Gas valve not sealing completely (internal leak)",
+            "Flame rod signal due to moisture or carbon bridging",
+            "Residual flame from slow valve closure",
+        ],
+        "action": "SAFETY CONCERN — this means gas may be leaking through the valve. Shut off gas supply. Check for flame presence visually. If gas is leaking through the valve, replace the gas valve immediately. If no actual flame, check flame rod for false signal.",
+    },
+    "73": {
+        "meaning": "Abnormal combustion temperature rise — temp climbing too fast.",
+        "causes": [
+            "Scale buildup on heat exchanger",
+            "Low water flow",
+            "Gas pressure too high",
+        ],
+        "action": "Flush the heat exchanger. Check water flow rate and inlet filter. Verify gas pressure. A fast temp rise means the heat exchanger isn't transferring heat efficiently — scale is the usual culprit.",
+    },
+    "90": {
+        "meaning": "Combustion abnormality — general combustion fault.",
+        "causes": [
+            "Vent system issue",
+            "Gas quality problem",
+            "Dirty burner",
+            "Air/fuel ratio out of spec",
+        ],
+        "action": "Run combustion analysis if possible. Check venting thoroughly. Inspect burner for debris or clogging. Verify gas type matches the unit (natural gas vs LP). Check gas pressure.",
+    },
+    "99": {
+        "meaning": "Freeze prevention error — anti-freeze system activated or failed.",
+        "causes": [
+            "Unit exposed to freezing temperatures without power",
+            "Freeze prevention heater failure",
+            "Drain-back system failure",
+            "Power outage during freezing weather",
+        ],
+        "action": "Check for freeze damage — inspect heat exchanger and water connections for cracks or leaks. If the unit froze, water damage may be extensive. Verify the freeze prevention circuit is working. If the unit has power and is still showing this code, the freeze prevention heater may be failed.",
+    },
+}
+
+LG_MINI_SPLIT_CODES = {
+    "CH01": {
+        "meaning": "Indoor temperature sensor error — room temp thermistor fault.",
+        "causes": [
+            "Failed room temperature thermistor",
+            "Loose connector at sensor or PCB",
+            "Wiring damage between sensor and board",
+        ],
+        "action": "Check the room temp sensor resistance — compare to the resistance/temperature chart in the service manual. Inspect the connector at the indoor PCB. If resistance is out of range, replace the thermistor.",
+    },
+    "CH02": {
+        "meaning": "Indoor pipe (coil) temperature sensor error.",
+        "causes": [
+            "Failed coil thermistor (most common)",
+            "Sensor displaced from its clip on the coil",
+            "Corroded connector",
+        ],
+        "action": "Check coil sensor resistance against the chart. Make sure the sensor is properly clipped to the coil — if it falls off it reads ambient instead of coil temp. Replace if out of spec.",
+    },
+    "CH03": {
+        "meaning": "Drain sensor error — condensate overflow detection.",
+        "causes": [
+            "Clogged condensate drain line causing water backup",
+            "Drain sensor float stuck in the up position",
+            "Failed drain sensor",
+        ],
+        "action": "Check the condensate drain first — this is usually a clogged drain, not a bad sensor. Clear the drain line with compressed air or a wet/dry vac. Clean the drain pan. If drain is clear, check the float switch or sensor.",
+    },
+    "CH04": {
+        "meaning": "Indoor freeze protection — coil temperature too low.",
+        "causes": [
+            "Dirty air filter restricting airflow",
+            "Indoor fan motor running slow or failing",
+            "Low refrigerant charge",
+            "Restricted metering device (TXV or capillary tube)",
+        ],
+        "action": "Check and clean the air filter first. Verify indoor fan is running at proper speed. Check refrigerant pressures — low charge is common. If charge is correct, check the metering device for restriction.",
+    },
+    "CH05": {
+        "meaning": "Indoor to outdoor communication error.",
+        "causes": [
+            "Communication wire loose or disconnected",
+            "Communication wire damaged (rodent damage, pinched)",
+            "Incorrect wiring between indoor and outdoor units",
+            "Outdoor PCB failure",
+            "Power issue to outdoor unit",
+        ],
+        "action": "Check communication wire connections at both indoor and outdoor units. Verify wiring matches the diagram — LG uses specific comm wire configurations. Check for voltage at the outdoor unit. Inspect wire run for damage. If wiring is good, try swapping the indoor PCB first (cheaper than outdoor).",
+    },
+    "CH06": {
+        "meaning": "Outdoor coil temperature sensor error.",
+        "causes": [
+            "Failed outdoor coil thermistor",
+            "Connector corroded from weather exposure",
+            "Wiring damage in the outdoor unit",
+        ],
+        "action": "Check outdoor coil sensor resistance against the spec chart. Inspect connector for corrosion — outdoor sensors take a beating from weather. Replace sensor if out of range.",
+    },
+    "CH07": {
+        "meaning": "Outdoor discharge temperature sensor error.",
+        "causes": [
+            "Failed discharge temp sensor",
+            "Sensor not properly attached to the discharge line",
+            "Wiring issue",
+        ],
+        "action": "Check discharge temp sensor resistance. Verify it's clamped tightly to the discharge line with proper insulation. Replace if readings are out of spec.",
+    },
+    "CH09": {
+        "meaning": "Indoor EEPROM error — memory chip fault on indoor PCB.",
+        "causes": [
+            "Indoor PCB EEPROM corruption from power surge",
+            "Indoor PCB hardware failure",
+            "Incorrect firmware for the model",
+        ],
+        "action": "Power cycle the indoor unit — unplug for 2 minutes. If code persists, the indoor PCB needs replacement. Make sure the replacement board has the correct firmware for the model number.",
+    },
+    "CH10": {
+        "meaning": "Indoor fan motor error — motor not running or running abnormally.",
+        "causes": [
+            "Indoor fan motor failure",
+            "Fan blade hitting something or out of balance",
+            "Motor connector loose",
+            "Indoor PCB motor driver circuit failure",
+        ],
+        "action": "Listen for the motor — is it humming but not spinning? Check for debris blocking the fan wheel. Verify motor connector is secure. Check voltage/signal at the motor connector during operation. If power is present but motor doesn't run, replace the motor. LG uses DC motors — check the hall sensor if applicable.",
+    },
+    "CH21": {
+        "meaning": "Outdoor inverter compressor overcurrent.",
+        "causes": [
+            "Compressor electrical fault (winding-to-winding or winding-to-ground)",
+            "Inverter board failure",
+            "Locked rotor condition from liquid slugging",
+            "Loose compressor wiring",
+        ],
+        "action": "Check compressor windings — measure resistance between all three phases (should be balanced) and from each phase to ground (should be infinite). If windings check out, inspect the inverter board. Check for liquid refrigerant at the compressor (frosted suction line at compressor = possible liquid flood).",
+    },
+    "CH22": {
+        "meaning": "Outdoor current sensor (CT) error.",
+        "causes": [
+            "Current transformer sensor failure",
+            "CT sensor wiring issue",
+            "Outdoor PCB fault reading the CT signal",
+        ],
+        "action": "Inspect the CT sensor on the compressor power leads — it's a ring that the wire passes through. Check its connector at the outdoor PCB. If the sensor is cracked or damaged, replace it.",
+    },
+    "CH23": {
+        "meaning": "Outdoor DC link voltage error — inverter power supply issue.",
+        "causes": [
+            "Power supply voltage too high or too low",
+            "Inverter board capacitor failure",
+            "Incoming power issue (brownout, phase loss)",
+        ],
+        "action": "Check incoming power voltage at the outdoor unit disconnect. Should be within 10% of nameplate rating. If voltage is good, the inverter board likely has a failed capacitor or rectifier — inspect for bulging capacitors. Replace inverter board if damaged.",
+    },
+    "CH25": {
+        "meaning": "Outdoor AC voltage error — power supply voltage out of range.",
+        "causes": [
+            "Utility voltage too high or too low",
+            "Bad connection at disconnect or breaker",
+            "Undersized wire run causing voltage drop",
+        ],
+        "action": "Check voltage at the outdoor unit disconnect — must be within 10% of nameplate. Check all connections from breaker to disconnect to unit for hot spots or loose terminals. If voltage is consistently out of range, contact the utility.",
+    },
+    "CH26": {
+        "meaning": "Outdoor compressor overheat protection — discharge temp too high.",
+        "causes": [
+            "Low refrigerant charge (most common cause of high discharge temp)",
+            "Restricted metering device",
+            "Dirty outdoor coil blocking heat rejection",
+            "Compressor valve damage",
+        ],
+        "action": "Check refrigerant charge — low charge is the #1 cause of high discharge temp. Clean the outdoor coil thoroughly. Check superheat and subcooling. If charge is correct and coil is clean, the compressor may have valve damage.",
+    },
+    "CH27": {
+        "meaning": "Outdoor communication error with inverter board.",
+        "causes": [
+            "Communication cable between outdoor main PCB and inverter board loose",
+            "Inverter board failure",
+            "Main outdoor PCB failure",
+        ],
+        "action": "Check the ribbon cable or connector between the outdoor main PCB and the inverter PCB. Reseat it firmly. If code persists, try replacing the inverter board first.",
+    },
+    "CH32": {
+        "meaning": "Outdoor coil temperature sensor error.",
+        "causes": [
+            "Failed outdoor coil thermistor",
+            "Corroded connector (outdoor exposure)",
+            "Wiring damage",
+        ],
+        "action": "Check sensor resistance. Inspect for weather-related corrosion on the connector. Replace if out of spec. Same process as CH06 — LG uses multiple coil sensors on some models.",
+    },
+    "CH33": {
+        "meaning": "Outdoor suction temperature sensor error.",
+        "causes": [
+            "Failed suction line thermistor",
+            "Sensor not properly mounted on suction line",
+            "Wiring or connector issue",
+        ],
+        "action": "Check suction temp sensor resistance. Verify sensor is firmly clamped to the suction line with insulation tape over it. Replace if out of spec.",
+    },
+    "CH34": {
+        "meaning": "High pressure switch activated — system pressure too high.",
+        "causes": [
+            "Dirty outdoor coil (most common)",
+            "Outdoor fan motor not running",
+            "Overcharged system",
+            "Non-condensable gases in the system (air)",
+            "Restricted condenser airflow (debris, vegetation)",
+        ],
+        "action": "Clean the outdoor coil thoroughly. Verify outdoor fan is running. Check for debris or vegetation blocking airflow. Check head pressure — if high with clean coil and good fan, system may be overcharged or have non-condensables. May need to recover, evacuate, and recharge.",
+    },
+    "CH38": {
+        "meaning": "Outdoor ambient temperature sensor error.",
+        "causes": [
+            "Failed ambient temp thermistor",
+            "Sensor exposure to direct sunlight giving false readings",
+            "Connector corroded",
+        ],
+        "action": "Check ambient temp sensor resistance. Verify sensor placement — it should be shielded from direct sunlight. Replace if out of spec.",
+    },
+    "CH40": {
+        "meaning": "Outdoor CT (current transformer) sensor error.",
+        "causes": [
+            "CT sensor failure",
+            "CT sensor disconnected or improperly installed",
+            "Outdoor PCB input circuit failure",
+        ],
+        "action": "Inspect the CT sensor — make sure the compressor power wire passes through the center of the ring. Check connector. Replace CT sensor if damaged.",
+    },
+    "CH44": {
+        "meaning": "Outdoor air temperature sensor error.",
+        "causes": [
+            "Failed outdoor air temp sensor",
+            "Wiring damage from UV exposure or rodents",
+            "Connector corrosion",
+        ],
+        "action": "Check sensor resistance. Inspect wiring — outdoor sensor wiring is exposed to UV and weather. Replace sensor if out of spec.",
+    },
+    "CH53": {
+        "meaning": "Indoor/outdoor unit mismatch — incompatible combination.",
+        "causes": [
+            "Indoor unit model not compatible with outdoor unit",
+            "Incorrect DIP switch or jumper settings",
+            "Wrong indoor unit connected during multi-zone installation",
+        ],
+        "action": "Verify the indoor and outdoor model numbers are a compatible match using LG's compatibility chart. Check DIP switch settings on both units. On multi-zone systems, verify each indoor unit is connected to the correct port.",
+    },
+    "CH67": {
+        "meaning": "Outdoor fan motor lock — motor is stuck.",
+        "causes": [
+            "Fan blade physically blocked by debris or ice",
+            "Fan motor bearing seized",
+            "Motor winding failure",
+            "Fan blade cracked and rubbing on shroud",
+        ],
+        "action": "Check for physical obstruction of the fan — debris, ice, or a cracked blade hitting the housing. Try spinning the fan by hand (power off!) — it should spin freely. If the motor is seized or has a burnt smell, replace it.",
+    },
+}
+
+SAMSUNG_MINI_SPLIT_CODES = {
+    "E101": {
+        "meaning": "Communication error between indoor and outdoor units.",
+        "causes": [
+            "Communication wire loose or disconnected at either unit",
+            "Damaged communication cable (rodent damage, pinched wire)",
+            "Incorrect wiring between units",
+            "Power supply issue to one of the units",
+            "PCB failure on either unit",
+        ],
+        "action": "Check communication wire connections at both units — pull and reseat each connector. Verify wiring matches the diagram. Check for voltage at both units. Inspect wire run for damage. If wiring is sound, try power cycling both units.",
+    },
+    "E121": {
+        "meaning": "Indoor room temperature sensor error.",
+        "causes": [
+            "Failed room temp thermistor",
+            "Loose or corroded connector",
+            "Wiring damage",
+        ],
+        "action": "Check room temp sensor resistance against the spec chart. Inspect connector at the indoor PCB. Replace the thermistor if resistance is out of range.",
+    },
+    "E122": {
+        "meaning": "Indoor coil (pipe) temperature sensor error.",
+        "causes": [
+            "Failed coil thermistor",
+            "Sensor displaced from the coil",
+            "Connector corroded or loose",
+        ],
+        "action": "Check coil sensor resistance. Verify sensor is properly clipped to the coil. Replace if out of spec.",
+    },
+    "E154": {
+        "meaning": "Indoor fan motor error — motor not operating correctly.",
+        "causes": [
+            "Indoor fan motor failure",
+            "Fan wheel blocked or out of balance",
+            "Motor connector loose on the PCB",
+            "PCB motor driver circuit failure",
+        ],
+        "action": "Check for debris blocking the fan wheel. Verify motor connector is seated firmly. Check voltage at the motor connector during operation. If power is present but motor won't run, replace the motor.",
+    },
+    "E162": {
+        "meaning": "Indoor EEPROM error — memory chip fault.",
+        "causes": [
+            "EEPROM corruption from power surge",
+            "Indoor PCB hardware failure",
+        ],
+        "action": "Power cycle the indoor unit for 2 minutes. If code persists, the indoor PCB needs replacement.",
+    },
+    "E201": {
+        "meaning": "Outdoor temperature sensor error.",
+        "causes": [
+            "Failed outdoor temp thermistor",
+            "Corroded connector due to weather exposure",
+            "Wiring damage",
+        ],
+        "action": "Check outdoor temp sensor resistance. Inspect connector for corrosion — outdoor sensors are exposed to the elements. Replace if out of range.",
+    },
+    "E202": {
+        "meaning": "Outdoor coil temperature sensor error.",
+        "causes": [
+            "Failed outdoor coil thermistor",
+            "Corroded or weather-damaged connector",
+            "Sensor displaced from coil",
+        ],
+        "action": "Check outdoor coil sensor resistance. Verify sensor is clipped to the coil properly. Replace if readings are out of spec.",
+    },
+    "E221": {
+        "meaning": "Outdoor compressor overload — mechanical or electrical overload.",
+        "causes": [
+            "Compressor winding fault",
+            "Locked rotor from liquid slugging or mechanical seizure",
+            "Power supply issue (low voltage)",
+            "Overcharged system causing high head pressure",
+        ],
+        "action": "Check compressor windings for shorts and grounds. Measure supply voltage. Check refrigerant pressures. If compressor is mechanically locked (no start, high amp draw), it may need replacement.",
+    },
+    "E236": {
+        "meaning": "Compressor overcurrent — drawing too many amps.",
+        "causes": [
+            "Compressor starting to fail electrically",
+            "Low voltage at the unit",
+            "High head pressure from dirty coil or overcharge",
+            "Inverter board issue sending incorrect drive signal",
+        ],
+        "action": "Measure compressor amp draw and compare to nameplate RLA. Check supply voltage. Clean outdoor coil. Check refrigerant charge. If amps are high with correct voltage and charge, compressor is likely failing.",
+    },
+    "E251": {
+        "meaning": "Outdoor DC link voltage error — inverter power stage issue.",
+        "causes": [
+            "Power supply voltage fluctuation",
+            "Inverter board capacitor or rectifier failure",
+            "Incoming power quality issue",
+        ],
+        "action": "Check incoming voltage at the unit. Inspect the inverter board for bulging capacitors or burnt components. If voltage is stable and board looks clean, replace the inverter board.",
+    },
+    "E301": {
+        "meaning": "Communication error between outdoor PCBs — board-to-board comm fault.",
+        "causes": [
+            "Ribbon cable or connector loose between boards",
+            "PCB failure",
+            "Moisture damage to outdoor electronics",
+        ],
+        "action": "Open the outdoor electrical box and reseat all ribbon cables and connectors between boards. Check for moisture intrusion. If connections are solid and dry, one of the PCBs needs replacement.",
+    },
+    "E401": {
+        "meaning": "Condensate drain error — indoor unit drain problem.",
+        "causes": [
+            "Clogged condensate drain line (most common)",
+            "Drain pan full — drain sensor triggered",
+            "Drain pump failure (if equipped)",
+            "Drain sensor fault",
+        ],
+        "action": "Clear the condensate drain line — use compressed air or a wet/dry vac from outside. Clean the drain pan. If the unit has a condensate pump, verify pump operation. This is almost always a clogged drain line.",
+    },
+    "E416": {
+        "meaning": "Freeze protection activated — indoor coil too cold.",
+        "causes": [
+            "Dirty air filter (check this first)",
+            "Low refrigerant charge",
+            "Indoor fan motor running too slow",
+            "Metering device restriction",
+        ],
+        "action": "Check and replace the air filter. Verify refrigerant charge. Check indoor fan speed. If filter is clean and charge is correct, check the metering device.",
+    },
+    "E441": {
+        "meaning": "High pressure protection activated.",
+        "causes": [
+            "Dirty outdoor coil (most common)",
+            "Outdoor fan not running",
+            "Overcharged system",
+            "Restricted airflow around outdoor unit",
+            "Non-condensable gases in system",
+        ],
+        "action": "Clean outdoor coil thoroughly. Verify outdoor fan is operating. Check for vegetation, fencing, or debris restricting airflow around the outdoor unit. Check head pressure and charge.",
+    },
+    "E442": {
+        "meaning": "Low pressure protection activated.",
+        "causes": [
+            "Refrigerant leak / low charge (most common)",
+            "Indoor coil iced up",
+            "Metering device restriction",
+            "Dirty indoor filter",
+        ],
+        "action": "Check refrigerant pressures. If low, find and repair the leak, then recharge. Check for ice on the indoor coil. Clean the air filter. If pressures are correct, check the metering device.",
+    },
+    "E464": {
+        "meaning": "PFC (Power Factor Correction) circuit error — outdoor board.",
+        "causes": [
+            "PFC circuit failure on the inverter board",
+            "Power surge damage",
+            "Input power quality issue",
+        ],
+        "action": "Check incoming power quality and voltage. Inspect the inverter/PFC board for visible damage. This is typically a board-level failure requiring inverter board replacement.",
+    },
+}
+
+WEIL_MCLAIN_BOILER_CODES = {
+    "E01": {
+        "meaning": "Ignition failure — boiler failed to light.",
+        "causes": [
+            "Gas supply off or low gas pressure",
+            "Igniter failure",
+            "Dirty flame sensor / flame rod",
+            "Condensate drain blocked causing exhaust restriction",
+            "Vent termination blocked",
+        ],
+        "action": "Verify gas is on and pressure is correct. Check igniter for spark. Clean flame sensor with fine emery cloth. Check condensate drain and vent termination. Reset the boiler and try again — if it fails 3 times, dig deeper.",
+    },
+    "E02": {
+        "meaning": "Flame failure — flame was established but lost.",
+        "causes": [
+            "Dirty flame sensor (most common)",
+            "Gas pressure dropping under load",
+            "Loose flame sensor wiring",
+            "Wind downdraft through vent",
+            "Condensate drain restriction",
+        ],
+        "action": "Clean the flame sensor first — this resolves most E02 codes. Check gas pressure while the boiler is firing. Secure all wiring connections. Check vent termination for wind exposure. Clear condensate drain.",
+    },
+    "E03": {
+        "meaning": "High limit / overheat — temperature exceeded safe limit.",
+        "causes": [
+            "Air in the system (most common after new install or repair)",
+            "Circulation pump failure",
+            "Flow restriction in the piping",
+            "Faulty high limit switch",
+        ],
+        "action": "Bleed air from the system — check all high points and radiators. Verify circulation pump is running (feel for vibration, check amp draw). Check for closed valves or restrictions in the piping. Let the boiler cool before resetting.",
+    },
+    "E04": {
+        "meaning": "Low water cutoff activated — insufficient water in the system.",
+        "causes": [
+            "System water level low (leak in the system)",
+            "Auto-fill valve not working",
+            "Low water cutoff sensor faulty",
+            "Air in the system causing sensor misread",
+        ],
+        "action": "Check system pressure gauge — is water pressure low? If so, there may be a leak. Check the auto-fill valve (pressure reducing valve) — it should maintain 12-15 PSI cold. Top up the system and look for leaks. If pressure is fine, the low water cutoff sensor may be faulty.",
+    },
+    "E05": {
+        "meaning": "Pressure switch fault — combustion air pressure switch issue.",
+        "causes": [
+            "Blocked vent or intake pipe",
+            "Inducer motor not running or weak",
+            "Pressure switch hose cracked, kinked, or water-logged",
+            "Pressure switch failure",
+        ],
+        "action": "Check the vent and intake for blockage. Verify inducer motor is running. Inspect the pressure switch hose — look for cracks, kinks, or water in the tubing. Test the pressure switch with a manometer to verify it's making/breaking at the right pressure.",
+    },
+    "E06": {
+        "meaning": "Blower (inducer) motor fault.",
+        "causes": [
+            "Inducer motor failure",
+            "Motor capacitor (if equipped) failure",
+            "Wiring issue to the motor",
+            "Debris in the inducer housing",
+        ],
+        "action": "Listen for the inducer — does it try to start? Check for voltage at the motor during ignition sequence. Inspect inducer housing for debris. If motor hums but doesn't spin, bearings may be seized. Replace motor if faulty.",
+    },
+    "E08": {
+        "meaning": "Gas valve fault — gas valve not operating correctly.",
+        "causes": [
+            "Gas valve coil failure",
+            "Wiring issue from control board to gas valve",
+            "Control board relay failure",
+            "Gas valve stuck closed",
+        ],
+        "action": "Check for voltage at the gas valve during ignition. If voltage present but valve won't open, replace the gas valve. If no voltage, check wiring and control board output.",
+    },
+    "E10": {
+        "meaning": "Sensor fault — temperature sensor error.",
+        "causes": [
+            "Failed supply or return water temperature sensor",
+            "Loose sensor connector",
+            "Corroded sensor wiring",
+        ],
+        "action": "Check temperature sensor resistance and compare to the chart in the manual. Weil-McLain uses thermistors — their resistance changes with temperature. Check connectors and wiring. Replace sensor if out of spec.",
+    },
+    "E12": {
+        "meaning": "Water pressure low — system pressure below minimum.",
+        "causes": [
+            "Leak in the heating system (piping, radiators, fittings)",
+            "Expansion tank waterlogged or failed (pre-charge lost)",
+            "Pressure relief valve leaking",
+            "Auto-fill valve not feeding water",
+        ],
+        "action": "Check system pressure gauge. Inspect the expansion tank (press the Schrader valve — if water comes out, the tank bladder is ruptured). Check the pressure relief valve for dripping. Look for leaks throughout the system. Verify auto-fill valve is working.",
+    },
+    "E28": {
+        "meaning": "Condensate drain issue — condensate not draining properly.",
+        "causes": [
+            "Clogged condensate drain line",
+            "Condensate trap blocked",
+            "Frozen drain line (cold climates)",
+            "Neutralizer (if equipped) plugged",
+        ],
+        "action": "Clear the condensate drain line. Clean the condensate trap. In cold climates, check for frozen drain lines. If there's a neutralizer, check it for blockage.",
+    },
+    "E30": {
+        "meaning": "Flame signal low — flame rod detecting weak flame.",
+        "causes": [
+            "Dirty flame sensor (most common)",
+            "Flame sensor corroded or deteriorated",
+            "Low gas pressure causing weak flame",
+            "Improper grounding of the boiler",
+        ],
+        "action": "Clean the flame sensor with fine emery cloth — this is almost always the fix. If it keeps coming back, check the flame sensor microamp reading (should be above 1.0 uA for most Weil-McLain boilers). Check gas pressure. Verify the boiler has a good ground — poor grounding affects flame sensing.",
+    },
+    "E31": {
+        "meaning": "Communication error — control board communication fault.",
+        "causes": [
+            "Communication cable loose between control modules",
+            "Control module failure",
+            "Power surge damage to communication circuits",
+        ],
+        "action": "Check all communication cables between the boiler control modules — reseat each connector. Power cycle the boiler. If code persists, one of the control modules may need replacement.",
+    },
+}
+
+NAVIEN_BOILER_CODES = {
+    "E003": {
+        "meaning": "Ignition failure — boiler failed to light.",
+        "causes": [
+            "Gas supply off or low gas pressure (most common)",
+            "Igniter failure or weak spark",
+            "Dirty or corroded flame rod",
+            "Condensate drain backup",
+            "Vent termination blocked",
+        ],
+        "action": "Verify gas is on and pressure is correct. Check igniter for spark. Clean flame rod with fine emery cloth. Check condensate drain. Inspect vent termination. Same diagnostic process as the tankless E003.",
+    },
+    "E012": {
+        "meaning": "Flame loss during heating operation.",
+        "causes": [
+            "Gas pressure dropping under load",
+            "Dirty flame rod",
+            "Wind downdraft in vent system",
+            "Loose flame rod wiring",
+        ],
+        "action": "Check gas pressure while unit is firing at full rate. Clean flame rod. Check vent termination for wind exposure. Secure wiring connections.",
+    },
+    "E016": {
+        "meaning": "Overheating — overheat protection activated.",
+        "causes": [
+            "Scale buildup in heat exchanger",
+            "Circulation pump failure",
+            "Air in the heating system",
+            "Flow restriction (closed valve, clogged strainer)",
+        ],
+        "action": "Flush the heat exchanger with descaling solution. Verify circulation pump is running. Bleed air from the system. Check all valves are open and strainers are clear.",
+    },
+    "E030": {
+        "meaning": "Air/fuel ratio imbalance in heating mode.",
+        "causes": [
+            "Vent system obstruction",
+            "High altitude without proper setup",
+            "APS sensor issue",
+            "Gas pressure out of spec",
+        ],
+        "action": "Check venting for obstructions. Verify altitude settings. Check APS sensor. Verify gas pressure against the spec plate.",
+    },
+    "E302": {
+        "meaning": "Low water flow in the heating circuit.",
+        "causes": [
+            "Circulation pump not running or weak",
+            "Air lock in the piping",
+            "Closed isolation valve",
+            "Clogged strainer or filter",
+            "System piping undersized for the flow rate needed",
+        ],
+        "action": "Verify circulation pump is running — feel for vibration, check amp draw. Bleed air from the system at all high points. Check all isolation valves are open. Clean strainers. Check system pressure — low pressure may indicate a leak or waterlogged expansion tank.",
+    },
+    "E351": {
+        "meaning": "DHW (domestic hot water) thermistor fault on combi boiler.",
+        "causes": [
+            "Failed DHW temperature sensor",
+            "Loose connector",
+            "Corroded wiring",
+        ],
+        "action": "Check DHW thermistor resistance. Inspect connector and wiring. Replace sensor if out of spec.",
+    },
+    "E407": {
+        "meaning": "Thermistor short — heating circuit temperature sensor shorted.",
+        "causes": [
+            "Shorted thermistor (internal failure)",
+            "Pinched sensor wire",
+            "Water intrusion into connector",
+        ],
+        "action": "Check thermistor resistance — a short reads near 0 ohms. Inspect wiring for damage. Replace the thermistor.",
+    },
+    "E421": {
+        "meaning": "Thermistor open — heating circuit temperature sensor open circuit.",
+        "causes": [
+            "Open thermistor (internal failure)",
+            "Broken wire or disconnected sensor",
+            "Corroded connector",
+        ],
+        "action": "Check thermistor resistance — open circuit reads OL on meter. Check wiring continuity. Replace the thermistor.",
+    },
+    "E515": {
+        "meaning": "Mixing valve flow abnormality in heating mode.",
+        "causes": [
+            "Mixing valve motor stuck or failed",
+            "Scale or debris in the mixing valve",
+            "Flow sensor disagreement with valve position",
+        ],
+        "action": "Check mixing valve motor operation. Flush if scale is suspected. Verify flow sensor readings. May need mixing valve assembly replacement.",
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Appliance Error Codes — split by brand for precise matching
+# ---------------------------------------------------------------------------
+
+APPLIANCE_LG_WASHER_CODES = {
+    "LE": {
+        "meaning": "Motor overload or locked motor — motor can't turn.",
+        "causes": [
+            "Overloaded drum (too many clothes)",
+            "Motor rotor position sensor failure",
+            "Stator winding damage",
+            "Worn motor brushes (older models)",
+            "Object lodged between drum and tub",
+        ],
+        "action": "Remove some clothes and try again — overloading is the #1 cause. If it happens with a normal load, check for objects between the inner drum and outer tub. Inspect the rotor position sensor (hall sensor). On direct-drive models, check the stator for burnt windings.",
+    },
+    "LE1": {
+        "meaning": "Motor locked — rotor cannot turn.",
+        "causes": [
+            "Object jammed between drum and tub",
+            "Motor rotor magnet cracked or detached",
+            "Stator failure",
+        ],
+        "action": "Same as LE — check for foreign objects first. Inspect the rotor magnet assembly for cracks. Check stator windings for continuity.",
+    },
+    "UE": {
+        "meaning": "Unbalanced load — washer can't balance the drum during spin.",
+        "causes": [
+            "Single heavy item (blanket, comforter)",
+            "Small load bunched to one side",
+            "Washer not level",
+            "Shock absorbers or suspension springs worn",
+        ],
+        "action": "Redistribute the load — add a few towels to balance a single heavy item. Level the washer with a bubble level. If it happens frequently with normal loads, check the suspension system (shock absorbers and springs) for wear.",
+    },
+    "OE": {
+        "meaning": "Drain pump fault — water won't drain.",
+        "causes": [
+            "Drain filter clogged with coins, lint, or debris (most common)",
+            "Drain hose kinked or clogged",
+            "Drain pump impeller jammed or motor failed",
+            "Drain hose too high (siphon issue)",
+        ],
+        "action": "Clean the drain filter first — it's behind the small door at the bottom front. You'll find coins, hair ties, lint, and small socks. Check the drain hose for kinks. If the filter is clean, check the pump motor — you should hear it try to run.",
+    },
+    "IE": {
+        "meaning": "Water inlet fault — washer not filling with water.",
+        "causes": [
+            "Water supply turned off (check both hot and cold)",
+            "Inlet screens clogged with sediment",
+            "Water inlet valve failure",
+            "Low water pressure",
+        ],
+        "action": "Check that both hot and cold faucets are on. Inspect the inlet hose screens — unscrew the hoses at the washer and clean the screens. If water pressure is good and screens are clear, the inlet valve may be failed.",
+    },
+    "PE": {
+        "meaning": "Pressure sensor fault — water level sensor issue.",
+        "causes": [
+            "Pressure switch (transducer) failure",
+            "Pressure hose kinked, cracked, or disconnected",
+            "Clogged pressure hose (suds or debris)",
+        ],
+        "action": "Check the pressure hose that runs from the tub to the pressure sensor — it may be kinked, cracked, or clogged with soap residue. Blow through it gently to clear it. If the hose is good, replace the pressure sensor.",
+    },
+    "FE": {
+        "meaning": "Overfill error — too much water in the tub.",
+        "causes": [
+            "Water inlet valve stuck open",
+            "Pressure sensor misreading",
+            "Control board sending incorrect fill signal",
+        ],
+        "action": "CAUTION — if water is overflowing, turn off the water supply. Check if the inlet valve closes when power is removed — if water keeps flowing, the valve is stuck open and must be replaced. If valve is okay, check the pressure sensor.",
+    },
+    "DE": {
+        "meaning": "Door lock error — door latch isn't engaging.",
+        "causes": [
+            "Something caught in the door seal preventing closure",
+            "Door lock mechanism failure",
+            "Door latch broken or misaligned",
+            "Wiring issue to door lock",
+        ],
+        "action": "Check the door seal for clothing or debris preventing full closure. Try closing the door firmly. If the door closes but doesn't lock, the door lock mechanism is likely failed — they're a common wear part on LG washers.",
+    },
+    "TE": {
+        "meaning": "Thermistor/heater error — water temp sensor fault.",
+        "causes": [
+            "Failed thermistor (temperature sensor)",
+            "Heater element failure (on models with internal heater)",
+            "Wiring issue",
+        ],
+        "action": "Check the water temperature sensor resistance — it's usually on or near the tub. If the washer uses an internal heater, check the heater element for continuity as well.",
+    },
+    "PF": {
+        "meaning": "Power failure — washer lost power during a cycle.",
+        "causes": [
+            "Brief power outage during operation",
+            "Loose power cord connection",
+            "Outlet issue",
+        ],
+        "action": "Press start to resume the cycle. If it keeps happening, check the power cord and outlet. Consider plugging the washer directly into the wall (not an extension cord or power strip).",
+    },
+    "CL": {
+        "meaning": "Child lock active — not an error, it's a feature.",
+        "causes": [
+            "Child lock was activated (intentionally or accidentally)",
+        ],
+        "action": "Press and hold the Child Lock button for 3-5 seconds to deactivate. On some models it's a button combination. Check the owner's manual for the specific model.",
+    },
+    "SUD": {
+        "meaning": "Excessive suds detected — too much soap.",
+        "causes": [
+            "Too much detergent used",
+            "Wrong type of detergent (non-HE detergent in HE washer)",
+            "Cheap or low-quality detergent that over-suds",
+        ],
+        "action": "Use HE (High Efficiency) detergent only, and use less than you think you need — 1 to 2 tablespoons for a full load. The washer will try to rinse out the extra suds. Run an empty cycle with no detergent to clear residual soap buildup.",
+    },
+    "SD": {
+        "meaning": "Excessive suds — same as Sud.",
+        "causes": [
+            "Too much detergent (most common)",
+            "Non-HE detergent used",
+        ],
+        "action": "Same as Sud code — reduce detergent amount and use HE formula only.",
+    },
+}
+
+APPLIANCE_SAMSUNG_WASHER_CODES = {
+    "1E": {
+        "meaning": "Water level sensor error — pressure sensor fault.",
+        "causes": [
+            "Pressure sensor (frequency sensor) failure",
+            "Pressure hose clogged or disconnected",
+            "Control board issue",
+        ],
+        "action": "Check the pressure hose from the tub to the sensor — it may be kinked or clogged with soap residue. Blow through it gently. If the hose is clear, the pressure sensor or main board may be faulty.",
+    },
+    "SE": {
+        "meaning": "Water level sensor error — same as 1E on some models.",
+        "causes": [
+            "Pressure sensor failure",
+            "Clogged pressure hose",
+        ],
+        "action": "Same as 1E — check pressure hose first, then sensor.",
+    },
+    "5E": {
+        "meaning": "Drain error — water won't drain from the tub.",
+        "causes": [
+            "Drain filter clogged (coins, lint, small items)",
+            "Drain hose kinked or clogged",
+            "Drain pump failure",
+            "Drain hose too high",
+        ],
+        "action": "Clean the debris filter at the bottom front of the washer — this catches coins, buttons, and lint. Check the drain hose for kinks. If the filter is clean, listen for the drain pump — if it hums but doesn't pump, the impeller may be jammed or motor failed.",
+    },
+    "E2": {
+        "meaning": "Drain error — same as 5E on older models.",
+        "causes": [
+            "Drain filter clogged",
+            "Drain hose issue",
+            "Pump failure",
+        ],
+        "action": "Same as 5E — clean the filter first.",
+    },
+    "5C": {
+        "meaning": "Drain error — same as 5E on newer models.",
+        "causes": [
+            "Drain filter clogged",
+            "Drain hose kinked",
+            "Pump failure",
+        ],
+        "action": "Same as 5E — clean the debris filter, check drain hose, check pump.",
+    },
+    "4E": {
+        "meaning": "Water supply error — washer not filling.",
+        "causes": [
+            "Water faucets turned off",
+            "Inlet hose screens clogged with sediment",
+            "Water inlet valve failure",
+            "Low water pressure",
+        ],
+        "action": "Verify both hot and cold faucets are fully open. Clean the inlet screens — unscrew hoses at the washer and clean the mesh filters. If screens are clear and pressure is good, the inlet valve may be failed.",
+    },
+    "E1": {
+        "meaning": "Water supply error — same as 4E on older models.",
+        "causes": [
+            "Water supply off",
+            "Clogged inlet screens",
+            "Inlet valve failure",
+        ],
+        "action": "Same as 4E.",
+    },
+    "4C": {
+        "meaning": "Water supply error — same as 4E on newer models.",
+        "causes": [
+            "Water supply off",
+            "Clogged inlet screens",
+            "Inlet valve failure",
+        ],
+        "action": "Same as 4E.",
+    },
+    "DC": {
+        "meaning": "Door open error — door not fully closed or locked.",
+        "causes": [
+            "Door not fully closed",
+            "Clothes caught in the door seal",
+            "Door lock mechanism failure",
+            "Door latch worn or broken",
+        ],
+        "action": "Make sure the door is fully closed and nothing is caught in the seal. If the door closes but won't lock, the door lock assembly needs replacement. It's a common failure part on Samsung front-loaders.",
+    },
+    "UE": {
+        "meaning": "Unbalanced load — drum can't balance for spin cycle.",
+        "causes": [
+            "Single bulky item",
+            "Small load bunched together",
+            "Washer not level",
+            "Suspension components worn",
+        ],
+        "action": "Redistribute the load. Level the washer. If it happens regularly with normal loads, check the suspension rods and springs.",
+    },
+    "E4": {
+        "meaning": "Unbalanced load — same as UE on older models.",
+        "causes": [
+            "Unbalanced items in drum",
+            "Machine not level",
+        ],
+        "action": "Same as UE.",
+    },
+    "UB": {
+        "meaning": "Unbalanced load — same as UE on some models.",
+        "causes": [
+            "Unbalanced items",
+            "Machine not level",
+        ],
+        "action": "Same as UE.",
+    },
+    "LE": {
+        "meaning": "Water leak detected — moisture where it shouldn't be.",
+        "causes": [
+            "Leak from door boot seal",
+            "Leak from hose connections inside the machine",
+            "Leak sensor false alarm from humidity",
+            "Cracked tub",
+        ],
+        "action": "Check for visible leaks — inspect the door boot seal for tears. Check internal hose connections. If no leak is found, the leak sensor may be giving a false alarm from excess humidity or suds.",
+    },
+    "LE1": {
+        "meaning": "Water leak — same as LE.",
+        "causes": [
+            "Door boot seal leak",
+            "Internal hose leak",
+            "Tub seal leak",
+        ],
+        "action": "Same as LE — check for visible leaks starting at the door boot seal.",
+    },
+    "LC": {
+        "meaning": "Water leak — same as LE on newer models.",
+        "causes": [
+            "Door boot seal leak",
+            "Internal hose leak",
+        ],
+        "action": "Same as LE.",
+    },
+    "LC1": {
+        "meaning": "Water leak — same as LE on newer models.",
+        "causes": [
+            "Door boot seal leak",
+            "Internal hose leak",
+        ],
+        "action": "Same as LE.",
+    },
+    "HE": {
+        "meaning": "Heater error — water heater circuit fault.",
+        "causes": [
+            "Heater element burned out",
+            "Thermistor (temp sensor) failure",
+            "Wiring issue to heater",
+        ],
+        "action": "Check heater element for continuity. Check thermistor resistance. Inspect wiring. If the washer only uses cold water, this won't affect basic wash function.",
+    },
+    "HE1": {
+        "meaning": "Heater error — overheating detected.",
+        "causes": [
+            "Thermistor failure reading incorrect temp",
+            "Heater relay stuck on",
+            "Water level too low in the tub",
+        ],
+        "action": "Check thermistor first. Verify water level is correct. If the heater is stuck on, the main board relay may be faulty.",
+    },
+    "HE2": {
+        "meaning": "Heater error — dryer heater circuit fault (washer/dryer combos).",
+        "causes": [
+            "Dryer heater element failure",
+            "Thermistor failure",
+            "Wiring fault",
+        ],
+        "action": "Check the dryer heater circuit — element continuity and thermistor resistance.",
+    },
+    "3E": {
+        "meaning": "Motor error — drive motor fault.",
+        "causes": [
+            "Motor hall sensor failure (position sensor)",
+            "Motor winding failure",
+            "Overloaded drum",
+            "Control board motor driver issue",
+        ],
+        "action": "Reduce load size and retry. Check the motor hall sensor connector. Test motor windings for continuity between all three phases. If motor checks out, the main board motor driver circuit may be faulty.",
+    },
+    "3E1": {
+        "meaning": "Motor error — overloaded.",
+        "causes": [
+            "Too many clothes in the drum",
+            "Motor weakening",
+        ],
+        "action": "Reduce load size. If it happens with normal loads, check motor windings.",
+    },
+    "3E2": {
+        "meaning": "Motor error — insufficient signal from motor.",
+        "causes": [
+            "Motor hall sensor failure",
+            "Wiring issue between motor and board",
+        ],
+        "action": "Check the hall sensor connector on the motor. Check wiring between motor and main board.",
+    },
+    "8E": {
+        "meaning": "Overcurrent error — electrical overload.",
+        "causes": [
+            "Motor drawing too much current",
+            "Main board power circuit issue",
+            "Voltage problem at the outlet",
+        ],
+        "action": "Check outlet voltage. Reduce load and retry. If persistent, check motor amp draw and main board.",
+    },
+}
+
+APPLIANCE_WHIRLPOOL_WASHER_CODES = {
+    "F0E2": {
+        "meaning": "Load detected during clean cycle — items in drum during self-clean.",
+        "causes": [
+            "Clothes or items left in the drum during a clean washer cycle",
+        ],
+        "action": "Remove all items from the drum before running the clean washer cycle. This is a normal safety check, not a malfunction.",
+    },
+    "F1E1": {
+        "meaning": "Control board error — main electronic control fault.",
+        "causes": [
+            "Control board failure from power surge",
+            "Software glitch",
+            "Component failure on the board",
+        ],
+        "action": "Unplug the washer for 5 minutes and plug back in. If code returns, the main control board likely needs replacement. Check for power surge damage.",
+    },
+    "F2E1": {
+        "meaning": "Stuck key error — user interface button stuck.",
+        "causes": [
+            "Button physically stuck on the control panel",
+            "Moisture behind the control panel",
+            "User interface board failure",
+        ],
+        "action": "Check if any button on the panel is visibly stuck. If moisture got behind the panel, let it dry completely. If no button is stuck, the user interface board may need replacement.",
+    },
+    "F5E1": {
+        "meaning": "Door lock error — door switch/lock malfunction.",
+        "causes": [
+            "Door lock mechanism failure (very common)",
+            "Door latch broken or misaligned",
+            "Wiring issue to door lock",
+            "Main board door lock circuit failure",
+        ],
+        "action": "Try closing the door firmly. Check the latch for damage. The door lock assembly is a high-failure part on Whirlpool front-loaders — it's usually the lock mechanism itself. Replace the door lock assembly.",
+    },
+    "F5E2": {
+        "meaning": "Door won't lock — unable to engage the lock.",
+        "causes": [
+            "Door lock actuator failure",
+            "Something preventing door from fully closing",
+            "Door strike misaligned",
+        ],
+        "action": "Check for obstructions in the door area. Verify the door strike aligns with the lock. Replace door lock assembly if mechanism is failed.",
+    },
+    "F7E1": {
+        "meaning": "Motor drive error — motor not responding properly.",
+        "causes": [
+            "Motor rotor position sensor (hall sensor) failure",
+            "Motor winding issue",
+            "Main board motor driver circuit failure",
+            "Wiring harness problem between motor and board",
+        ],
+        "action": "Check the motor position sensor (hall sensor) and its connector. Test motor windings. Check wiring harness between motor and control board. If motor checks out, the main board motor driver may be faulty.",
+    },
+    "F8E1": {
+        "meaning": "Water supply error — washer not filling properly.",
+        "causes": [
+            "Water supply faucets turned off",
+            "Inlet hose screens clogged",
+            "Water inlet valve failure",
+            "Low water pressure",
+        ],
+        "action": "Check that both hot and cold faucets are fully open. Clean inlet screens at the washer connection. If screens are clean and pressure is good, replace the water inlet valve.",
+    },
+    "F8E3": {
+        "meaning": "Overflow / overfill — too much water in the tub.",
+        "causes": [
+            "Water inlet valve stuck open",
+            "Pressure sensor/hose issue causing incorrect water level reading",
+            "Siphoning from drain standpipe",
+        ],
+        "action": "Check if water keeps flowing when the washer is unplugged — if so, the inlet valve is stuck open and must be replaced. Check the pressure sensor hose. Verify the drain hose has an air gap at the standpipe to prevent siphoning.",
+    },
+    "F9E1": {
+        "meaning": "Drain pump error — long drain time.",
+        "causes": [
+            "Drain pump filter clogged with debris",
+            "Drain hose kinked or clogged",
+            "Drain pump motor failure",
+            "Drain hose too high",
+        ],
+        "action": "Clean the drain pump filter (access from the front lower panel). Check the drain hose for kinks. If filter is clean, check pump motor operation — it should spin freely. Replace pump if motor is failed.",
+    },
+    "F3E1": {
+        "meaning": "Pressure switch error — water level sensor malfunction.",
+        "causes": [
+            "Pressure switch failure",
+            "Pressure hose disconnected or clogged",
+            "Air leak in the pressure system",
+        ],
+        "action": "Check the pressure hose from the tub to the pressure switch. Make sure it's connected and not clogged with soap residue. If hose is good, replace the pressure switch.",
+    },
+}
+
+APPLIANCE_LG_DRYER_CODES = {
+    "D80": {
+        "meaning": "80% exhaust restriction — dryer vent partially blocked.",
+        "causes": [
+            "Lint buildup in the dryer vent duct",
+            "Vent duct too long or too many bends",
+            "Crushed or kinked vent duct",
+            "Vent termination flap stuck closed",
+        ],
+        "action": "Clean the dryer vent duct from the dryer to the outside termination. Check the vent hood outside — make sure the flap opens freely. If the duct is flexible foil, replace it with rigid or semi-rigid metal duct. Keep runs under 25 feet equivalent (deduct 5 feet for each 90-degree bend).",
+    },
+    "D90": {
+        "meaning": "90% exhaust restriction — dryer vent seriously blocked.",
+        "causes": [
+            "Severe lint buildup in vent duct",
+            "Vent duct disconnected inside the wall",
+            "Bird nest in the vent termination",
+            "Vent duct crushed behind the dryer",
+        ],
+        "action": "This is a fire hazard level of restriction. Clean the entire vent run professionally. Check for disconnections inside the wall. Inspect the outside termination. Replace any flexible foil duct with rigid metal.",
+    },
+    "D95": {
+        "meaning": "95%+ exhaust restriction — critical blockage.",
+        "causes": [
+            "Nearly complete vent blockage",
+            "Vent completely disconnected from dryer",
+            "Vent crushed or collapsed",
+        ],
+        "action": "FIRE HAZARD — do not continue using the dryer until this is resolved. Completely clean or replace the vent duct from dryer to outside. This level of restriction causes overheating and is a leading cause of house fires.",
+    },
+    "TE1": {
+        "meaning": "Thermistor error — primary temperature sensor fault.",
+        "causes": [
+            "Failed thermistor",
+            "Loose connector at thermistor or PCB",
+            "Wiring damage",
+        ],
+        "action": "Check thermistor resistance — compare to spec chart. Inspect connector. Replace if out of spec.",
+    },
+    "TE2": {
+        "meaning": "Thermistor error — secondary temperature sensor fault.",
+        "causes": [
+            "Failed secondary thermistor",
+            "Connector issue",
+        ],
+        "action": "Same as tE1 — check resistance and replace if faulty.",
+    },
+    "TE3": {
+        "meaning": "Thermistor error — exhaust temperature sensor fault.",
+        "causes": [
+            "Failed exhaust thermistor",
+            "Sensor displaced from its mounting",
+        ],
+        "action": "Check exhaust temp sensor resistance. Verify it's properly mounted. Replace if faulty.",
+    },
+    "NP": {
+        "meaning": "No power or voltage error — electrical supply issue.",
+        "causes": [
+            "Only getting 120V instead of 240V (half voltage)",
+            "One leg of the 240V circuit tripped at the breaker",
+            "Loose connection at the outlet, cord, or terminal block",
+        ],
+        "action": "Check the breaker — on a 2-pole breaker, one side can trip without the other visually appearing tripped. Reset both sides. Check voltage at the outlet — should be 240V between the two hots. If only 120V, one leg is dead.",
+    },
+    "PS": {
+        "meaning": "Power supply error — similar to nP.",
+        "causes": [
+            "Incorrect voltage supply",
+            "Power cord issue",
+            "Terminal block loose or corroded",
+        ],
+        "action": "Check voltage at the outlet. Inspect the power cord for damage. Check terminal block connections inside the dryer access panel.",
+    },
+    "CL": {
+        "meaning": "Child lock active — not an error.",
+        "causes": [
+            "Child lock feature activated",
+        ],
+        "action": "Press and hold the Child Lock button for 3-5 seconds to deactivate.",
+    },
+    "PF": {
+        "meaning": "Power failure — dryer lost power during a cycle.",
+        "causes": [
+            "Power outage",
+            "Loose plug",
+        ],
+        "action": "Press start to resume. If frequent, check the power cord and outlet connection.",
+    },
+    "HS": {
+        "meaning": "Humidity sensor error — moisture detection fault.",
+        "causes": [
+            "Humidity sensor bars dirty (fabric softener buildup)",
+            "Humidity sensor failure",
+            "Wiring issue to sensor",
+        ],
+        "action": "Clean the humidity sensor bars inside the drum (metal bars near the lint filter) with rubbing alcohol and a soft cloth. Fabric softener residue coats these bars and causes false readings. If cleaning doesn't help, replace the sensor.",
+    },
+    "F1": {
+        "meaning": "Control board error — main PCB fault.",
+        "causes": [
+            "Control board failure",
+            "Power surge damage",
+        ],
+        "action": "Unplug for 5 minutes and try again. If code returns, the main control board needs replacement.",
+    },
+}
+
+APPLIANCE_SAMSUNG_DRYER_CODES = {
+    "HE": {
+        "meaning": "Heater circuit error — heating element or circuit fault.",
+        "causes": [
+            "Heater element burned out (open circuit)",
+            "Thermal fuse blown (most common with clogged vents)",
+            "Heater relay on main board stuck",
+            "Wiring issue in the heater circuit",
+        ],
+        "action": "Check the thermal fuse first — it's on the blower housing and blows when the vent is clogged. Test heater element for continuity. Check the high-limit thermostat. If the thermal fuse blew, also clean the vent — it blew for a reason.",
+    },
+    "TE": {
+        "meaning": "Temperature sensor error — thermistor fault.",
+        "causes": [
+            "Failed thermistor (temperature sensor)",
+            "Loose connector",
+            "Wiring damage",
+        ],
+        "action": "Check thermistor resistance against the spec chart. Inspect connector and wiring. Replace if out of range.",
+    },
+    "TS": {
+        "meaning": "Temperature sensor error — same as tE on some models.",
+        "causes": [
+            "Failed thermistor",
+            "Connector issue",
+        ],
+        "action": "Same as tE — check thermistor resistance and connector.",
+    },
+    "DC": {
+        "meaning": "Door switch error — door not detected as closed.",
+        "causes": [
+            "Door not fully closed",
+            "Door switch failure",
+            "Door latch worn or broken",
+            "Wiring issue to door switch",
+        ],
+        "action": "Close the door firmly. Check the door switch with a multimeter — it should show continuity when pressed. Replace the door switch if faulty. Check the latch for wear.",
+    },
+    "DF": {
+        "meaning": "Door switch error — same as dC on some models.",
+        "causes": [
+            "Door switch failure",
+            "Door not closing fully",
+        ],
+        "action": "Same as dC.",
+    },
+    "BE": {
+        "meaning": "Button/control panel error — stuck button.",
+        "causes": [
+            "Button stuck on the control panel",
+            "Moisture behind the panel",
+            "Control panel overlay delaminating",
+        ],
+        "action": "Check for stuck buttons. If moisture got behind the panel, let it dry. If the overlay is peeling, it can cause false button presses — replace the control panel overlay.",
+    },
+    "FE": {
+        "meaning": "Power frequency error — AC frequency out of range.",
+        "causes": [
+            "Generator power (non-standard frequency)",
+            "Power quality issue from utility",
+            "Main board power sensing circuit fault",
+        ],
+        "action": "If running on a generator, the frequency may not be stable enough. On utility power, this is rare — check incoming power. May indicate a main board issue.",
+    },
+    "9E1": {
+        "meaning": "Voltage error — supply voltage out of range.",
+        "causes": [
+            "Low or high voltage at the outlet",
+            "One leg of 240V circuit lost",
+            "Breaker issue",
+        ],
+        "action": "Check voltage at the outlet — should be 240V. Check both breakers. If voltage is correct, the main board power sensing circuit may be faulty.",
+    },
+    "9C1": {
+        "meaning": "Low voltage to unit — underpowered.",
+        "causes": [
+            "Low utility voltage",
+            "Undersized wire run to the dryer",
+            "Loose connection at breaker, outlet, or terminal block",
+        ],
+        "action": "Check voltage at the outlet and at the breaker. If voltage drops significantly from breaker to outlet, the wire gauge may be undersized for the run length. Check all connections for tightness.",
+    },
+    "ET": {
+        "meaning": "Communication error — board-to-board communication fault.",
+        "causes": [
+            "Ribbon cable or connector loose between control boards",
+            "Control board failure",
+        ],
+        "action": "Check ribbon cable connections between the main board and display board. Reseat connectors. If code persists, one of the boards needs replacement.",
+    },
+    "AE": {
+        "meaning": "Signal error — communication fault between boards.",
+        "causes": [
+            "Communication cable issue",
+            "Board failure",
+        ],
+        "action": "Check all cable connections between boards. Power cycle the unit. If persistent, replace the faulty board.",
+    },
+    "AE3": {
+        "meaning": "Signal error — variant of AE.",
+        "causes": [
+            "Sub-board communication failure",
+        ],
+        "action": "Same as AE — check connections and boards.",
+    },
+    "AE4": {
+        "meaning": "Signal error — variant of AE.",
+        "causes": [
+            "Sub-board communication failure",
+        ],
+        "action": "Same as AE — check connections and boards.",
+    },
+    "AE5": {
+        "meaning": "Signal error — variant of AE.",
+        "causes": [
+            "Sub-board communication failure",
+        ],
+        "action": "Same as AE — check connections and boards.",
+    },
+    "EE": {
+        "meaning": "EEPROM error — memory chip fault.",
+        "causes": [
+            "EEPROM corruption from power surge",
+            "Main board failure",
+        ],
+        "action": "Power cycle the dryer. If code persists, the main control board needs replacement.",
+    },
+}
+
+APPLIANCE_SAMSUNG_REFRIGERATOR_CODES = {
+    "1E": {
+        "meaning": "Freezer sensor error — freezer temperature sensor fault.",
+        "causes": [
+            "Failed freezer thermistor",
+            "Connector corroded or loose",
+            "Wiring damage",
+        ],
+        "action": "Check freezer temp sensor resistance against the spec chart. Inspect connector. Replace sensor if out of range.",
+    },
+    "2E": {
+        "meaning": "Fridge sensor error — refrigerator compartment sensor fault.",
+        "causes": [
+            "Failed fridge thermistor",
+            "Connector issue",
+        ],
+        "action": "Check fridge temp sensor resistance. Replace if out of spec.",
+    },
+    "5E": {
+        "meaning": "Defrost sensor error — defrost thermistor fault.",
+        "causes": [
+            "Failed defrost sensor/thermistor",
+            "Sensor displaced from evaporator",
+            "Ice buildup around sensor",
+        ],
+        "action": "Check defrost sensor resistance. Make sure it's clipped to the evaporator properly. If there's heavy ice buildup around it, the defrost system may have other issues (heater, timer, or board).",
+    },
+    "6E": {
+        "meaning": "Ambient temperature sensor error.",
+        "causes": [
+            "Failed ambient temp sensor",
+            "Wiring damage",
+        ],
+        "action": "Check ambient temp sensor resistance. Replace if out of spec.",
+    },
+    "8E": {
+        "meaning": "Ice maker sensor error.",
+        "causes": [
+            "Ice maker temperature sensor failure",
+            "Connector issue in the ice maker assembly",
+        ],
+        "action": "Check ice maker sensor. May require ice maker assembly replacement if the sensor is not separately replaceable.",
+    },
+    "13E": {
+        "meaning": "Ice dispenser sensor error.",
+        "causes": [
+            "Failed ice dispenser sensor",
+            "Connector issue",
+        ],
+        "action": "Check sensor and connector. Replace if faulty.",
+    },
+    "14E": {
+        "meaning": "Ice maker sensor error — secondary ice sensor fault.",
+        "causes": [
+            "Ice maker sensor failure",
+            "Wiring issue within the ice maker",
+        ],
+        "action": "Check ice maker sensor and wiring. Replace ice maker assembly if needed.",
+    },
+    "21E": {
+        "meaning": "Freezer fan motor error — evaporator fan not running.",
+        "causes": [
+            "Fan motor failure",
+            "Fan blade blocked by ice buildup (most common)",
+            "Wiring issue to fan motor",
+        ],
+        "action": "Check for ice buildup around the evaporator fan — this is very common on Samsung fridges. Defrost the freezer manually (hair dryer or leave doors open). If no ice, check the fan motor for continuity and replace if failed.",
+    },
+    "22E": {
+        "meaning": "Fridge fan motor error — fresh food compartment fan fault.",
+        "causes": [
+            "Fridge fan motor failure",
+            "Fan blocked",
+            "Wiring issue",
+        ],
+        "action": "Check fridge compartment fan for blockage. Test motor for continuity. Replace if failed.",
+    },
+    "25E": {
+        "meaning": "Defrost circuit error — defrost heater or circuit fault.",
+        "causes": [
+            "Defrost heater burned out (check continuity)",
+            "Defrost thermostat (bi-metal) failed",
+            "Main board defrost relay failure",
+        ],
+        "action": "Check defrost heater for continuity. Test the bi-metal thermostat. If both are good, the main board defrost relay circuit is likely faulty. Samsung fridges are notorious for defrost issues — the main board is often the culprit.",
+    },
+    "26E": {
+        "meaning": "Ice maker water valve error.",
+        "causes": [
+            "Water inlet valve failure",
+            "Low water pressure to the fridge",
+            "Frozen water line inside the fridge door",
+        ],
+        "action": "Check water pressure at the fridge supply line. Inspect the water inlet valve. On Samsung French door models, the water line in the door can freeze — this is a known issue. Thaw the line carefully.",
+    },
+    "33E": {
+        "meaning": "Ice pipe heater error — anti-frost heater fault.",
+        "causes": [
+            "Ice pipe heater failed",
+            "Wiring issue",
+        ],
+        "action": "Check ice pipe heater for continuity. Replace if open circuit.",
+    },
+    "39E": {
+        "meaning": "Ice maker function error.",
+        "causes": [
+            "Ice maker motor failure",
+            "Ice maker module malfunction",
+            "Ice bucket not seated properly",
+        ],
+        "action": "Make sure the ice bucket is seated correctly. Check ice maker motor operation. May need ice maker assembly replacement.",
+    },
+    "39C": {
+        "meaning": "Ice maker function error — same as 39E on newer models.",
+        "causes": [
+            "Ice maker malfunction",
+        ],
+        "action": "Same as 39E.",
+    },
+    "40E": {
+        "meaning": "Ice room fan error — ice compartment fan fault.",
+        "causes": [
+            "Ice room fan motor failure",
+            "Fan blocked by ice",
+        ],
+        "action": "Check for ice blocking the fan. Test motor. Replace if failed.",
+    },
+    "40C": {
+        "meaning": "Ice room fan error — same as 40E.",
+        "causes": [
+            "Fan motor failure or ice blockage",
+        ],
+        "action": "Same as 40E.",
+    },
+    "41C": {
+        "meaning": "Ice maker fan error.",
+        "causes": [
+            "Ice maker fan motor failure",
+            "Ice obstruction",
+        ],
+        "action": "Check for ice obstruction. Replace fan motor if failed.",
+    },
+    "84C": {
+        "meaning": "Compressor lock error — compressor not starting.",
+        "causes": [
+            "Compressor mechanically locked (seized bearing or piston)",
+            "Compressor start relay or overload failure",
+            "Inverter board failure (on inverter models)",
+            "Low voltage",
+        ],
+        "action": "Try a hard reset — unplug for 10 minutes. Check voltage. On non-inverter models, check the start relay and overload. On inverter models, check the inverter board. If the compressor is mechanically seized, it needs replacement.",
+    },
+    "85C": {
+        "meaning": "Compressor communication error — inverter board communication fault.",
+        "causes": [
+            "Inverter board failure",
+            "Communication cable between main board and inverter loose",
+            "Main board failure",
+        ],
+        "action": "Check the cable between the main board and the inverter/compressor board. Reseat connectors. If code persists, try the inverter board first — it's the more common failure point.",
+    },
+}
+
+APPLIANCE_LG_REFRIGERATOR_CODES = {
+    "ERIF": {
+        "meaning": "Ice maker fan motor error.",
+        "causes": [
+            "Ice fan motor failure",
+            "Fan blade blocked by ice",
+            "Wiring issue to fan motor",
+        ],
+        "action": "Check for ice blocking the fan blade. Test motor for continuity. Replace if failed.",
+    },
+    "ERFF": {
+        "meaning": "Freezer fan motor error — evaporator fan not running.",
+        "causes": [
+            "Fan motor failure",
+            "Ice buildup around evaporator fan (common)",
+            "Wiring issue",
+        ],
+        "action": "Check for ice around the fan — defrost manually if needed. Test fan motor. Replace if motor is bad.",
+    },
+    "ERCF": {
+        "meaning": "Condenser fan motor error — not circulating air over the compressor.",
+        "causes": [
+            "Condenser fan motor failure",
+            "Fan blade blocked by debris",
+            "Connector loose at motor",
+        ],
+        "action": "Check condenser fan at the bottom rear of the fridge. Make sure the blade spins freely. Clean any dust or debris. Test motor and replace if failed.",
+    },
+    "ERCO": {
+        "meaning": "Communication error — board-to-board communication fault.",
+        "causes": [
+            "Ribbon cable or connector loose between boards",
+            "Main board or display board failure",
+            "Power surge damage",
+        ],
+        "action": "Check all ribbon cables and connectors between the main board and display board. Power cycle the fridge for 10 minutes. If code persists, suspect a board failure.",
+    },
+    "ERDH": {
+        "meaning": "Defrost heater error — defrost circuit fault.",
+        "causes": [
+            "Defrost heater burned out",
+            "Defrost thermostat (bi-metal) open",
+            "Main board defrost circuit failure",
+        ],
+        "action": "Check defrost heater for continuity. Test bi-metal thermostat. If both are good, the main board defrost relay is likely faulty.",
+    },
+    "ERDS": {
+        "meaning": "Defrost sensor error — defrost thermistor fault.",
+        "causes": [
+            "Failed defrost thermistor",
+            "Sensor displaced from evaporator",
+            "Connector corroded",
+        ],
+        "action": "Check defrost sensor resistance. Ensure it's clipped to the evaporator properly. Replace if out of spec.",
+    },
+    "ERFS": {
+        "meaning": "Freezer sensor error — freezer temperature sensor fault.",
+        "causes": [
+            "Failed freezer thermistor",
+            "Connector issue",
+        ],
+        "action": "Check freezer temp sensor resistance. Replace if out of range.",
+    },
+    "ERRS": {
+        "meaning": "Fridge sensor error — refrigerator compartment sensor fault.",
+        "causes": [
+            "Failed fridge thermistor",
+            "Wiring issue",
+        ],
+        "action": "Check fridge temp sensor resistance. Replace if out of spec.",
+    },
+    "ERIS": {
+        "meaning": "Ice maker sensor error.",
+        "causes": [
+            "Failed ice maker sensor",
+            "Connector issue in ice maker assembly",
+        ],
+        "action": "Check ice maker sensor. May need ice maker assembly replacement.",
+    },
+    "ERHS": {
+        "meaning": "Humidity sensor error.",
+        "causes": [
+            "Failed humidity sensor",
+            "Connector corrosion",
+        ],
+        "action": "Check humidity sensor and replace if faulty.",
+    },
+    "ERGF": {
+        "meaning": "Flow sensor error — water flow sensor fault.",
+        "causes": [
+            "Failed water flow sensor",
+            "Low water pressure",
+            "Kinked water supply line",
+        ],
+        "action": "Check water pressure at the supply line. Inspect for kinks. Test the flow sensor. Replace if faulty.",
+    },
+    "ERSS": {
+        "meaning": "Pantry sensor error — pantry/deli drawer sensor fault.",
+        "causes": [
+            "Failed pantry thermistor",
+            "Connector issue",
+        ],
+        "action": "Check pantry temp sensor resistance. Replace if out of spec.",
+    },
+}
+
+APPLIANCE_BOSCH_DISHWASHER_CODES = {
+    "E01": {
+        "meaning": "Heating fault — water not reaching target temperature.",
+        "causes": [
+            "Heating element burned out",
+            "NTC temperature sensor fault causing incorrect reading",
+            "Control module relay failure",
+        ],
+        "action": "Test heating element for continuity. Check the NTC sensor resistance against the spec. If both are good, the control module is likely at fault.",
+    },
+    "E02": {
+        "meaning": "NTC temperature sensor fault.",
+        "causes": [
+            "Failed NTC thermistor (open or shorted)",
+            "Connector corroded from moisture",
+            "Wiring issue",
+        ],
+        "action": "Check NTC sensor resistance — at room temperature it should be around 50k ohms (varies by model). Replace if out of range.",
+    },
+    "E09": {
+        "meaning": "Heating element fault — specific to the heater.",
+        "causes": [
+            "Heating element open circuit",
+            "Heater relay failure on control board",
+            "Wiring damage to heater",
+        ],
+        "action": "Test the heating element for continuity. If open, replace it. Also check for ground fault (heater to chassis). If element is good, the control board heater relay is suspect.",
+    },
+    "E14": {
+        "meaning": "Flow meter error — no water detected entering the dishwasher.",
+        "causes": [
+            "Water supply turned off",
+            "Inlet hose kinked",
+            "Water inlet valve failure",
+            "Flow meter (impeller sensor) failure",
+        ],
+        "action": "Check water supply — is the valve under the sink turned on? Check inlet hose for kinks. If water is available, the inlet valve or flow meter may be failed.",
+    },
+    "E15": {
+        "meaning": "Leak protection activated — Aquastop system triggered.",
+        "causes": [
+            "Water in the base pan (actual leak)",
+            "Leak sensor triggered by moisture or condensation",
+            "Hose connection leaking inside the machine",
+            "Aquastop valve failure",
+        ],
+        "action": "Tilt the dishwasher back slightly (carefully) to drain water from the base pan. Look inside the base for the source of the leak — check the main wash pump seal, hose connections, and door seal. The float switch in the base triggers this code. Clean and dry the base pan. If no actual leak, the float switch may be stuck.",
+    },
+    "E16": {
+        "meaning": "Uncontrolled water inlet — water filling when it shouldn't be.",
+        "causes": [
+            "Water inlet valve stuck open",
+            "Inlet valve leaking through when closed",
+        ],
+        "action": "Turn off water supply immediately. The inlet valve is stuck open or leaking — replace it. Check the valve even when the machine is off — if water seeps in with power off, the valve is definitely leaking through.",
+    },
+    "E17": {
+        "meaning": "Overfill error — too much water in the tub.",
+        "causes": [
+            "Water inlet valve not closing properly",
+            "Drainage siphon effect pulling water back in",
+            "Pressure sensor issue giving wrong water level",
+        ],
+        "action": "Check inlet valve for proper shutoff. Verify drain hose has a high loop or air gap to prevent siphoning. Check water level pressure switch.",
+    },
+    "E22": {
+        "meaning": "Filter blocked — restricted water flow through the filter system.",
+        "causes": [
+            "Dirty filter screens (food debris buildup)",
+            "Filter not properly seated after cleaning",
+        ],
+        "action": "Remove and clean all filter components — the cylindrical micro-filter and the flat mesh filter. Rinse under running water. Make sure they're properly reassembled and seated. Clean filters monthly to prevent this.",
+    },
+    "E24": {
+        "meaning": "Drain hose kinked or clogged — water not draining.",
+        "causes": [
+            "Drain hose kinked behind the dishwasher",
+            "Drain hose clogged with food debris",
+            "Connection to garbage disposal or drain blocked",
+            "Knockout plug not removed from garbage disposal",
+        ],
+        "action": "Pull the dishwasher out and check the drain hose for kinks. If connected to a garbage disposal, make sure the knockout plug was removed when the disposal was installed. Check for food debris in the hose. Run the garbage disposal to clear the drain path.",
+    },
+    "E25": {
+        "meaning": "Drain pump blocked — pump can't drain water.",
+        "causes": [
+            "Drain pump impeller jammed with glass, bones, or debris",
+            "Drain pump motor failure",
+            "Drain pump cover not properly seated",
+        ],
+        "action": "Remove the drain pump cover inside the dishwasher (at the bottom of the tub) and check for debris jamming the impeller. You'll often find broken glass, fruit pits, or toothpicks. Clear the impeller and test. If it spins freely and still won't pump, the motor is failed.",
+    },
+}
+
+APPLIANCE_GE_DISHWASHER_CODES = {
+    "H2O": {
+        "meaning": "Water supply issue — dishwasher not getting water.",
+        "causes": [
+            "Water supply valve under sink turned off",
+            "Inlet hose kinked",
+            "Water inlet valve failure",
+            "Low water pressure",
+        ],
+        "action": "Check that the water supply valve under the sink is fully open. Inspect the inlet hose for kinks. If water supply is good, the inlet valve may need replacement.",
+    },
+    "PRS": {
+        "meaning": "Pressure sensor error — water level sensor fault.",
+        "causes": [
+            "Failed pressure sensor",
+            "Clogged or disconnected sensor tube",
+            "Main board issue",
+        ],
+        "action": "Check the pressure sensor tube for clogs or disconnection. Replace the pressure sensor if faulty.",
+    },
+    "LE": {
+        "meaning": "Leak detected — water in the base pan.",
+        "causes": [
+            "Actual water leak inside the dishwasher",
+            "Door gasket leaking",
+            "Pump seal leaking",
+            "Leak sensor false alarm from condensation",
+        ],
+        "action": "Check the base pan for water. Inspect door gasket, pump seals, and hose connections for leaks. Clean and dry the base pan. If no actual leak, the leak sensor may need replacement.",
+    },
+}
+
+APPLIANCE_LG_DISHWASHER_CODES = {
+    "OE": {
+        "meaning": "Drain error — water not draining.",
+        "causes": [
+            "Drain hose kinked or clogged",
+            "Drain pump jammed or failed",
+            "Garbage disposal knockout plug not removed",
+            "Filter system clogged",
+        ],
+        "action": "Check drain hose for kinks. Clean the filter system. If connected to a disposal, verify knockout was removed. Check drain pump for debris.",
+    },
+    "IE": {
+        "meaning": "Water inlet error — not filling with water.",
+        "causes": [
+            "Water supply off",
+            "Inlet valve failure",
+            "Low water pressure",
+        ],
+        "action": "Check water supply valve. Test inlet valve. Check water pressure.",
+    },
+    "FE": {
+        "meaning": "Overfill error — too much water.",
+        "causes": [
+            "Inlet valve stuck open",
+            "Float switch stuck or failed",
+        ],
+        "action": "Turn off water supply. Replace inlet valve if stuck open. Check float switch.",
+    },
+    "HE": {
+        "meaning": "Heater circuit error — water not heating.",
+        "causes": [
+            "Heating element burned out",
+            "NTC sensor failure",
+            "Control board relay issue",
+        ],
+        "action": "Test heating element for continuity. Check NTC sensor resistance. If both good, suspect control board.",
+    },
+    "TE": {
+        "meaning": "Thermistor error — temperature sensor fault.",
+        "causes": [
+            "Failed thermistor",
+            "Connector issue",
+        ],
+        "action": "Check thermistor resistance and replace if out of spec.",
+    },
+    "LE": {
+        "meaning": "Motor error — wash motor fault.",
+        "causes": [
+            "Wash motor failure",
+            "Motor winding issue",
+            "Main board motor circuit failure",
+        ],
+        "action": "Check wash motor for continuity. Listen for motor during cycle. Replace motor if failed.",
+    },
+    "CE": {
+        "meaning": "Overcurrent error — motor drawing too much current.",
+        "causes": [
+            "Motor or pump jammed",
+            "Main board issue",
+            "Wiring short",
+        ],
+        "action": "Check for debris jamming the wash motor or drain pump. Inspect wiring for damage. If pumps are clear, suspect main board.",
+    },
+    "PF": {
+        "meaning": "Power failure — lost power during cycle.",
+        "causes": [
+            "Power outage",
+            "Loose connection",
+        ],
+        "action": "Press start to resume. Check power connections if frequent.",
+    },
+    "CL": {
+        "meaning": "Child lock active — not an error.",
+        "causes": [
+            "Child lock activated",
+        ],
+        "action": "Press and hold Child Lock button for 3 seconds to deactivate.",
+    },
+}
+
+APPLIANCE_GE_OVEN_CODES = {
+    "F0": {
+        "meaning": "Control board stuck key — a key input is held.",
+        "causes": [
+            "Button stuck on the control panel",
+            "Control board touch key circuit failure",
+            "Moisture behind the panel",
+        ],
+        "action": "Check for a physically stuck button. Power off and clean the panel with a damp cloth (not dripping). If no button is stuck, the control board or keypad membrane may need replacement.",
+    },
+    "F1": {
+        "meaning": "Control board fault — ERC (Electronic Range Control) failure.",
+        "causes": [
+            "Control board component failure",
+            "Power surge damage",
+            "Relay stuck on the board",
+        ],
+        "action": "Power cycle the oven (breaker off for 2 minutes). If code returns, the control board needs replacement. This is the most common GE oven repair.",
+    },
+    "F2": {
+        "meaning": "Oven too hot — temperature exceeded safe limit.",
+        "causes": [
+            "Temperature sensor (RTD probe) failure reading low (oven overshoots)",
+            "Control board relay stuck closed (keeps heating)",
+            "Vent blocked causing heat buildup",
+        ],
+        "action": "TURN OFF BREAKER immediately if oven is excessively hot. Check the oven temp sensor — measure resistance at room temp (should be about 1080 ohms at 70F for most GE ovens). If the relay is stuck, the control board must be replaced.",
+    },
+    "F3": {
+        "meaning": "Open oven temperature sensor — sensor circuit open.",
+        "causes": [
+            "Oven temp sensor (RTD probe) failed open",
+            "Sensor wire disconnected or broken",
+            "Loose connector at sensor or control board",
+        ],
+        "action": "Check oven temp sensor resistance — should read about 1080 ohms at 70F. If it reads infinite (OL), the sensor is open — replace it. If the sensor is good, check the wiring and connector to the control board.",
+    },
+    "F4": {
+        "meaning": "Shorted oven temperature sensor — sensor reading too low.",
+        "causes": [
+            "Oven temp sensor shorted (reading near 0 ohms)",
+            "Sensor wires touching each other",
+            "Sensor harness pinched against oven cavity",
+        ],
+        "action": "Check oven temp sensor resistance. If it reads near 0 ohms, the sensor is shorted — replace it. Also inspect the sensor wire harness for pinch points or melted insulation where wires may be touching.",
+    },
+    "F5": {
+        "meaning": "Control board relay failure — board not switching properly.",
+        "causes": [
+            "Control board relay welded closed (stuck on)",
+            "Relay driver circuit failure on the board",
+        ],
+        "action": "This is a control board failure. The relay that controls the heating elements may be stuck. Replace the control board. If the oven was running very hot before this code, the relay was probably stuck closed.",
+    },
+    "F7": {
+        "meaning": "Stuck function key — a button on the control panel is stuck.",
+        "causes": [
+            "Physical button stuck",
+            "Keypad membrane deteriorated",
+            "Moisture behind the control panel",
+        ],
+        "action": "Check for a stuck button. The keypad membrane (flexible layer over the buttons) may be deteriorated — especially on older models. Replace the keypad/membrane panel. On some GE models the keypad is separate from the control board.",
+    },
+    "F8": {
+        "meaning": "Control board configuration error — EEPROM fault.",
+        "causes": [
+            "Control board EEPROM corrupted",
+            "Wrong replacement control board installed",
+            "Power surge damage to EEPROM",
+        ],
+        "action": "Power cycle the oven. If code persists, the control board EEPROM is corrupted and the board needs replacement. If this appeared after a board replacement, verify the correct part number was installed.",
+    },
+    "F9": {
+        "meaning": "Door lock fault — door lock mechanism not working.",
+        "causes": [
+            "Door lock motor/latch assembly failure",
+            "Door lock switch failure",
+            "Wiring issue to door lock",
+        ],
+        "action": "Check the door lock mechanism. If the oven was in self-clean mode, let it cool completely before troubleshooting. Check the lock motor and switches for continuity. Replace the lock assembly if faulty.",
+    },
+    "FF": {
+        "meaning": "Safety lockout — oven locked out for safety.",
+        "causes": [
+            "Multiple failed attempts or persistent fault",
+            "Control board safety circuit activated",
+        ],
+        "action": "Power off the oven at the breaker for 5 minutes. This is a safety lockout that requires a full power reset. If it keeps locking out, address the underlying fault code that caused it.",
+    },
+}
+
+APPLIANCE_WHIRLPOOL_OVEN_CODES = {
+    "F1E0": {
+        "meaning": "Control board EEPROM error — memory fault.",
+        "causes": [
+            "EEPROM corrupted from power surge",
+            "Control board failure",
+        ],
+        "action": "Power cycle the oven (breaker off for 2 minutes). If code persists, the control board needs replacement.",
+    },
+    "F2E0": {
+        "meaning": "Shorted keypad — input stuck.",
+        "causes": [
+            "Keypad membrane deteriorated or damaged",
+            "Moisture behind the control panel",
+            "Keypad connector issue",
+        ],
+        "action": "Disconnect the keypad ribbon cable from the control board. If the code clears, the keypad needs replacement. If the code stays, the control board is faulty.",
+    },
+    "F2E1": {
+        "meaning": "Stuck touch key — a key input is continuously triggered.",
+        "causes": [
+            "Button stuck physically",
+            "Keypad membrane wear",
+            "Moisture intrusion",
+        ],
+        "action": "Same as F2E0 — disconnect keypad to isolate the problem. Replace keypad if it's the cause.",
+    },
+    "F3E0": {
+        "meaning": "Open oven sensor — temperature sensor circuit open.",
+        "causes": [
+            "Oven temp sensor (RTD) failed open",
+            "Sensor wire disconnected",
+            "Connector loose at sensor or board",
+        ],
+        "action": "Check oven sensor resistance — should be about 1080 ohms at room temperature. If infinite (OL), sensor is open. Replace sensor. Check wiring and connector if sensor is good.",
+    },
+    "F3E1": {
+        "meaning": "Shorted oven sensor — sensor reading near zero.",
+        "causes": [
+            "Oven temp sensor shorted internally",
+            "Sensor wires touching or pinched",
+        ],
+        "action": "Check sensor resistance — if near 0 ohms, replace the sensor. Inspect wire harness for pinch points.",
+    },
+    "F3E2": {
+        "meaning": "Open meat probe — meat probe circuit open.",
+        "causes": [
+            "Meat probe not plugged in (code appears if oven expects it)",
+            "Meat probe failed",
+            "Jack (outlet) in oven cavity corroded or damaged",
+        ],
+        "action": "If meat probe is plugged in, try a different probe. Check the jack inside the oven for corrosion. If no probe is being used, unplug any probe from the jack.",
+    },
+    "F3E3": {
+        "meaning": "Shorted meat probe — meat probe reading near zero.",
+        "causes": [
+            "Meat probe failed internally (shorted)",
+            "Probe cord damaged",
+            "Jack corroded causing a short",
+        ],
+        "action": "Unplug the meat probe. If code clears, the probe is shorted — replace it. If code persists, check the jack and wiring.",
+    },
+    "F5E1": {
+        "meaning": "Door latch not working — lock mechanism fault.",
+        "causes": [
+            "Door lock motor/latch failure",
+            "Lock switch failed",
+            "Wiring issue",
+        ],
+        "action": "Check the door lock mechanism. If stuck mid-cycle during self-clean, let it cool completely. Test lock motor and switches. Replace lock assembly if needed.",
+    },
+    "F9E0": {
+        "meaning": "Door latch not reset — door latch stuck in locked position.",
+        "causes": [
+            "Door latch stuck from self-clean cycle",
+            "Latch motor failure",
+            "Latch switch out of position",
+        ],
+        "action": "Try running a self-clean cycle briefly then canceling — sometimes this resets the latch. If that doesn't work, power off and manually check the latch mechanism for binding.",
+    },
+    "F1E1": {
+        "meaning": "Control board fault — main board failure.",
+        "causes": [
+            "Control board component failure",
+            "Power surge damage",
+        ],
+        "action": "Power cycle the oven. If code returns, replace the control board.",
+    },
+}
+
+APPLIANCE_SAMSUNG_OVEN_CODES = {
+    "SE": {
+        "meaning": "Key short error — button stuck on the panel.",
+        "causes": [
+            "Button physically stuck",
+            "Membrane keypad deteriorated",
+            "Moisture behind panel",
+        ],
+        "action": "Check for stuck buttons. Clean and dry the control panel. If persistent, replace the membrane keypad or control panel assembly.",
+    },
+    "E08": {
+        "meaning": "Oven temperature sensor error.",
+        "causes": [
+            "Oven temp sensor (RTD) failure",
+            "Connector loose or corroded",
+            "Wiring damage",
+        ],
+        "action": "Check oven temp sensor resistance. Replace if out of spec. Check connectors and wiring.",
+    },
+    "E0A": {
+        "meaning": "Gas igniter fault — igniter not reaching temperature.",
+        "causes": [
+            "Weak or failed igniter (most common)",
+            "Gas valve safety solenoid failure",
+            "Wiring issue to igniter",
+        ],
+        "action": "Check the igniter — it should glow bright orange/white in about 30-60 seconds. If it glows but the gas doesn't flow, it may be too weak to pull in the gas valve safety. Check igniter amp draw — most need 3.2-3.6 amps to open the valve. Replace igniter if weak.",
+    },
+    "E27": {
+        "meaning": "Oven temperature sensor range — reading out of expected range.",
+        "causes": [
+            "Oven sensor degraded (reading drifting over time)",
+            "Sensor exposed to excessive heat from self-clean cycle",
+            "Wiring issue",
+        ],
+        "action": "Check sensor resistance at room temp. If slightly off spec, the sensor is degrading — replace it. Sensors can drift after many self-clean cycles due to the extreme heat.",
+    },
+    "C10": {
+        "meaning": "Communication error — board-to-board communication fault.",
+        "causes": [
+            "Ribbon cable or connector loose between boards",
+            "Control board failure",
+            "Display board failure",
+        ],
+        "action": "Check cable connections between the main board and display board. Reseat all connectors. Power cycle the oven. If persistent, one of the boards needs replacement.",
+    },
+    "CF0": {
+        "meaning": "Door lock error — lock mechanism fault.",
+        "causes": [
+            "Door lock mechanism failure",
+            "Lock switch issue",
+            "Wiring problem",
+        ],
+        "action": "Check door lock mechanism. If stuck from self-clean, let it cool completely. Test lock motor and switches. Replace if faulty.",
+    },
+}
+
+APPLIANCE_WHIRLPOOL_DRYER_CODES = {
+    "F1E1": {
+        "meaning": "Control board fault — main electronic control error.",
+        "causes": [
+            "Control board failure",
+            "Power surge damage",
+        ],
+        "action": "Unplug for 5 minutes. If code returns, replace the main control board.",
+    },
+    "F2E1": {
+        "meaning": "Stuck key error — button stuck on control panel.",
+        "causes": [
+            "Button physically stuck",
+            "Moisture behind panel",
+            "User interface board failure",
+        ],
+        "action": "Check for stuck buttons. Let panel dry if moisture is suspected. Replace UI board if needed.",
+    },
+    "F3E1": {
+        "meaning": "Exhaust thermistor open — exhaust temp sensor fault.",
+        "causes": [
+            "Exhaust thermistor failed open",
+            "Connector loose or corroded",
+            "Wiring break",
+        ],
+        "action": "Check exhaust thermistor resistance. Replace if open circuit. Check connector and wiring.",
+    },
+    "F3E2": {
+        "meaning": "Exhaust thermistor shorted.",
+        "causes": [
+            "Exhaust thermistor failed short",
+            "Wiring pinched",
+        ],
+        "action": "Check exhaust thermistor resistance. Replace if reading near 0 ohms.",
+    },
+    "F5E1": {
+        "meaning": "Door switch error — door not detected as closed.",
+        "causes": [
+            "Door switch failure",
+            "Door latch worn",
+            "Wiring to door switch",
+        ],
+        "action": "Test door switch with a multimeter. Replace if no continuity when pressed. Check wiring.",
+    },
+    "F6E2": {
+        "meaning": "Communication error between boards.",
+        "causes": [
+            "Ribbon cable loose",
+            "Board failure",
+        ],
+        "action": "Check cable connections between control boards. Reseat connectors. Replace board if needed.",
+    },
+}
+
+APPLIANCE_GE_REFRIGERATOR_CODES = {
+    "FF": {
+        "meaning": "Freezer fan circuit fault — evaporator fan issue.",
+        "causes": [
+            "Freezer evaporator fan motor failure",
+            "Fan blocked by ice buildup",
+            "Wiring issue",
+        ],
+        "action": "Check for ice around the evaporator fan. Test fan motor. Replace if failed.",
+    },
+    "CC": {
+        "meaning": "Condenser fan circuit fault.",
+        "causes": [
+            "Condenser fan motor failure",
+            "Fan blocked by debris",
+            "Connector issue",
+        ],
+        "action": "Check condenser fan at bottom rear. Clean debris. Test motor and replace if failed.",
+    },
+    "CI": {
+        "meaning": "Compressor inverter fault.",
+        "causes": [
+            "Inverter board failure",
+            "Compressor issue",
+            "Wiring fault",
+        ],
+        "action": "Check inverter board. Test compressor windings. Replace inverter board if faulty.",
+    },
+    "DI": {
+        "meaning": "Defrost issue — defrost circuit problem.",
+        "causes": [
+            "Defrost heater burned out",
+            "Defrost thermostat failed",
+            "Main board defrost timer/relay failure",
+        ],
+        "action": "Check defrost heater continuity. Test defrost thermostat. If both good, suspect main board.",
+    },
+    "TF": {
+        "meaning": "Temperature sensor fault — fridge sensor issue.",
+        "causes": [
+            "Thermistor failure",
+            "Connector corroded",
+        ],
+        "action": "Check thermistor resistance. Replace if out of spec.",
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Brand aliases — maps variations to the canonical brand key
 # ---------------------------------------------------------------------------
@@ -1812,6 +4327,40 @@ BRAND_ALIASES = {
     # Bradford White
     "bradford white": "bradford_white",
     "bradford": "bradford_white",
+    # Navien — STT may say "navian" or split it
+    "navien": "navien",
+    "navian": "navien",
+    "navi en": "navien",
+    # Noritz — STT may truncate
+    "noritz": "noritz",
+    "norit": "noritz",
+    # LG
+    "lg": "lg",
+    "l.g.": "lg",
+    "l g": "lg",
+    "life's good": "lg",
+    # Samsung — STT usually gets it
+    "samsung": "samsung",
+    "sam sung": "samsung",
+    # Weil-McLain — STT often garbles this
+    "weil mclain": "weil_mclain",
+    "weil-mclain": "weil_mclain",
+    "weil mclane": "weil_mclain",
+    "wile mclane": "weil_mclain",
+    # Whirlpool — STT may split; includes Maytag & KitchenAid (same parent)
+    "whirlpool": "whirlpool",
+    "whirl pool": "whirlpool",
+    "maytag": "whirlpool",
+    "may tag": "whirlpool",
+    "kitchenaid": "whirlpool",
+    # GE / GE Appliances
+    "ge": "ge",
+    "g.e.": "ge",
+    "general electric": "ge",
+    "ge appliances": "ge",
+    # Bosch — STT may say "bosh"
+    "bosch": "bosch",
+    "bosh": "bosch",
 }
 
 # ---------------------------------------------------------------------------
@@ -1863,6 +4412,61 @@ ERROR_CODE_DB = {
         "air conditioner": FUJITSU_MINI_SPLIT_CODES,
         "heat pump": FUJITSU_MINI_SPLIT_CODES,
     },
+    "navien": {
+        "tankless": NAVIEN_TANKLESS_CODES,
+        "water heater": NAVIEN_TANKLESS_CODES,
+        "boiler": NAVIEN_BOILER_CODES,
+        "combi": NAVIEN_BOILER_CODES,
+    },
+    "noritz": {
+        "tankless": NORITZ_TANKLESS_CODES,
+        "water heater": NORITZ_TANKLESS_CODES,
+    },
+    "lg": {
+        "mini split": LG_MINI_SPLIT_CODES,
+        "minisplit": LG_MINI_SPLIT_CODES,
+        "air conditioner": LG_MINI_SPLIT_CODES,
+        "heat pump": LG_MINI_SPLIT_CODES,
+        "washer": APPLIANCE_LG_WASHER_CODES,
+        "washing machine": APPLIANCE_LG_WASHER_CODES,
+        "dryer": APPLIANCE_LG_DRYER_CODES,
+        "refrigerator": APPLIANCE_LG_REFRIGERATOR_CODES,
+        "fridge": APPLIANCE_LG_REFRIGERATOR_CODES,
+        "dishwasher": APPLIANCE_LG_DISHWASHER_CODES,
+    },
+    "samsung": {
+        "mini split": SAMSUNG_MINI_SPLIT_CODES,
+        "minisplit": SAMSUNG_MINI_SPLIT_CODES,
+        "air conditioner": SAMSUNG_MINI_SPLIT_CODES,
+        "heat pump": SAMSUNG_MINI_SPLIT_CODES,
+        "washer": APPLIANCE_SAMSUNG_WASHER_CODES,
+        "washing machine": APPLIANCE_SAMSUNG_WASHER_CODES,
+        "dryer": APPLIANCE_SAMSUNG_DRYER_CODES,
+        "refrigerator": APPLIANCE_SAMSUNG_REFRIGERATOR_CODES,
+        "fridge": APPLIANCE_SAMSUNG_REFRIGERATOR_CODES,
+        "oven": APPLIANCE_SAMSUNG_OVEN_CODES,
+        "range": APPLIANCE_SAMSUNG_OVEN_CODES,
+    },
+    "weil_mclain": {
+        "boiler": WEIL_MCLAIN_BOILER_CODES,
+    },
+    "whirlpool": {
+        "washer": APPLIANCE_WHIRLPOOL_WASHER_CODES,
+        "washing machine": APPLIANCE_WHIRLPOOL_WASHER_CODES,
+        "dryer": APPLIANCE_WHIRLPOOL_DRYER_CODES,
+        "oven": APPLIANCE_WHIRLPOOL_OVEN_CODES,
+        "range": APPLIANCE_WHIRLPOOL_OVEN_CODES,
+    },
+    "ge": {
+        "oven": APPLIANCE_GE_OVEN_CODES,
+        "range": APPLIANCE_GE_OVEN_CODES,
+        "dishwasher": APPLIANCE_GE_DISHWASHER_CODES,
+        "refrigerator": APPLIANCE_GE_REFRIGERATOR_CODES,
+        "fridge": APPLIANCE_GE_REFRIGERATOR_CODES,
+    },
+    "bosch": {
+        "dishwasher": APPLIANCE_BOSCH_DISHWASHER_CODES,
+    },
 }
 
 # Equipment type aliases
@@ -1885,15 +4489,45 @@ EQUIPMENT_ALIASES = {
     "a/c": "air conditioner",
     "heat pump": "heat pump",
     "boiler": "boiler",
+    "combi": "boiler",
+    "combi boiler": "boiler",
     "air handler": "air handler",
+    "washer": "washer",
+    "washing machine": "washer",
+    "clothes washer": "washer",
+    "dryer": "dryer",
+    "clothes dryer": "dryer",
+    "refrigerator": "refrigerator",
+    "fridge": "refrigerator",
+    "freezer": "refrigerator",
+    "dishwasher": "dishwasher",
+    "dish washer": "dishwasher",
+    "oven": "oven",
+    "range": "oven",
+    "stove": "oven",
+    "tankless water heater": "tankless",
 }
 
 # Patterns to extract error codes from natural language queries
+# Order matters — more specific patterns come first to avoid partial matches.
 _CODE_PATTERNS = [
+    # LG fridge "ERXX" codes — pre-normalized from "Er IF" → "ERIF", etc.
+    re.compile(r"\b(ER[A-Z]{2})\b"),
+    # Whirlpool compound codes — "F0E2", "F5E1", "F8E3", "F1E1"
+    re.compile(r"\b([A-Za-z]\d[A-Za-z]\d)\b"),
+    # Two-letter prefix + digits — "CH01", "CH67" (LG mini-split), "CF0" (Samsung oven)
+    re.compile(r"\b([A-Za-z]{2}\d{1,2})\b"),
+    # Digit + letter codes — "1E", "5E", "4E", "9E1", "84C", "39C" (Samsung washer/fridge)
+    # Must come BEFORE general "error code N" pattern to capture the trailing letter(s)
+    re.compile(r"\b(\d{1,2}[A-Za-z]\d?)\b"),
     # "error code 11", "fault code E228", "code 34"
     re.compile(r"(?:error|fault|diagnostic|status)\s*(?:code)?\s*#?\s*([A-Za-z]?\d+)", re.I),
-    # "E228", "E6", "U4" (letter + number codes)
-    re.compile(r"\b([A-Z]\d{1,3})\b"),
+    # "E228", "E6", "U4", "d80", "D95" (letter + number codes, case insensitive)
+    re.compile(r"\b([A-Za-z]\d{1,3})\b"),
+    # Letter + digit + letter codes — "H2O", "E0A" (GE dishwasher, Samsung oven)
+    re.compile(r"\b([A-Za-z]\d[A-Za-z])\b"),
+    # 2-3 letter text codes — "SUD", "PRS" preceded by keyword
+    re.compile(r"(?:code|error|fault)\s+([A-Za-z]{2,3})\b", re.I),
     # "blinking 3 times", "3 blinks", "flashing 3", "3 flashes"
     re.compile(r"(?:blink(?:ing|s)?|flash(?:ing|es)?)\s*(\d{1,2})\s*(?:times?)?", re.I),
     re.compile(r"(\d{1,2})\s*(?:blinks?|flash(?:es)?|times?)", re.I),
@@ -1903,9 +4537,11 @@ _CODE_PATTERNS = [
     re.compile(r"(?:code|error|fault)\s+([A-Z]{2})\b", re.I),
     # "AH error", "EA fault", "PA code" (two-letter codes followed by keyword)
     re.compile(r"\b([A-Z]{2})\s+(?:error|fault|code)", re.I),
-    # "AH", "EA", "EE", "FB", "PA", "UA" (two-letter codes at end of query string)
+    # Letter + letter + digit codes — "LE1", "LC1", "HE1", "HE2" (Samsung/LG appliance codes)
+    re.compile(r"\b([A-Za-z]{2}\d)\b"),
+    # "AH", "EA", "EE", "SUD", "PRS" etc. (2-3 letter codes at end of query string)
     # Only matches at end of string to avoid matching brand abbreviations like "AO" from "AO Smith"
-    re.compile(r"\b([A-Z]{2})\s*$", re.I),
+    re.compile(r"\b([A-Z]{2,3})\s*$", re.I),
     # Just a number in context like "rheem 3" or "carrier 34"
     re.compile(r"(\d{1,3})$"),
 ]
@@ -1949,10 +4585,19 @@ def _extract_code(text: str) -> str | None:
     """Try to extract an error/fault code from the query text."""
     # First, convert number words to digits ("three blinks" → "3 blinks")
     normalized = _normalize_number_words(text)
+    # Normalize hyphens in codes like "E-08" → "E08", "C-F0" → "CF0"
+    normalized = re.sub(r"\b([A-Za-z])-(\d)", r"\1\2", normalized)
+    # Normalize "Er IF" / "er ff" → "ERIF" / "ERFF" (LG fridge codes)
+    normalized = re.sub(r"\b[Ee][Rr]\s+([A-Za-z]{2})\b", lambda m: "ER" + m.group(1).upper(), normalized)
     for pattern in _CODE_PATTERNS:
         match = pattern.search(normalized)
         if match:
-            return match.group(1).upper().lstrip("0") or "0"  # Normalize: strip leading zeros
+            # If the pattern has 2 groups (e.g., hyphenated codes), combine them
+            if match.lastindex and match.lastindex >= 2:
+                raw = match.group(1) + match.group(2)
+            else:
+                raw = match.group(1)
+            return raw.upper().lstrip("0") or "0"  # Normalize: strip leading zeros
     return None
 
 
