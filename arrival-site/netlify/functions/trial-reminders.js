@@ -96,7 +96,7 @@ module.exports.handler = schedule("@daily", async (event) => {
             <p>Upgrade now to keep using Arrival without interruption.</p>
             <div class="highlight">
               <div class="highlight-label">Recommended</div>
-              <div class="highlight-value">Pro — $25/month</div>
+              <div class="highlight-value">Pro — $20/month</div>
             </div>
             <a href="https://arrivalcompany.com/dashboard-individual#billing" class="btn">Upgrade Now</a>
           `)

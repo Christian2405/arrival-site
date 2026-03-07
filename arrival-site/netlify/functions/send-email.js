@@ -66,7 +66,7 @@ function welcomeEmail(firstName) {
         <li>Voice + text input</li>
         <li>All trades supported</li>
       </ul>
-      <p>Want unlimited access? Upgrade to Pro for just $25/month.</p>
+      <p>Want unlimited access? Upgrade to Pro for just $20/month.</p>
       <a href="https://arrivalcompany.com/dashboard-individual" class="btn">Go to Dashboard</a>
       <p style="font-size:13px; color:#7c736a;">Need help? Just reply to this email.</p>
     `)
@@ -77,7 +77,7 @@ function welcomeEmail(firstName) {
 function subscriptionConfirmedEmail(firstName, plan) {
   const name = firstName || 'there';
   const planName = plan === 'business' ? 'Business' : 'Pro';
-  const price = plan === 'business' ? '$250/month' : '$25/month';
+  const price = plan === 'business' ? '$250/month' : '$20/month';
   const dashboardUrl = plan === 'business'
     ? 'https://arrivalcompany.com/dashboard-business'
     : 'https://arrivalcompany.com/dashboard-individual';
@@ -163,7 +163,7 @@ function trialEndingTomorrowEmail(firstName) {
       <p>Upgrade now to keep using Arrival without interruption.</p>
       <div class="highlight">
         <div class="highlight-label">Recommended</div>
-        <div class="highlight-value">Pro &mdash; $25/month</div>
+        <div class="highlight-value">Pro &mdash; $20/month</div>
       </div>
       <ul class="feature-list">
         <li>Unlimited AI queries</li>

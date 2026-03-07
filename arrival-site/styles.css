@@ -825,7 +825,7 @@ p {
 
 .ask-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 24px;
 }
 
@@ -1358,7 +1358,7 @@ p {
 
 .benefits-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 48px;
 }
 
@@ -1862,6 +1862,178 @@ p {
 }
 
 /* ============================================
+   HORIZONTAL STEPS (How It Works)
+   ============================================ */
+
+.steps-horizontal {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 48px;
+    text-align: center;
+}
+
+.step-h-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.step-h-num {
+    width: 56px;
+    height: 56px;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+}
+
+.step-h-item h3 {
+    color: white;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ============================================
+   STAT BLOCKS (For Business — The Problem)
+   ============================================ */
+
+.stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 48px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.stat-block {
+    text-align: center;
+}
+
+.stat-number {
+    font-family: var(--font-heading);
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 12px;
+}
+
+.stat-desc {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+/* ============================================
+   BEFORE / AFTER (For Business — The Solution)
+   ============================================ */
+
+.before-after {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    max-width: 800px;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--bg-border);
+}
+
+.before-col {
+    background: var(--bg-light);
+    padding: 48px 40px;
+    border-right: 1px solid var(--bg-border);
+}
+
+.after-col {
+    background: white;
+    padding: 48px 40px;
+}
+
+.before-col h4, .after-col h4 {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 16px;
+    color: var(--text-dark);
+}
+
+.before-col p, .after-col p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.after-col p {
+    color: var(--text-dark);
+}
+
+/* ============================================
+   TIMELINE STEPPER (For Business — Get Started)
+   ============================================ */
+
+.steps-timeline {
+    display: flex;
+    justify-content: space-between;
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.steps-timeline::before {
+    content: '';
+    position: absolute;
+    top: 24px;
+    left: 60px;
+    right: 60px;
+    height: 2px;
+    background: var(--bg-border);
+}
+
+.timeline-step {
+    text-align: center;
+    flex: 1;
+    position: relative;
+}
+
+.timeline-step-num {
+    width: 48px;
+    height: 48px;
+    background: var(--text-dark);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    margin: 0 auto 16px;
+    position: relative;
+    z-index: 1;
+}
+
+.timeline-step h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--text-dark);
+}
+
+.timeline-step p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 
@@ -2026,6 +2198,61 @@ p {
     .nav-inner {
         padding: 12px 24px;
     }
+
+    .steps-horizontal {
+        grid-template-columns: 1fr;
+        gap: 32px;
+    }
+
+    .stat-row {
+        grid-template-columns: 1fr;
+        gap: 32px;
+    }
+
+    .stat-number {
+        font-size: 40px;
+    }
+
+    .before-after {
+        grid-template-columns: 1fr;
+    }
+
+    .before-col {
+        border-right: none;
+        border-bottom: 1px solid var(--bg-border);
+        padding: 32px 28px;
+    }
+
+    .after-col {
+        padding: 32px 28px;
+    }
+
+    .steps-timeline {
+        flex-direction: column;
+        gap: 32px;
+        align-items: flex-start;
+    }
+
+    .steps-timeline::before {
+        top: 0;
+        bottom: 0;
+        left: 23px;
+        right: auto;
+        width: 2px;
+        height: auto;
+    }
+
+    .timeline-step {
+        text-align: left;
+        display: flex;
+        align-items: flex-start;
+        gap: 20px;
+    }
+
+    .timeline-step-num {
+        margin: 0;
+        flex-shrink: 0;
+    }
 }
 
 @media (max-width: 480px) {
@@ -2055,5 +2282,19 @@ p {
 
     .form-row .form-group {
         margin-bottom: 24px;
+    }
+
+    .stat-number {
+        font-size: 36px;
+    }
+
+    .before-col, .after-col {
+        padding: 24px 20px;
+    }
+
+    .step-h-num {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
     }
 }

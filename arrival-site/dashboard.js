@@ -18,7 +18,7 @@ let currentSubscription = null;
 
 // Document limits by plan
 const DOC_LIMITS = { pro: 50, business: 999, enterprise: 999 };
-const PLAN_PRICES = { pro: '$25/month', business: '$250/month', enterprise: 'Custom' };
+const PLAN_PRICES = { pro: '$20/month', business: '$250/month', enterprise: 'Custom' };
 
 // Category display labels
 var CATEGORY_LABELS = {
