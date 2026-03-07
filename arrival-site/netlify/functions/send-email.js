@@ -194,6 +194,27 @@ function trialExpiredEmail(firstName) {
   };
 }
 
+// ─── CONTACT FORM ────────────────────────────
+function contactFormEmail(firstName, lastName, email, subject, message) {
+  return {
+    subject: `Contact Form: ${subject} — from ${firstName} ${lastName}`,
+    html: baseTemplate(`
+      <h1>New Contact Form Submission</h1>
+      <div class="highlight">
+        <div class="highlight-label">From</div>
+        <div class="highlight-value">${firstName} ${lastName}</div>
+        <p style="margin-top: 4px;">${email}</p>
+      </div>
+      <div class="highlight">
+        <div class="highlight-label">Subject</div>
+        <div class="highlight-value">${subject}</div>
+      </div>
+      <hr class="divider">
+      <p>${message.replace(/\n/g, '<br>')}</p>
+    `)
+  };
+}
+
 // ============================================
 // TEMPLATE REGISTRY
 // ============================================
@@ -204,7 +225,8 @@ const TEMPLATES = {
   subscription_cancelled: subscriptionCancelledEmail,
   payment_failed: paymentFailedEmail,
   trial_ending_tomorrow: trialEndingTomorrowEmail,
-  trial_expired: trialExpiredEmail
+  trial_expired: trialExpiredEmail,
+  contact_form: contactFormEmail
 };
 
 // ============================================

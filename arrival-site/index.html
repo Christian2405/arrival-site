@@ -889,7 +889,7 @@
                     <p style="font-size: 15px; color: var(--text-muted); margin: 0 auto; max-width: 480px;">Question, demo request, or partnership? We'd like to hear from you.</p>
                 </div>
                 <div style="max-width: 560px; margin: 0 auto;">
-                    <form class="auth-form">
+                    <form class="auth-form" id="contact-form">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>First Name</label>
@@ -1758,6 +1758,55 @@
                 showPage(path);
             }
         })();
+
+        // Contact form submission
+        document.getElementById('contact-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var btn = this.querySelector('button[type="submit"]');
+            var inputs = this.querySelectorAll('input, select, textarea');
+            var firstName = inputs[0].value.trim();
+            var lastName = inputs[1].value.trim();
+            var email = inputs[2].value.trim();
+            var subject = inputs[3].value;
+            var message = inputs[4].value.trim();
+
+            if (!firstName || !email || !subject || !message) return;
+
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+
+            try {
+                var res = await fetch('/.netlify/functions/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: 'hello@arrivalcompany.com',
+                        template: 'contact_form',
+                        args: [firstName, lastName, email, subject, message]
+                    })
+                });
+                if (res.ok) {
+                    btn.textContent = 'Message Sent ✓';
+                    btn.style.background = '#4caf50';
+                    inputs.forEach(function(i) { i.value = ''; });
+                    setTimeout(function() {
+                        btn.textContent = 'Send Message';
+                        btn.style.background = '';
+                        btn.disabled = false;
+                    }, 3000);
+                } else {
+                    throw new Error('Failed');
+                }
+            } catch (err) {
+                btn.textContent = 'Error — try again';
+                btn.style.background = '#c0392b';
+                btn.disabled = false;
+                setTimeout(function() {
+                    btn.textContent = 'Send Message';
+                    btn.style.background = '';
+                }, 3000);
+            }
+        });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="auth.js"></script>
