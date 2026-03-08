@@ -998,10 +998,15 @@ async function openBillingPortal() {
     }
 }
 
-async function handleAddSeats() {
-    var countStr = prompt('How many extra seats to add? ($250/month each)', '1');
-    var count = parseInt(countStr, 10);
-    if (!count || count < 1) return;
+function handleAddSeats() {
+    document.getElementById('add-seats-count').value = '1';
+    openModal('add-seats-modal');
+}
+
+async function confirmAddSeats() {
+    var count = parseInt(document.getElementById('add-seats-count').value, 10);
+    if (!count || count < 1) { showToast('Enter a valid number.', 'error'); return; }
+    closeModal('add-seats-modal');
 
     try {
         var session = await sb.auth.getSession();
@@ -1028,10 +1033,15 @@ async function handleAddSeats() {
     }
 }
 
-async function handleRemoveSeats() {
-    var countStr = prompt('How many seats to remove?', '1');
-    var count = parseInt(countStr, 10);
-    if (!count || count < 1) return;
+function handleRemoveSeats() {
+    document.getElementById('remove-seats-count').value = '1';
+    openModal('remove-seats-modal');
+}
+
+async function confirmRemoveSeats() {
+    var count = parseInt(document.getElementById('remove-seats-count').value, 10);
+    if (!count || count < 1) { showToast('Enter a valid number.', 'error'); return; }
+    closeModal('remove-seats-modal');
 
     try {
         var session = await sb.auth.getSession();
@@ -1327,6 +1337,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Billing — Add/Remove seats
     document.getElementById('billing-add-seats-btn').addEventListener('click', handleAddSeats);
     document.getElementById('billing-remove-seats-btn').addEventListener('click', handleRemoveSeats);
+
+    // Seat modal confirm buttons
+    document.getElementById('add-seats-confirm-btn').addEventListener('click', confirmAddSeats);
+    document.getElementById('remove-seats-confirm-btn').addEventListener('click', confirmRemoveSeats);
 
     // Billing — Cancel subscription (opens portal)
     document.getElementById('billing-cancel-btn').addEventListener('click', function() {

@@ -386,6 +386,30 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="add-seats-modal" onclick="if(event.target===this)closeModal('add-seats-modal')">
+    <div class="modal">
+        <h2>Add Seats</h2>
+        <p style="color:var(--text-muted);margin-bottom:16px;">Each additional seat costs <strong>$250/month</strong>, added to your next billing cycle.</p>
+        <div class="form-group">
+            <label>Number of seats to add</label>
+            <input type="number" id="add-seats-count" min="1" max="100" value="1" style="max-width:120px;">
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('add-seats-modal')">Cancel</button><button class="btn btn-primary" id="add-seats-confirm-btn">Add Seats</button></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="remove-seats-modal" onclick="if(event.target===this)closeModal('remove-seats-modal')">
+    <div class="modal">
+        <h2>Remove Seats</h2>
+        <p style="color:var(--text-muted);margin-bottom:16px;">Removed seats will be reflected in your next billing cycle.</p>
+        <div class="form-group">
+            <label>Number of seats to remove</label>
+            <input type="number" id="remove-seats-count" min="1" max="100" value="1" style="max-width:120px;">
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('remove-seats-modal')">Cancel</button><button class="btn btn-danger" id="remove-seats-confirm-btn">Remove Seats</button></div>
+    </div>
+</div>
+
 <script>
 // Page ID to sidebar link index mapping
 var PAGE_NAV_INDEX = { home:0, docs:1, activity:2, billing:3, settings:4 };
