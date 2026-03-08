@@ -27,7 +27,7 @@ import {
   registerGlobals,
 } from '@livekit/react-native';
 import { ConnectionState, RoomEvent } from 'livekit-client';
-import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
+import { getLiveKitSession, type LiveKitSession } from '../services/livekitService';
 import { supabase } from '../services/supabase';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -125,7 +125,7 @@ export default function LiveKitVoiceRoom({
 
         // Get token from backend
         console.log(`[LiveKitVoice] Getting token (attempt ${attempt + 1})...`);
-        const lkSession = await createLiveKitSession(mode);
+        const lkSession = await getLiveKitSession(mode);
         console.log(`[LiveKitVoice] Token received. Room: ${lkSession.roomName}, URL: ${lkSession.wsUrl}`);
 
         if (!cancelled) {
@@ -195,13 +195,10 @@ export default function LiveKitVoiceRoom({
     );
   }
 
+  // Don't show any loading UI — glass pills render immediately
+  // Voice agent connects silently in the background
   if (!session) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="small" color="#F97316" />
-        <Text style={styles.statusText}>{statusMsg}</Text>
-      </View>
-    );
+    return null;
   }
 
   return (
@@ -528,35 +525,8 @@ function RoomContent({
     );
   }
 
-  // Show minimal status
-  if (connectionState === ConnectionState.Connecting) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="small" color="#F97316" />
-        <Text style={styles.statusText}>Connecting...</Text>
-      </View>
-    );
-  }
-
-  if (connectionState === ConnectionState.Reconnecting) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="small" color="#F97316" />
-        <Text style={styles.statusText}>Reconnecting...</Text>
-      </View>
-    );
-  }
-
-  if (connectionState === ConnectionState.Connected && !agentConnected) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="small" color="#F97316" />
-        <Text style={styles.statusText}>Waiting for voice agent...</Text>
-      </View>
-    );
-  }
-
-  // Connected and agent is present — voice is live
+  // Don't show any loading/connecting UI — connect silently in background
+  // The glass pills (JobModeView) are already visible, voice just "arrives"
   return null;
 }
 

@@ -17,6 +17,11 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 // Token request timeout — Render free tier can cold-start in 50s
 const TOKEN_TIMEOUT_MS = 60000;
 
+// Pre-fetched session cache — eliminates wait when entering job mode
+let cachedSession: LiveKitSession | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes (token TTL is 8 hours)
+
 export interface LiveKitSession {
   token: string;
   wsUrl: string;
@@ -88,4 +93,36 @@ export async function createLiveKitSession(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Pre-fetch a LiveKit token so job mode connects instantly.
+ * Call this at app startup — silently caches the session.
+ */
+export async function prefetchLiveKitSession(): Promise<void> {
+  try {
+    const session = await createLiveKitSession('job');
+    cachedSession = session;
+    cacheTimestamp = Date.now();
+    console.log('[LiveKitService] Pre-fetched session cached');
+  } catch (e) {
+    // Silent fail — will fetch on demand when entering job mode
+    console.log('[LiveKitService] Pre-fetch failed (will retry on demand):', e);
+  }
+}
+
+/**
+ * Get a LiveKit session — uses cache if available, otherwise creates new.
+ */
+export async function getLiveKitSession(
+  mode: 'default' | 'job' = 'job',
+): Promise<LiveKitSession> {
+  if (cachedSession && (Date.now() - cacheTimestamp) < CACHE_TTL_MS) {
+    console.log('[LiveKitService] Using cached session');
+    const session = cachedSession;
+    cachedSession = null; // Use once, then pre-fetch a new one
+    prefetchLiveKitSession().catch(() => {}); // Refill cache in background
+    return session;
+  }
+  return createLiveKitSession(mode);
 }

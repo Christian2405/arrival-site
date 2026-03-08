@@ -57,6 +57,7 @@ export default function HomeScreen() {
 
   // Camera
   const cameraRef = useRef<CameraView>(null);
+  const isCapturingRef = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
 
   // Recording
@@ -147,7 +148,13 @@ export default function HomeScreen() {
   }, [permission?.granted]);
 
   // Warmup ping — wake up Render server on app open so first query is fast
-  useEffect(() => { aiAPI.warmup(); }, []);
+  useEffect(() => {
+    aiAPI.warmup();
+    // Pre-fetch LiveKit token so job mode connects instantly
+    import('../../services/livekitService').then(({ prefetchLiveKitSession }) => {
+      prefetchLiveKitSession().catch(() => {});
+    }).catch(() => {});
+  }, []);
 
   // Prefill from codes screen (or any deep link)
   useEffect(() => {
@@ -1086,6 +1093,8 @@ export default function HomeScreen() {
                     {/* Camera capture */}
                     <TouchableOpacity
                       onPress={async () => {
+                        if (isCapturingRef.current) return;
+                        isCapturingRef.current = true;
                         try {
                           if (!cameraRef.current) return;
                           const photo = await cameraRef.current.takePictureAsync({
@@ -1099,9 +1108,13 @@ export default function HomeScreen() {
                           }
                         } catch (e) {
                           console.log('[Camera] Capture error:', e);
+                        } finally {
+                          isCapturingRef.current = false;
                         }
                       }}
-                      style={styles.inputIconBtn}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={styles.cameraBtn}
                     >
                       <Ionicons
                         name="camera-outline"
@@ -1530,6 +1543,13 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },
