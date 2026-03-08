@@ -408,35 +408,10 @@ async function ensureProfileExists(user) {
 // DASHBOARD NAVIGATION
 // ============================================
 
-async function navigateToDashboard() {
-    try {
-        var sessionResult = await sb.auth.getSession();
-        var session = sessionResult.data.session;
-
-        if (!session || !session.user) {
-            showPage('login');
-            return;
-        }
-
-        // Check account_type from profile to route to correct dashboard
-        var profileResult = await sb
-            .from('profiles')
-            .select('account_type')
-            .eq('id', session.user.id)
-            .single();
-
-        if (profileResult.data && profileResult.data.account_type === 'business') {
-            localStorage.setItem('arrival_dashboard', 'business');
-            window.location.href = '/dashboard-business';
-        } else {
-            localStorage.setItem('arrival_dashboard', 'individual');
-            window.location.href = '/dashboard-individual';
-        }
-    } catch (err) {
-        console.error('Dashboard navigation error:', err);
-        // Fallback — always go to individual dashboard
-        window.location.href = '/dashboard-individual';
-    }
+function navigateToDashboard() {
+    // Go straight to dashboard — the dashboard page handles auth + routing
+    var lastDash = localStorage.getItem('arrival_dashboard') || 'individual';
+    window.location.href = '/dashboard-' + lastDash;
 }
 
 
