@@ -51,6 +51,7 @@ from livekit.agents import (
     AgentSession,
     AgentServer,
     JobContext,
+    JobExecutorType,
     cli,
     function_tool,
 )
@@ -649,7 +650,16 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 # Agent Server & Entrypoint
 # ---------------------------------------------------------------------------
 
-server = AgentServer()
+# Render free tier = 512MB RAM. The default production settings spawn 12 idle
+# worker *processes* (~50-100MB each) which OOMs immediately. Switch to thread-
+# based execution and zero idle workers so the agent fits in memory.  The HTTP
+# health-check port is set to 0 (OS-assigned) to avoid "address already in use"
+# crashes when the watchdog restarts the agent.
+server = AgentServer(
+    num_idle_processes=0,
+    job_executor_type=JobExecutorType.THREAD,
+    port=0,
+)
 
 
 @server.rtc_session()
