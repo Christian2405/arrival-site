@@ -73,6 +73,18 @@ async def livekit_debug():
     except Exception as e:
         info["agent_process_check_error"] = str(e)
 
+    # Try to start agent directly and capture the error
+    try:
+        result = subprocess.run(
+            ["python", "-c", "import livekit_agent.agent; print('IMPORT OK')"],
+            capture_output=True, text=True, timeout=15
+        )
+        info["agent_import_stdout"] = result.stdout[-500:] if result.stdout else ""
+        info["agent_import_stderr"] = result.stderr[-500:] if result.stderr else ""
+        info["agent_import_returncode"] = result.returncode
+    except Exception as e:
+        info["agent_import_error"] = str(e)
+
     # Use LiveKit Server API to check Cloud status
     try:
         lk = api.LiveKitAPI(
