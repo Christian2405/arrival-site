@@ -642,13 +642,13 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 # Agent Server & Entrypoint
 # ---------------------------------------------------------------------------
 
-server = AgentServer()
+def _make_entrypoint(server):
+    """Register the entrypoint on the given AgentServer."""
 
-
-@server.rtc_session()
-async def entrypoint(ctx: JobContext):
-    """Called when a participant joins a LiveKit room that needs an agent."""
-    try:
+    @server.rtc_session()
+    async def entrypoint(ctx: JobContext):
+        """Called when a participant joins a LiveKit room that needs an agent."""
+        try:
         # Lazy-load plugins on first call (not at module level — avoids import hang)
         global silero, MultilingualModel, deepgram, anthropic, elevenlabs
         if deepgram is None:
@@ -826,6 +826,10 @@ async def entrypoint(ctx: JobContext):
         logger.error(f"[arrival-agent] ✗ ENTRYPOINT CRASHED: {e}", exc_info=True)
         raise
 
+    return entrypoint
+
 
 if __name__ == "__main__":
+    server = AgentServer()
+    _make_entrypoint(server)
     cli.run_app(server)

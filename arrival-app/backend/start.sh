@@ -12,35 +12,26 @@ echo "[start.sh] LIVEKIT_URL: ${LIVEKIT_URL:-(NOT SET)}"
 echo "[start.sh] LIVEKIT_API_KEY set: $([ -n "$LIVEKIT_API_KEY" ] && echo 'YES' || echo 'NO')"
 echo "[start.sh] LIVEKIT_API_SECRET set: $([ -n "$LIVEKIT_API_SECRET" ] && echo 'YES' || echo 'NO')"
 
-# Quick import check — only verify SDK is installed (don't load full agent which loads ML models)
-echo "[start.sh] Checking SDK imports..."
-if python -c "
-from livekit.agents import Agent, AgentSession, AgentServer
-from livekit.plugins import deepgram, anthropic, elevenlabs
-print('[start.sh] SDK imports OK')
-" 2>&1; then
-    echo "[start.sh] ✓ SDK OK — starting LiveKit agent"
-    # Start agent in background — it loads ML models (Silero, etc) on startup which takes time
+# Start agent directly — no import pre-check (it was hanging on Render)
+if [ -n "$LIVEKIT_URL" ] && [ -n "$LIVEKIT_API_KEY" ] && [ -n "$LIVEKIT_API_SECRET" ]; then
+    echo "[start.sh] LiveKit env vars set — starting agent..."
     python -m livekit_agent.agent start \
         --url "${LIVEKIT_URL}" \
         --api-key "${LIVEKIT_API_KEY}" \
         --api-secret "${LIVEKIT_API_SECRET}" \
         --log-level INFO 2>&1 &
     AGENT_PID=$!
-    echo "[start.sh] LiveKit agent PID: $AGENT_PID (loading models in background...)"
+    echo "[start.sh] LiveKit agent PID: $AGENT_PID"
 
-    # Give it more time — ML model loading is slow on 0.5 CPU
-    sleep 8
+    sleep 5
     if kill -0 $AGENT_PID 2>/dev/null; then
-        echo "[start.sh] ✓ LiveKit agent still running after 8s"
+        echo "[start.sh] ✓ LiveKit agent running"
     else
         wait $AGENT_PID 2>/dev/null
-        AGENT_EXIT=$?
-        echo "[start.sh] ✗ LiveKit agent CRASHED on startup (exit code: $AGENT_EXIT)"
-        echo "[start.sh] FastAPI will continue without voice agent"
+        echo "[start.sh] ✗ LiveKit agent crashed (exit $?)"
     fi
 else
-    echo "[start.sh] ✗ SDK import check failed — skipping LiveKit agent"
+    echo "[start.sh] ✗ LiveKit env vars not set — skipping agent"
 fi
 
 # Start FastAPI in foreground — Render monitors this process
