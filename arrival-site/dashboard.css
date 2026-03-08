@@ -951,6 +951,54 @@ p { line-height: 1.7; color: var(--text-dark); }
 }
 
 /* ============================================
+   SEAT MANAGEMENT CARD
+   ============================================ */
+
+.seat-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border: 1px solid var(--bg-border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 32px;
+}
+
+.seat-card-info {
+    flex: 1;
+}
+
+.seat-card-count {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 10px;
+}
+
+.seat-card-bar {
+    width: 100%;
+    max-width: 280px;
+    height: 8px;
+    background: var(--bg-border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.seat-card-bar-fill {
+    height: 100%;
+    background: var(--text-dark);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.seat-card-detail {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* ============================================
    SEARCH BAR
    ============================================ */
 

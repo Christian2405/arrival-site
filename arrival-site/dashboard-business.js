@@ -702,10 +702,12 @@ function renderTeamTable(members) {
 function updateSeatIndicator() {
     var usedSeats = teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length;
     var maxSeats = currentTeam.max_seats || 10;
-    var el = document.getElementById('team-seat-indicator');
-    if (el) {
-        el.innerHTML = usedSeats + ' / ' + maxSeats + ' seats used. Additional seats: $250/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button>';
-    }
+    var usedEl = document.getElementById('seat-used');
+    var maxEl = document.getElementById('seat-max');
+    var barEl = document.getElementById('seat-bar-fill');
+    if (usedEl) usedEl.textContent = usedSeats;
+    if (maxEl) maxEl.textContent = maxSeats;
+    if (barEl) barEl.style.width = Math.round((usedSeats / maxSeats) * 100) + '%';
 }
 
 async function handleInvite() {

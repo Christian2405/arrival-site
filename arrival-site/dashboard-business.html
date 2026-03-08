@@ -150,6 +150,18 @@
             </div>
         </div>
 
+        <!-- Seat Management Card -->
+        <div class="seat-card" id="team-seat-indicator">
+            <div class="seat-card-info">
+                <div class="seat-card-count"><span id="seat-used">0</span> / <span id="seat-max">10</span> seats used</div>
+                <div class="seat-card-bar">
+                    <div class="seat-card-bar-fill" id="seat-bar-fill" style="width:0%"></div>
+                </div>
+                <div class="seat-card-detail">Additional seats: $250/month each</div>
+            </div>
+            <button class="btn btn-outline" onclick="handleAddSeats()">Add Seats</button>
+        </div>
+
         <div class="dash-section">
             <h2>Your Team</h2>
             <div class="table-wrapper">
@@ -159,7 +171,6 @@
                     </tbody>
                 </table>
             </div>
-            <div class="storage-indicator" id="team-seat-indicator">0 / 10 seats used. Additional seats: $250/month each. <button class="btn btn-sm btn-outline" style="margin-left:16px;" onclick="handleAddSeats()">Add Seats</button></div>
         </div>
 
         <div class="dash-section">
