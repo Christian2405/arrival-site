@@ -410,6 +410,30 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="delete-doc-modal" onclick="if(event.target===this)closeModal('delete-doc-modal')">
+    <div class="modal">
+        <h2>Delete Document</h2>
+        <p>This will permanently delete this document and remove it from AI search. This cannot be undone.</p>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('delete-doc-modal')">Cancel</button><button class="btn btn-danger" id="delete-doc-confirm-btn">Delete Document</button></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="change-role-modal" onclick="if(event.target===this)closeModal('change-role-modal')">
+    <div class="modal">
+        <h2>Change Role</h2>
+        <p>Select a new role for this team member.</p>
+        <div class="form-group">
+            <label>Role</label>
+            <select id="change-role-select">
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+                <option value="technician">Technician</option>
+            </select>
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('change-role-modal')">Cancel</button><button class="btn btn-primary" id="change-role-confirm-btn">Update Role</button></div>
+    </div>
+</div>
+
 <script>
 // Page ID to sidebar link index mapping
 var PAGE_NAV_INDEX = { home:0, docs:1, activity:2, billing:3, settings:4 };

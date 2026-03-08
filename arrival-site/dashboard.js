@@ -331,8 +331,21 @@ async function viewDocument(docId, storagePath) {
     }
 }
 
-async function deleteDocument(docId, storagePath) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+var pendingDeleteDocId = null;
+var pendingDeleteStoragePath = null;
+
+function deleteDocument(docId, storagePath) {
+    pendingDeleteDocId = docId;
+    pendingDeleteStoragePath = storagePath;
+    openModal('delete-doc-modal');
+}
+
+async function confirmDeleteDocument() {
+    var docId = pendingDeleteDocId;
+    closeModal('delete-doc-modal');
+    pendingDeleteDocId = null;
+    pendingDeleteStoragePath = null;
+    if (!docId) return;
 
     try {
         // Delete through backend API so RAG vectors get cleaned up too
@@ -1145,6 +1158,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Delete account
     document.getElementById('delete-confirm-btn').addEventListener('click', handleDeleteAccount);
+
+    // Delete document confirm
+    var delDocBtn = document.getElementById('delete-doc-confirm-btn');
+    if (delDocBtn) delDocBtn.addEventListener('click', confirmDeleteDocument);
 
     // Billing — Upgrade to Pro
     document.getElementById('billing-btn-pro').addEventListener('click', function() {

@@ -366,6 +366,14 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="delete-doc-modal" onclick="if(event.target===this)closeModal('delete-doc-modal')">
+    <div class="modal">
+        <h2>Delete Document</h2>
+        <p>This will permanently delete this document and remove it from AI search. This cannot be undone.</p>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('delete-doc-modal')">Cancel</button><button class="btn btn-danger" id="delete-doc-confirm-btn">Delete Document</button></div>
+    </div>
+</div>
+
 <script>
 var PAGE_NAV_INDEX = { documents:0, 'chat-history':1, 'saved-answers':2, billing:3, settings:4 };
 

@@ -513,8 +513,21 @@ async function viewDocument(docId, storagePath) {
     }
 }
 
-async function deleteDocument(docId, storagePath) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+var pendingDeleteDocId = null;
+var pendingDeleteStoragePath = null;
+
+function deleteDocument(docId, storagePath) {
+    pendingDeleteDocId = docId;
+    pendingDeleteStoragePath = storagePath;
+    openModal('delete-doc-modal');
+}
+
+async function confirmDeleteDocument() {
+    var docId = pendingDeleteDocId;
+    closeModal('delete-doc-modal');
+    pendingDeleteDocId = null;
+    pendingDeleteStoragePath = null;
+    if (!docId) return;
 
     try {
         // Delete through backend API so RAG vectors get cleaned up too
@@ -768,16 +781,22 @@ async function handleInvite() {
     }
 }
 
+var pendingChangeRoleMemberId = null;
+
 function promptChangeRole(memberId, currentRole) {
-    var roles = ['admin', 'manager', 'technician'];
-    var otherRoles = roles.filter(function(r) { return r !== currentRole; });
-    var newRole = prompt('Change role to: ' + otherRoles.join(' or ') + '?', otherRoles[0]);
-    if (!newRole) return;
-    newRole = newRole.toLowerCase().trim();
-    if (roles.indexOf(newRole) === -1) {
-        showToast('Invalid role. Choose: admin, manager, or technician.', 'error');
-        return;
-    }
+    pendingChangeRoleMemberId = memberId;
+    var select = document.getElementById('change-role-select');
+    if (select) select.value = currentRole;
+    openModal('change-role-modal');
+}
+
+function confirmChangeRole() {
+    var memberId = pendingChangeRoleMemberId;
+    var select = document.getElementById('change-role-select');
+    var newRole = select ? select.value : null;
+    closeModal('change-role-modal');
+    pendingChangeRoleMemberId = null;
+    if (!memberId || !newRole) return;
     changeRole(memberId, newRole);
 }
 
@@ -1321,6 +1340,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Remove team member confirm
     document.getElementById('remove-confirm-btn').addEventListener('click', handleRemoveMember);
+
+    // Delete document confirm
+    document.getElementById('delete-doc-confirm-btn').addEventListener('click', confirmDeleteDocument);
+
+    // Change role confirm
+    document.getElementById('change-role-confirm-btn').addEventListener('click', confirmChangeRole);
 
     // Company profile save
     document.getElementById('settings-company-save-btn').addEventListener('click', handleSaveCompanyProfile);
