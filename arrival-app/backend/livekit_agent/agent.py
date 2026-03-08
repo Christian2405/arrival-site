@@ -54,23 +54,16 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, anthropic, elevenlabs
 
-# Optional ML plugins — may fail to import if deps are missing
-try:
-    from livekit.plugins import silero
-except ImportError:
-    silero = None
-    print("[arrival-agent] WARNING: Silero plugin not available")
-
-try:
-    from livekit.plugins.turn_detector.multilingual import MultilingualModel
-except ImportError:
-    try:
-        from livekit.plugins.turn_detector import MultilingualModel
-    except ImportError:
-        MultilingualModel = None
-        print("[arrival-agent] WARNING: MultilingualModel not available")
+# LAZY IMPORTS: plugins and ML models are loaded inside entrypoint(), not at
+# module level.  On Render's 0.5 CPU, importing silero/turn-detector at module
+# level causes a 15+ second hang that prevents the agent from ever starting.
+# These are set to None here and populated in entrypoint().
+silero = None
+MultilingualModel = None
+deepgram = None
+anthropic = None  # livekit anthropic plugin (not the SDK)
+elevenlabs = None
 
 import httpx
 import anthropic as anthropic_sdk
@@ -656,6 +649,34 @@ server = AgentServer()
 async def entrypoint(ctx: JobContext):
     """Called when a participant joins a LiveKit room that needs an agent."""
     try:
+        # Lazy-load plugins on first call (not at module level — avoids import hang)
+        global silero, MultilingualModel, deepgram, anthropic, elevenlabs
+        if deepgram is None:
+            logger.info("[arrival-agent] Loading plugins (first call)...")
+            from livekit.plugins import deepgram as _dg, anthropic as _anth, elevenlabs as _el
+            deepgram = _dg
+            anthropic = _anth
+            elevenlabs = _el
+            logger.info("[arrival-agent] ✓ Core plugins loaded")
+
+            try:
+                from livekit.plugins import silero as _silero
+                silero = _silero
+                logger.info("[arrival-agent] ✓ Silero plugin loaded")
+            except ImportError:
+                logger.warning("[arrival-agent] Silero plugin not available")
+
+            try:
+                from livekit.plugins.turn_detector.multilingual import MultilingualModel as _MM
+                MultilingualModel = _MM
+                logger.info("[arrival-agent] ✓ Turn detector loaded")
+            except ImportError:
+                try:
+                    from livekit.plugins.turn_detector import MultilingualModel as _MM
+                    MultilingualModel = _MM
+                except ImportError:
+                    logger.warning("[arrival-agent] MultilingualModel not available")
+
         logger.info(f"[arrival-agent] ★ Entrypoint called — room={ctx.room.name}")
         await ctx.connect()
         logger.info(f"[arrival-agent] Connected to room: {ctx.room.name}")
@@ -680,8 +701,7 @@ async def entrypoint(ctx: JobContext):
         # Select prompt based on mode
         prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
 
-        # Load ML models with fallback — these download on first use and may fail
-        # on memory-constrained environments (Render free tier = 512MB)
+        # Load ML models with fallback
         vad = None
         turn_det = None
         if silero is not None:
