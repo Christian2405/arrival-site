@@ -46,19 +46,14 @@ from dotenv import load_dotenv
 _env_file = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_file, override=True)
 
-from livekit.agents import (
-    Agent,
-    AgentSession,
-    AgentServer,
-    JobContext,
-    cli,
-    function_tool,
-)
-
-# LAZY IMPORTS: plugins and ML models are loaded inside entrypoint(), not at
-# module level.  On Render's 0.5 CPU, importing silero/turn-detector at module
-# level causes a 15+ second hang that prevents the agent from ever starting.
-# These are set to None here and populated in entrypoint().
+# ALL livekit imports are deferred to __main__ to avoid import-time hangs on Render.
+# These globals are populated in main() before the agent server starts.
+Agent = None
+AgentSession = None
+AgentServer = None
+JobContext = None
+cli = None
+function_tool = None
 silero = None
 MultilingualModel = None
 deepgram = None
@@ -830,6 +825,26 @@ def _make_entrypoint(server):
 
 
 if __name__ == "__main__":
+    print("[arrival-agent] Starting — importing livekit SDK...", flush=True)
+
+    from livekit.agents import (
+        Agent as _Agent,
+        AgentSession as _AgentSession,
+        AgentServer as _AgentServer,
+        JobContext as _JobContext,
+        cli as _cli,
+        function_tool as _function_tool,
+    )
+    # Populate globals so the rest of the module can use them
+    Agent = _Agent
+    AgentSession = _AgentSession
+    AgentServer = _AgentServer
+    JobContext = _JobContext
+    cli = _cli
+    function_tool = _function_tool
+
+    print("[arrival-agent] ✓ SDK imported", flush=True)
+
     server = AgentServer()
     _make_entrypoint(server)
     cli.run_app(server)

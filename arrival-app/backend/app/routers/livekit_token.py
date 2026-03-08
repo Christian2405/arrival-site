@@ -33,6 +33,21 @@ class TokenResponse(BaseModel):
     room_name: str
 
 
+@router.get("/agent-log")
+async def agent_log():
+    """Read the LiveKit agent stdout/stderr log."""
+    import subprocess
+    try:
+        result = subprocess.run(["tail", "-50", "/tmp/agent_output.log"], capture_output=True, text=True, timeout=5)
+        pgrep = subprocess.run(["pgrep", "-fa", "livekit_agent"], capture_output=True, text=True, timeout=5)
+        return {
+            "log": result.stdout,
+            "processes": pgrep.stdout.strip(),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/livekit-status")
 async def livekit_status():
     """Diagnostic: check LiveKit config is loaded (no auth required)."""
