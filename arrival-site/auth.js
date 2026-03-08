@@ -334,8 +334,12 @@ async function handlePasswordUpdate(event) {
 // LOGOUT
 // ============================================
 
-async function handleLogout() {
-    await sb.auth.signOut();
+function handleLogout() {
+    // Clear local state immediately so redirect is instant
+    localStorage.removeItem('arrival_dashboard');
+    localStorage.removeItem('sb-' + window.location.hostname + '-auth-token');
+    // Fire signOut but don't wait for it
+    sb.auth.signOut().catch(function () {});
     window.location.href = '/';
 }
 

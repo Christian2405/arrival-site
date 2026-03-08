@@ -195,8 +195,9 @@ function showTrialExpiredOverlay() {
 // LOGOUT
 // ============================================
 
-async function handleLogout() {
-    await sb.auth.signOut();
+function handleLogout() {
+    localStorage.removeItem('arrival_dashboard');
+    sb.auth.signOut().catch(function () {});
     window.location.href = '/';
 }
 
