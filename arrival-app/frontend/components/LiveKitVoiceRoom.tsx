@@ -524,6 +524,55 @@ function RoomContent({
     onVoiceConnected?.(agentConnected);
   }, [agentConnected, onVoiceConnected]);
 
+  // Agent connection timeout — if agent doesn't join within 20s, show error
+  const agentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [agentTimedOut, setAgentTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (connectionState === ConnectionState.Connected && !agentConnected) {
+      // Start timeout — agent should join within 20s
+      if (!agentTimeoutRef.current) {
+        agentTimeoutRef.current = setTimeout(() => {
+          if (!agentConnected) {
+            setAgentTimedOut(true);
+            onStateChange('error');
+          }
+        }, 20000);
+      }
+    }
+
+    if (agentConnected) {
+      // Agent joined — clear timeout
+      if (agentTimeoutRef.current) {
+        clearTimeout(agentTimeoutRef.current);
+        agentTimeoutRef.current = null;
+      }
+      setAgentTimedOut(false);
+    }
+
+    return () => {
+      if (agentTimeoutRef.current) {
+        clearTimeout(agentTimeoutRef.current);
+        agentTimeoutRef.current = null;
+      }
+    };
+  }, [connectionState, agentConnected]);
+
+  // Agent timed out — show retry
+  if (agentTimedOut) {
+    return (
+      <TouchableOpacity style={styles.errorContainer} onPress={() => {
+        setAgentTimedOut(false);
+        onRetry();
+      }} activeOpacity={0.7}>
+        <Text style={styles.errorText}>Voice agent unavailable</Text>
+        <View style={styles.retryBadge}>
+          <Text style={styles.retryText}>Retry</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
   // Room-level error with retry
   if (roomError) {
     return (
