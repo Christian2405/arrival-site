@@ -12,34 +12,27 @@ echo "[start.sh] LIVEKIT_URL: ${LIVEKIT_URL:-(NOT SET)}"
 echo "[start.sh] LIVEKIT_API_KEY set: $([ -n "$LIVEKIT_API_KEY" ] && echo 'YES' || echo 'NO')"
 echo "[start.sh] LIVEKIT_API_SECRET set: $([ -n "$LIVEKIT_API_SECRET" ] && echo 'YES' || echo 'NO')"
 
-# Verify agent module can be imported before starting it
-echo "[start.sh] Checking livekit_agent imports..."
+# Quick import check — only verify SDK is installed (don't load full agent which loads ML models)
+echo "[start.sh] Checking SDK imports..."
 if python -c "
-import sys
-sys.stdout.write('[start.sh] Importing livekit_agent.agent... ')
-import livekit_agent.agent
-sys.stdout.write('OK\n')
-sys.stdout.write('[start.sh] Importing livekit.agents... ')
 from livekit.agents import Agent, AgentSession, AgentServer
-sys.stdout.write('OK\n')
-sys.stdout.write('[start.sh] Importing plugins... ')
 from livekit.plugins import deepgram, anthropic, elevenlabs
-sys.stdout.write('OK\n')
+print('[start.sh] SDK imports OK')
 " 2>&1; then
-    echo "[start.sh] ✓ All imports OK — starting LiveKit agent"
-    # Pass credentials explicitly in case env var inheritance fails
+    echo "[start.sh] ✓ SDK OK — starting LiveKit agent"
+    # Start agent in background — it loads ML models (Silero, etc) on startup which takes time
     python -m livekit_agent.agent start \
         --url "${LIVEKIT_URL}" \
         --api-key "${LIVEKIT_API_KEY}" \
         --api-secret "${LIVEKIT_API_SECRET}" \
         --log-level INFO 2>&1 &
     AGENT_PID=$!
-    echo "[start.sh] LiveKit agent PID: $AGENT_PID"
+    echo "[start.sh] LiveKit agent PID: $AGENT_PID (loading models in background...)"
 
-    # Brief check — did it crash immediately?
-    sleep 3
+    # Give it more time — ML model loading is slow on 0.5 CPU
+    sleep 8
     if kill -0 $AGENT_PID 2>/dev/null; then
-        echo "[start.sh] ✓ LiveKit agent still running after 3s"
+        echo "[start.sh] ✓ LiveKit agent still running after 8s"
     else
         wait $AGENT_PID 2>/dev/null
         AGENT_EXIT=$?
@@ -47,7 +40,7 @@ sys.stdout.write('OK\n')
         echo "[start.sh] FastAPI will continue without voice agent"
     fi
 else
-    echo "[start.sh] ✗ Import check failed — skipping LiveKit agent"
+    echo "[start.sh] ✗ SDK import check failed — skipping LiveKit agent"
 fi
 
 # Start FastAPI in foreground — Render monitors this process

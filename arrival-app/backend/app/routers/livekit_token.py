@@ -73,17 +73,24 @@ async def livekit_debug():
     except Exception as e:
         info["agent_process_check_error"] = str(e)
 
-    # Try to start agent directly and capture the error
+    # Try a lightweight import test (avoid importing the full agent which loads ML models)
     try:
         result = subprocess.run(
-            ["python", "-c", "import livekit_agent.agent; print('IMPORT OK')"],
-            capture_output=True, text=True, timeout=15
+            ["python", "-c", "from livekit.agents import AgentServer; print('SDK OK'); import livekit_agent; print('PKG OK')"],
+            capture_output=True, text=True, timeout=10
         )
-        info["agent_import_stdout"] = result.stdout[-500:] if result.stdout else ""
-        info["agent_import_stderr"] = result.stderr[-500:] if result.stderr else ""
-        info["agent_import_returncode"] = result.returncode
+        info["sdk_import_stdout"] = result.stdout.strip()
+        info["sdk_import_stderr"] = result.stderr[-300:] if result.stderr else ""
+        info["sdk_import_returncode"] = result.returncode
     except Exception as e:
-        info["agent_import_error"] = str(e)
+        info["sdk_import_error"] = str(e)
+
+    # Check memory
+    try:
+        result = subprocess.run(["free", "-m"], capture_output=True, text=True, timeout=5)
+        info["memory"] = result.stdout.strip()
+    except Exception:
+        pass
 
     # Use LiveKit Server API to check Cloud status
     try:
