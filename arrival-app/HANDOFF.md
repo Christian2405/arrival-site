@@ -1,8 +1,8 @@
 # Arrival AI — Handoff Document
 ## "50-Year Veteran in Your Pocket" Upgrade
 
-**Last Updated:** March 7, 2026
-**Latest Commits:** `a93a695` (voice agent RAG + trade intelligence) | `2b3d157` (feedback data flywheel)
+**Last Updated:** March 8, 2026
+**Latest Commits:** `36fe75f` (restore silero/turn-detector) | `8972ba3` (agent debug) | `a93a695` (voice agent RAG)
 
 ---
 
@@ -330,16 +330,53 @@ Next question about cap tube superheat:
 
 ---
 
+## March 8, 2026 Session — Voice Agent Fix + Mic Icon
+
+### LiveKit Agent Not Starting — Root Cause Found & Fixed
+
+**Problem:** Job mode voice stopped working. Agent process was never running on Render. Multiple debugging attempts (lazy imports, SDK extras removal, AgentServer params) didn't help because the root cause was elsewhere.
+
+**Root Cause:** Render's **Start Command** was set to `uvicorn app.main:app --host 0.0.0.0 --port $PORT` — this only starts the web server. The `start.sh` script (which launches the LiveKit agent process in the background before starting uvicorn) was never executed.
+
+**Fix:** Changed Render Start Command from `uvicorn app.main:app ...` → `bash start.sh` via Render Dashboard > Settings > Build & Deploy > Start Command.
+
+**Result:** Agent process starts, registers with LiveKit Cloud (worker ID, region US West B), and marks itself available for sessions.
+
+**Debug infrastructure added:**
+- `GET /api/agent-log` — reads agent stdout/stderr from `/tmp/agent_output.log`
+- `GET /api/livekit-debug` — checks agent process (pgrep), SDK import, memory, LiveKit Cloud rooms/participants
+- `start.sh` — writes agent output to log file with unbuffered Python (`python -u`)
+
+**Commits:** `ec3cf2f` (mic icon color) → `30d5327` → `fd75987` → `ebcd404` → `f710f6f` → `320a29d` → `6357b1c` → `51a0590` → `d241cfa` → `5b3be7e` → `1cc792f` → `8972ba3` (debug) → `36fe75f` (restore extras)
+
+### Mic Icon Color Indicator
+
+**File:** `frontend/components/JobModeView.tsx`
+- Mic icon turns green (`#34C759`) when voice agent is connected
+- Transparent (`rgba(255,255,255,0.25)`) when not connected
+
+**File:** `frontend/components/LiveKitVoiceRoom.tsx`
+- `onVoiceConnected` callback fires when `agentConnected` state changes
+- 20-second agent timeout with "Voice agent unavailable" + Retry button
+- Status text: "Connecting...", "Waiting for voice agent..."
+
+**File:** `frontend/app/(tabs)/home.tsx`
+- Passes `onVoiceConnected` / `voiceConnected` props between LiveKitVoiceRoom and JobModeView
+- Resets `voiceConnected` to false when leaving job mode
+
+---
+
 ## Known Issues / Next Steps
 
-1. **App Store submission — DEADLINE March 10th**
-2. **Remove demo mode** (user request, not yet done)
-3. **OpenAI Realtime API for job mode voice** — post-launch priority
-4. **Re-run 100-question test** after all fixes
-5. **Proactive vision testing** — need a way to test without being on a building site
-6. **Area-specific codes/plans** — upload plans/codes for certain areas so workers can ask "what are the restrictions for here"
-7. **Speed optimization** — target 3s max per answer (currently 3-5s voice, similar text — acceptable for now)
-8. **home.tsx refactor** (deferred)
+1. **Remove demo mode** (user request, not yet done)
+2. **OpenAI Realtime API for job mode voice** — post-launch priority
+3. **Re-run 100-question test** after all fixes
+4. **Proactive vision testing** — need a way to test without being on a building site
+5. **Area-specific codes/plans** — upload plans/codes for certain areas so workers can ask "what are the restrictions for here"
+6. **Speed optimization** — target 3s max per answer (currently 3-5s voice, similar text — acceptable for now)
+7. **home.tsx refactor** (deferred)
+8. **Thumbs up comment feature** — currently thumbs up sends immediately with no comment option; user requested adding comment input like thumbs down has
+9. **Render free tier sleep** — server spins down after 15min inactivity, delays first request by 50+ seconds. $7/month Starter plan fixes this
 
 ---
 
@@ -358,6 +395,7 @@ backend/
       job_context.py             — Job context CRUD endpoints
       account.py                 — DELETE /api/account
       error_codes_api.py         — GET /api/error-codes (public)
+      livekit_token.py           — LiveKit token generation, /agent-log, /livekit-debug, /livekit-frame endpoints
       analyze.py                 — Frame analysis endpoint
     services/
       anthropic.py               — _score_confidence(), frame analysis, OK detection
@@ -373,6 +411,7 @@ backend/
       demo.py                    — Fixed responses
     middleware/
       auth.py                    — JWT auth
+  start.sh                       — Launches agent process + uvicorn (Render Start Command: `bash start.sh`)
   livekit_agent/
     agent.py                     — Voice agent: proactive vision, search_knowledge tool (NEW Mar 6), improved prompts
   knowledge/
@@ -408,7 +447,8 @@ frontend/
       quick-tools.tsx            — Quick tools
   components/
     ChatBubble.tsx               — Thumbs up/down + comment input (Mar 6), bookmark, 92% width
-    JobModeView.tsx              — Two glass pills, equipment chips
+    JobModeView.tsx              — Two glass pills, equipment chips, green mic when voice connected (Mar 8)
+    LiveKitVoiceRoom.tsx         — WebRTC voice room, agent timeout, onVoiceConnected callback (Mar 8)
     ModeSelector.tsx             — Mode switching
     VoiceStatusIndicator.tsx     — Voice status
     OfflineBanner.tsx            — Network polling + banner

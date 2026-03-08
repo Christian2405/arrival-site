@@ -78,10 +78,9 @@ exports.handler = async (event) => {
     if (plan === 'pro') {
       lineItems = [{ price: PRICES.pro, quantity: 1 }];
     } else {
-      // Business: base plan (10 seats included) + seat line item at quantity 0 for future scaling
+      // Business: base plan (10 seats included)
       lineItems = [
-        { price: PRICES.business_base, quantity: 1 },
-        { price: PRICES.business_seat, quantity: 0 }
+        { price: PRICES.business_base, quantity: 1 }
       ];
     }
 

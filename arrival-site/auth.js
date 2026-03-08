@@ -410,30 +410,22 @@ async function ensureProfileExists(user) {
 
 async function navigateToDashboard() {
     try {
-        // Use getSession (local, fast) instead of getUser (API call, can fail)
         var sessionResult = await sb.auth.getSession();
         var session = sessionResult.data.session;
 
         if (!session || !session.user) {
-            if (typeof _originalShowPage === 'function') {
-                _originalShowPage('login');
-            } else {
-                showPage('login');
-            }
+            showPage('login');
             return;
         }
 
-        var user = session.user;
+        // Check account_type from profile to route to correct dashboard
+        var profileResult = await sb
+            .from('profiles')
+            .select('account_type')
+            .eq('id', session.user.id)
+            .single();
 
-        // Check if user has an active team membership → business dashboard
-        var tmResult = await sb
-            .from('team_members')
-            .select('team_id')
-            .eq('user_id', user.id)
-            .eq('status', 'active')
-            .limit(1);
-
-        if (tmResult.data && tmResult.data.length > 0) {
+        if (profileResult.data && profileResult.data.account_type === 'business') {
             localStorage.setItem('arrival_dashboard', 'business');
             window.location.href = '/dashboard-business';
         } else {
@@ -442,9 +434,8 @@ async function navigateToDashboard() {
         }
     } catch (err) {
         console.error('Dashboard navigation error:', err);
-        // Fallback — use last known dashboard type, default to individual
-        var lastDash = localStorage.getItem('arrival_dashboard') || 'individual';
-        window.location.href = '/dashboard-' + lastDash;
+        // Fallback — always go to individual dashboard
+        window.location.href = '/dashboard-individual';
     }
 }
 
