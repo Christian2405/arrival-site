@@ -46,6 +46,8 @@ interface LiveKitVoiceRoomProps {
   captureFrame?: () => Promise<string | undefined>;
   /** Callback with agent state changes */
   onStateChange?: (state: AgentVoiceState) => void;
+  /** Callback when voice agent connects/disconnects */
+  onVoiceConnected?: (connected: boolean) => void;
   /** Callback when agent speaks (for transcript display) */
   onAgentTranscript?: (text: string, isFinal: boolean) => void;
   /** Callback when user speaks (for transcript display) */
@@ -62,6 +64,7 @@ export default function LiveKitVoiceRoom({
   active,
   captureFrame,
   onStateChange,
+  onVoiceConnected,
   onAgentTranscript,
   onUserTranscript,
   onError,
@@ -219,6 +222,7 @@ export default function LiveKitVoiceRoom({
     >
       <RoomContent
         onStateChange={updateState}
+        onVoiceConnected={onVoiceConnected}
         onAgentTranscript={onAgentTranscript}
         onUserTranscript={onUserTranscript}
         onRetry={retry}
@@ -239,6 +243,7 @@ export default function LiveKitVoiceRoom({
  */
 function RoomContent({
   onStateChange,
+  onVoiceConnected,
   onAgentTranscript,
   onUserTranscript,
   onRetry,
@@ -247,6 +252,7 @@ function RoomContent({
   roomName,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
+  onVoiceConnected?: (connected: boolean) => void;
   onAgentTranscript?: (text: string, isFinal: boolean) => void;
   onUserTranscript?: (text: string, isFinal: boolean) => void;
   onRetry: () => void;
@@ -512,6 +518,11 @@ function RoomContent({
 
   // Check if agent is in the room
   const agentConnected = participants.some(p => !p.isLocal);
+
+  // Notify parent when voice agent connects/disconnects
+  useEffect(() => {
+    onVoiceConnected?.(agentConnected);
+  }, [agentConnected, onVoiceConnected]);
 
   // Room-level error with retry
   if (roomError) {

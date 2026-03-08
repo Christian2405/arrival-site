@@ -71,6 +71,7 @@ export default function HomeScreen() {
 
   // Job Mode state
   const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
+  const [voiceConnected, setVoiceConnected] = useState(false);
   const [jobPaused, setJobPaused] = useState(false);
   const jobControllerRef = useRef<JobModeController | null>(null);
   const streamingControllerRef = useRef<StreamingJobModeController | null>(null);
@@ -592,6 +593,7 @@ export default function HomeScreen() {
 
     // Bug fix: Reset jobPaused so re-entering job mode doesn't have stale pause state
     setJobPaused(false);
+    setVoiceConnected(false);
     setJobAIState('monitoring');
     setLastJobAlert(null);
     setInterimTranscript('');
@@ -1156,6 +1158,7 @@ export default function HomeScreen() {
                   mode="job"
                   active={livekitActive}
                   captureFrame={captureFrame}
+                  onVoiceConnected={setVoiceConnected}
                   onStateChange={(state: AgentVoiceState) => {
                     // Map LiveKit agent states to JobAIState for the UI
                     const stateMap: Record<AgentVoiceState, JobAIState> = {
@@ -1177,6 +1180,7 @@ export default function HomeScreen() {
               )}
               <JobModeView
                 aiState={jobAIState}
+                voiceConnected={voiceConnected}
                 onPause={() => {
                   // Handle pause for both streaming and REST controllers
                   if (streamingControllerRef.current) {

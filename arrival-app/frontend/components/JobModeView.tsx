@@ -16,6 +16,7 @@ export interface JobAlert {
 
 interface JobModeViewProps {
   aiState: JobAIState;
+  voiceConnected?: boolean;
   onPause?: () => void;
   isPaused?: boolean;
   lastAlert?: JobAlert | null;
@@ -50,7 +51,7 @@ const QUICK_ACTIONS: { key: QuickActionType; icon: string; label: string }[] = [
 const CHIP_AUTO_DISMISS_MS = 8000;
 const TEXT_DISPLAY_MS = 10000;
 
-export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQuickAction, onInterrupt }: JobModeViewProps) {
+export default function JobModeView({ aiState, voiceConnected, onPause, isPaused, lastAlert, onQuickAction, onInterrupt }: JobModeViewProps) {
   // --- Glass pill animations ---
   const eyeGlow = useRef(new Animated.Value(0.5)).current;
   const voicePulse = useRef(new Animated.Value(1)).current;
@@ -222,7 +223,7 @@ export default function JobModeView({ aiState, onPause, isPaused, lastAlert, onQ
     aiState === 'listening' ? '#FF9500' :
     aiState === 'speaking' ? '#4A90D9' :
     aiState === 'processing' ? Colors.accent :
-    'rgba(255,255,255,0.6)';
+    voiceConnected ? '#34C759' : 'rgba(255,255,255,0.25)';
   const voiceActive = aiState !== 'monitoring';
 
   const equipLabel = jobContext
