@@ -151,10 +151,6 @@ export default function HomeScreen() {
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => {
     aiAPI.warmup();
-    // Pre-fetch LiveKit token so job mode connects instantly
-    import('../../services/livekitService').then(({ prefetchLiveKitSession }) => {
-      prefetchLiveKitSession().catch(() => {});
-    }).catch(() => {});
   }, []);
 
   // Prefill from codes screen (or any deep link)

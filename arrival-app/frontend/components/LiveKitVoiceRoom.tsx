@@ -27,7 +27,7 @@ import {
   registerGlobals,
 } from '@livekit/react-native';
 import { ConnectionState, RoomEvent } from 'livekit-client';
-import { getLiveKitSession, type LiveKitSession } from '../services/livekitService';
+import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
 import { supabase } from '../services/supabase';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -128,7 +128,7 @@ export default function LiveKitVoiceRoom({
 
         // Get token from backend
         console.log(`[LiveKitVoice] Getting token (attempt ${attempt + 1})...`);
-        const lkSession = await getLiveKitSession(mode);
+        const lkSession = await createLiveKitSession(mode);
         console.log(`[LiveKitVoice] Token received. Room: ${lkSession.roomName}, URL: ${lkSession.wsUrl}`);
 
         if (!cancelled) {
@@ -198,10 +198,14 @@ export default function LiveKitVoiceRoom({
     );
   }
 
-  // Don't show any loading UI — glass pills render immediately
-  // Voice agent connects silently in the background
+  // Show subtle status while getting token — not blocking, just informational
   if (!session) {
-    return null;
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+        <Text style={styles.statusText}>{statusMsg}</Text>
+      </View>
+    );
   }
 
   return (
@@ -585,8 +589,26 @@ function RoomContent({
     );
   }
 
-  // Don't show any loading/connecting UI — connect silently in background
-  // The glass pills (JobModeView) are already visible, voice just "arrives"
+  // Show subtle status while connecting or waiting for agent
+  if (connectionState === ConnectionState.Connecting || connectionState === ConnectionState.Reconnecting) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+        <Text style={styles.statusText}>Connecting...</Text>
+      </View>
+    );
+  }
+
+  if (connectionState === ConnectionState.Connected && !agentConnected) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+        <Text style={styles.statusText}>Waiting for voice agent...</Text>
+      </View>
+    );
+  }
+
+  // Connected and agent is present — voice is live, no UI needed
   return null;
 }
 
