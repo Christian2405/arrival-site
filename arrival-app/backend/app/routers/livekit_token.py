@@ -51,6 +51,7 @@ async def livekit_status():
 @router.get("/livekit-debug")
 async def livekit_debug():
     """Diagnostic: check LiveKit Cloud rooms and agent worker status."""
+    import subprocess
     if not config.LIVEKIT_URL or not config.LIVEKIT_API_KEY or not config.LIVEKIT_API_SECRET:
         return {"configured": False, "error": "LiveKit env vars not set"}
 
@@ -59,6 +60,18 @@ async def livekit_debug():
         "url": config.LIVEKIT_URL,
         "key_prefix": config.LIVEKIT_API_KEY[:5] + "***",
     }
+
+    # Check if agent process is alive on this server
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "livekit_agent.agent"],
+            capture_output=True, text=True, timeout=5
+        )
+        agent_pids = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
+        info["agent_process_running"] = len(agent_pids) > 0
+        info["agent_pids"] = agent_pids
+    except Exception as e:
+        info["agent_process_check_error"] = str(e)
 
     # Use LiveKit Server API to check Cloud status
     try:
