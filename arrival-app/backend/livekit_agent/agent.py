@@ -46,19 +46,31 @@ from dotenv import load_dotenv
 _env_file = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_file, override=True)
 
-# ALL livekit imports are deferred to __main__ to avoid import-time hangs on Render.
-# These globals are populated in main() before the agent server starts.
-Agent = None
-AgentSession = None
-AgentServer = None
-JobContext = None
-cli = None
-function_tool = None
-silero = None
-MultilingualModel = None
-deepgram = None
-anthropic = None  # livekit anthropic plugin (not the SDK)
-elevenlabs = None
+from livekit.agents import (
+    Agent,
+    AgentSession,
+    AgentServer,
+    JobContext,
+    cli,
+    function_tool,
+)
+from livekit.plugins import deepgram, anthropic, elevenlabs
+
+# Optional ML plugins — may fail to import if deps are missing
+try:
+    from livekit.plugins import silero
+except ImportError:
+    silero = None
+    print("[arrival-agent] WARNING: Silero plugin not available")
+
+try:
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+except ImportError:
+    try:
+        from livekit.plugins.turn_detector import MultilingualModel
+    except ImportError:
+        MultilingualModel = None
+        print("[arrival-agent] WARNING: MultilingualModel not available")
 
 import httpx
 import anthropic as anthropic_sdk
@@ -637,41 +649,13 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 # Agent Server & Entrypoint
 # ---------------------------------------------------------------------------
 
-def _make_entrypoint(server):
-    """Register the entrypoint on the given AgentServer."""
+server = AgentServer()
 
-    @server.rtc_session()
-    async def entrypoint(ctx: JobContext):
-        """Called when a participant joins a LiveKit room that needs an agent."""
-        try:
-        # Lazy-load plugins on first call (not at module level — avoids import hang)
-        global silero, MultilingualModel, deepgram, anthropic, elevenlabs
-        if deepgram is None:
-            logger.info("[arrival-agent] Loading plugins (first call)...")
-            from livekit.plugins import deepgram as _dg, anthropic as _anth, elevenlabs as _el
-            deepgram = _dg
-            anthropic = _anth
-            elevenlabs = _el
-            logger.info("[arrival-agent] ✓ Core plugins loaded")
 
-            try:
-                from livekit.plugins import silero as _silero
-                silero = _silero
-                logger.info("[arrival-agent] ✓ Silero plugin loaded")
-            except ImportError:
-                logger.warning("[arrival-agent] Silero plugin not available")
-
-            try:
-                from livekit.plugins.turn_detector.multilingual import MultilingualModel as _MM
-                MultilingualModel = _MM
-                logger.info("[arrival-agent] ✓ Turn detector loaded")
-            except ImportError:
-                try:
-                    from livekit.plugins.turn_detector import MultilingualModel as _MM
-                    MultilingualModel = _MM
-                except ImportError:
-                    logger.warning("[arrival-agent] MultilingualModel not available")
-
+@server.rtc_session()
+async def entrypoint(ctx: JobContext):
+    """Called when a participant joins a LiveKit room that needs an agent."""
+    try:
         logger.info(f"[arrival-agent] ★ Entrypoint called — room={ctx.room.name}")
         await ctx.connect()
         logger.info(f"[arrival-agent] Connected to room: {ctx.room.name}")
@@ -696,7 +680,8 @@ def _make_entrypoint(server):
         # Select prompt based on mode
         prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
 
-        # Load ML models with fallback
+        # Load ML models with fallback — these download on first use and may fail
+        # on memory-constrained environments (Render free tier = 512MB)
         vad = None
         turn_det = None
         if silero is not None:
@@ -821,30 +806,6 @@ def _make_entrypoint(server):
         logger.error(f"[arrival-agent] ✗ ENTRYPOINT CRASHED: {e}", exc_info=True)
         raise
 
-    return entrypoint
-
 
 if __name__ == "__main__":
-    print("[arrival-agent] Starting — importing livekit SDK...", flush=True)
-
-    from livekit.agents import (
-        Agent as _Agent,
-        AgentSession as _AgentSession,
-        AgentServer as _AgentServer,
-        JobContext as _JobContext,
-        cli as _cli,
-        function_tool as _function_tool,
-    )
-    # Populate globals so the rest of the module can use them
-    Agent = _Agent
-    AgentSession = _AgentSession
-    AgentServer = _AgentServer
-    JobContext = _JobContext
-    cli = _cli
-    function_tool = _function_tool
-
-    print("[arrival-agent] ✓ SDK imported", flush=True)
-
-    server = AgentServer()
-    _make_entrypoint(server)
     cli.run_app(server)
