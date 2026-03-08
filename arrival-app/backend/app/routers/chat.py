@@ -108,6 +108,7 @@ async def _safe_task(coro, task_name: str = "background_task"):
 class ChatRequest(BaseModel):
     message: str
     image_base64: str | None = None
+    image_manual: bool = False
     conversation_history: list[dict] = []
     units: str = "imperial"
 
@@ -257,21 +258,22 @@ async def chat(
                     except (asyncio.TimeoutError, Exception) as e:
                         logger.debug(f"[chat] Team RAG supplementary search skipped: {e}")
 
-                # Strip image unless the message contains visual keywords.
-                # Prevents Claude from describing the camera when user asks a text question
-                # with an auto-captured frame attached.
-                if request.image_base64:
+                # Strip auto-captured images unless the message contains visual keywords.
+                # Manually-attached images (user tapped camera/photo button) are always kept.
+                if request.image_base64 and not request.image_manual:
                     _visual_keywords = {
                         "see", "look", "show", "camera", "picture", "photo", "image",
                         "what's this", "what is this", "what's that", "what is that",
                         "this look", "that look", "what do you", "point", "pointing",
                         "check this", "check that", "wrong here", "wrong with",
                         "identify", "read this", "read that", "model number",
-                        "what brand", "what model",
+                        "what brand", "what model", "diagnose", "what's the issue",
+                        "what is the issue", "what's wrong", "this unit", "this thing",
+                        "describe", "tell me about", "inspect", "analyze",
                     }
                     _msg_lower = request.message.lower()
                     if not any(kw in _msg_lower for kw in _visual_keywords):
-                        logger.info(f"[chat] Stripping image — no visual keywords in: '{request.message[:40]}'")
+                        logger.info(f"[chat] Stripping auto-captured image — no visual keywords in: '{request.message[:40]}'")
                         request.image_base64 = None
 
                 # Build units instruction if user prefers metric

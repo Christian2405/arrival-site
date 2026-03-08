@@ -124,16 +124,14 @@ export default class StreamingAudioRecorder {
       this.recording = null;
     }
 
-    // Reset audio mode so playback routes to loudspeaker
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-    }).catch(() => {});
+    // Don't reset audio mode here — let the player handle it once
+    // Reducing category switches prevents iOS volume/route resets
   }
 
   /**
    * Pause recording (e.g., while AI is speaking).
-   * Stops the mic and resets audio mode for playback.
+   * Stops the mic but does NOT reset audio mode — the audio player
+   * will set it once before playback to avoid volume reset.
    */
   async pause(): Promise<void> {
     this.isRunning = false;
@@ -149,12 +147,8 @@ export default class StreamingAudioRecorder {
       } catch {}
       this.recording = null;
     }
-
-    // Reset audio mode for playback through loudspeaker
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-    }).catch(() => {});
+    // Don't reset audio mode here — reduces iOS audio session switches
+    // which cause volume to reset
   }
 
   /**
@@ -169,12 +163,8 @@ export default class StreamingAudioRecorder {
 
   private async startNewRecording(): Promise<void> {
     try {
-      // Ensure audio mode is set for recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
+      // Audio mode already set in start() — don't re-set per chunk
+      // Reducing setAudioModeAsync calls prevents iOS volume resets
       const { recording } = await Audio.Recording.createAsync(RECORDING_OPTIONS);
       this.recording = recording;
     } catch (e) {

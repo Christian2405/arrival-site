@@ -1,6 +1,6 @@
 #!/bin/bash
 # Arrival Backend — starts FastAPI + LiveKit Agent
-# LiveKit agent runs in background; if it crashes, FastAPI continues
+# LiveKit agent runs in background with a watchdog to restart on crash
 # FastAPI runs in foreground so Render monitors it directly
 
 echo "[start.sh] ========================================="
@@ -26,24 +26,30 @@ sys.stdout.write('[start.sh] Importing plugins... ')
 from livekit.plugins import deepgram, anthropic, elevenlabs
 sys.stdout.write('OK\n')
 " 2>&1; then
-    echo "[start.sh] ✓ All imports OK — starting LiveKit agent"
-    # Pass credentials explicitly in case env var inheritance fails
-    python -m livekit_agent.agent start \
-        --url "${LIVEKIT_URL}" \
-        --api-key "${LIVEKIT_API_KEY}" \
-        --api-secret "${LIVEKIT_API_SECRET}" \
-        --log-level INFO 2>&1 &
-    AGENT_PID=$!
-    echo "[start.sh] LiveKit agent PID: $AGENT_PID"
+    echo "[start.sh] ✓ All imports OK — starting LiveKit agent with watchdog"
+
+    # Watchdog loop: restart agent if it crashes
+    (
+        while true; do
+            python -m livekit_agent.agent start \
+                --url "${LIVEKIT_URL}" \
+                --api-key "${LIVEKIT_API_KEY}" \
+                --api-secret "${LIVEKIT_API_SECRET}" \
+                --log-level INFO 2>&1
+            EXIT_CODE=$?
+            echo "[start.sh] ⚠ LiveKit agent exited (code: $EXIT_CODE) — restarting in 5s..."
+            sleep 5
+        done
+    ) &
+    WATCHDOG_PID=$!
+    echo "[start.sh] LiveKit agent watchdog PID: $WATCHDOG_PID"
 
     # Brief check — did it crash immediately?
     sleep 3
-    if kill -0 $AGENT_PID 2>/dev/null; then
-        echo "[start.sh] ✓ LiveKit agent still running after 3s"
+    if kill -0 $WATCHDOG_PID 2>/dev/null; then
+        echo "[start.sh] ✓ LiveKit agent watchdog running"
     else
-        wait $AGENT_PID 2>/dev/null
-        AGENT_EXIT=$?
-        echo "[start.sh] ✗ LiveKit agent CRASHED on startup (exit code: $AGENT_EXIT)"
+        echo "[start.sh] ✗ LiveKit agent watchdog failed to start"
         echo "[start.sh] FastAPI will continue without voice agent"
     fi
 else

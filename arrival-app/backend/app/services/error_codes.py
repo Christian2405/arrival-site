@@ -4276,6 +4276,82 @@ APPLIANCE_GE_REFRIGERATOR_CODES = {
     },
 }
 
+HONEYWELL_THERMOSTAT_CODES = {
+    "E1": {
+        "meaning": "Room temperature sensor failure.",
+        "causes": ["Internal thermistor failure", "Wiring damage to sensor", "Board-level fault"],
+        "action": "Check room sensor wiring. If hardwired sensor, test resistance. Replace thermostat if internal sensor failed.",
+    },
+    "E2": {
+        "meaning": "Outdoor temperature sensor failure.",
+        "causes": ["Outdoor sensor disconnected", "Wire damage from UV/weather", "Sensor out of range"],
+        "action": "Check outdoor sensor wiring and connections. Test sensor resistance against spec. Replace sensor if faulty.",
+    },
+    "E3": {
+        "meaning": "Communication error — thermostat can't reach equipment interface.",
+        "causes": ["Wiring issue between thermostat and equipment", "Equipment interface module failure", "Incompatible equipment"],
+        "action": "Check thermostat wiring connections. Verify equipment interface module is powered. Check compatibility.",
+    },
+    "E4": {
+        "meaning": "Power failure — insufficient power to thermostat.",
+        "causes": ["C-wire missing or disconnected", "Transformer undersized", "Wiring short"],
+        "action": "Verify 24VAC at thermostat terminals. Check C-wire connection. If no C-wire, install one or use an add-a-wire kit.",
+    },
+    "E5": {
+        "meaning": "HVAC system not responding — no equipment response.",
+        "causes": ["Equipment turned off or breaker tripped", "Control board failure", "Wiring disconnect at equipment"],
+        "action": "Check equipment power and breakers. Verify wiring at both thermostat and equipment terminals. Check control board for faults.",
+    },
+    "E6": {
+        "meaning": "Humidity sensor failure.",
+        "causes": ["Internal humidity sensor fault", "Excessive moisture damage", "Board failure"],
+        "action": "Try power cycling the thermostat. If error persists, replace the unit.",
+    },
+    "80": {
+        "meaning": "Low battery warning.",
+        "causes": ["Batteries depleted", "Battery contacts corroded"],
+        "action": "Replace batteries with fresh alkaline AA or AAA (model-dependent). Clean battery contacts.",
+    },
+    "90": {
+        "meaning": "Wiring error — incorrect thermostat wiring detected.",
+        "causes": ["Wires connected to wrong terminals", "Shorted wire", "Incompatible system wiring"],
+        "action": "Turn off power. Verify wire connections match the wiring diagram for your system type. Check for shorts.",
+    },
+}
+
+EMERSON_THERMOSTAT_CODES = {
+    "E1": {
+        "meaning": "Short in room temperature sensor.",
+        "causes": ["Internal sensor shorted", "Moisture damage", "Board-level fault"],
+        "action": "Power cycle the thermostat. If error persists, the internal sensor has failed — replace the thermostat.",
+    },
+    "E2": {
+        "meaning": "Open room temperature sensor.",
+        "causes": ["Internal sensor open circuit", "Loose internal connection"],
+        "action": "Power cycle. If error persists, replace the thermostat.",
+    },
+    "E3": {
+        "meaning": "Short in outdoor/remote sensor.",
+        "causes": ["Outdoor sensor wire shorted", "Sensor failed short", "Water intrusion at sensor"],
+        "action": "Check outdoor sensor wiring for damage. Disconnect sensor and test resistance. Replace if shorted.",
+    },
+    "E4": {
+        "meaning": "Open outdoor/remote sensor.",
+        "causes": ["Outdoor sensor wire broken", "Sensor disconnected", "Sensor failed open"],
+        "action": "Check wiring continuity to outdoor sensor. Reconnect or replace sensor.",
+    },
+    "E5": {
+        "meaning": "EEPROM communication error — memory fault.",
+        "causes": ["Internal memory corruption", "Power surge damage", "Manufacturing defect"],
+        "action": "Try factory reset. If error persists after reset, replace the thermostat.",
+    },
+    "E6": {
+        "meaning": "Keypad or button stuck.",
+        "causes": ["Button physically stuck", "Moisture behind faceplate", "Debris in button mechanism"],
+        "action": "Clean around all buttons. Remove faceplate and check for debris or moisture. Replace if button mechanism is damaged.",
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Brand aliases — maps variations to the canonical brand key
 # ---------------------------------------------------------------------------
@@ -4361,6 +4437,15 @@ BRAND_ALIASES = {
     # Bosch — STT may say "bosh"
     "bosch": "bosch",
     "bosh": "bosch",
+    # Honeywell — STT usually gets it
+    "honeywell": "honeywell",
+    "honey well": "honeywell",
+    "honeywell home": "honeywell",
+    # Emerson / Sensi — same parent company
+    "emerson": "emerson",
+    "sensi": "emerson",
+    "white rodgers": "emerson",
+    "white-rodgers": "emerson",
 }
 
 # ---------------------------------------------------------------------------
@@ -4466,6 +4551,13 @@ ERROR_CODE_DB = {
     },
     "bosch": {
         "dishwasher": APPLIANCE_BOSCH_DISHWASHER_CODES,
+    },
+    "honeywell": {
+        "thermostat": HONEYWELL_THERMOSTAT_CODES,
+    },
+    "emerson": {
+        "thermostat": EMERSON_THERMOSTAT_CODES,
+        "controller": EMERSON_THERMOSTAT_CODES,
     },
 }
 

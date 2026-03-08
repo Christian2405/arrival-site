@@ -106,11 +106,13 @@ export const aiAPI = {
     imageBase64?: string,
     conversationHistory: any[] = [],
     demoMode: boolean = false,
-    units?: string
+    units?: string,
+    imageManual: boolean = false
   ) => {
     const response = await api.post(`/chat${demoMode ? '?demo=true' : ''}`, {
       message,
       image_base64: imageBase64,
+      image_manual: imageManual,
       conversation_history: conversationHistory,
       units,
     });

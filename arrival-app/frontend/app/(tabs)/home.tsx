@@ -323,7 +323,6 @@ export default function HomeScreen() {
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
-      Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
     }
   }, [setIsRecording]);
 
@@ -428,7 +427,6 @@ export default function HomeScreen() {
         setVoiceState('idle');
       } finally {
         setIsProcessing(false);
-        Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
       }
       return;
     }
@@ -487,6 +485,7 @@ export default function HomeScreen() {
 
     // Auto-capture camera frame if user asks a visual question and no image is attached
     let imageForThisMessage = pendingImage;
+    const imageIsManual = !!pendingImage;
     if (!imageForThisMessage) {
       const visualKeywords = ['see', 'look', 'show', 'what is this', 'what\'s this', 'what is that', 'what\'s that', 'check this', 'wrong here', 'wrong with', 'identify', 'read this', 'read that', 'model number', 'what brand', 'what model', 'point'];
       const textLower = text.toLowerCase();
@@ -510,7 +509,7 @@ export default function HomeScreen() {
       const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
       const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
       const currentDemoMode = useSettingsStore.getState().demoMode;
-      const response = await aiAPI.chat(text, imageForThisMessage, history, currentDemoMode, useSettingsStore.getState().units);
+      const response = await aiAPI.chat(text, imageForThisMessage, history, currentDemoMode, useSettingsStore.getState().units, imageIsManual);
 
       addMessage({
         id: generateId(), role: 'assistant', content: response.response,

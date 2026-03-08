@@ -89,11 +89,8 @@ export default class VoiceActivityDetector {
       } catch (_) {}
       this.recording = null;
     }
-    // Reset iOS audio session to playback mode so TTS routes to loudspeaker.
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-    }).catch(() => {});
+    // Don't reset audio mode here — reduces iOS audio session switches
+    // which cause volume to reset between recording and playback
     this.isSpeaking = false;
     this.speechConfirmed = false;
     this.isPausing = false;
@@ -232,11 +229,8 @@ export default class VoiceActivityDetector {
       const uri = this.recording.getURI();
       this.recording = null;
 
-      // Reset audio mode so TTS plays through speaker, not earpiece
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      }).catch(() => {});
+      // Don't reset audio mode here — the playAudio function handles it
+      // Reducing switches prevents iOS volume reset bug
 
       if (uri) {
         const audioBase64 = await FileSystem.readAsStringAsync(uri, {
