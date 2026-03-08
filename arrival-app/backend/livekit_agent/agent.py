@@ -54,12 +54,6 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-
-# JobExecutorType may not exist in older SDK versions
-try:
-    from livekit.agents import JobExecutorType
-except ImportError:
-    JobExecutorType = None
 from livekit.plugins import deepgram, anthropic, elevenlabs
 
 # Optional ML plugins — may fail to import if deps are missing
@@ -655,18 +649,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 # Agent Server & Entrypoint
 # ---------------------------------------------------------------------------
 
-# Render free tier = 512MB. Try optimized settings, fall back to defaults.
-try:
-    _server_kwargs = {"port": 0}  # OS-assigned port avoids "address in use" on restart
-    if JobExecutorType is not None:
-        _server_kwargs["num_idle_processes"] = 0
-        _server_kwargs["job_executor_type"] = JobExecutorType.THREAD
-    server = AgentServer(**_server_kwargs)
-    logger.info(f"[arrival-agent] AgentServer created with: {_server_kwargs}")
-except TypeError as e:
-    # SDK version doesn't support these params — use bare defaults
-    logger.warning(f"[arrival-agent] AgentServer kwargs failed ({e}), using defaults")
-    server = AgentServer()
+server = AgentServer()
 
 
 @server.rtc_session()
