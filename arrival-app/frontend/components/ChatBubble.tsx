@@ -136,6 +136,20 @@ export default function ChatBubble({ message, onSave, onFeedback, isLatest }: Ch
         {displayedText}
       </Text>
 
+      {/* Confidence badge — only show for high ("Verified") and low ("Best guess") */}
+      {!isUser && message.confidence === 'high' && (
+        <View style={styles.confidenceBadge}>
+          <View style={[styles.confidenceDot, { backgroundColor: Colors.confidenceHigh }]} />
+          <Text style={[styles.confidenceText, { color: Colors.confidenceHigh }]}>Verified</Text>
+        </View>
+      )}
+      {!isUser && message.confidence === 'low' && (
+        <View style={styles.confidenceBadge}>
+          <View style={[styles.confidenceDot, { backgroundColor: Colors.warning }]} />
+          <Text style={[styles.confidenceText, { color: Colors.warning }]}>Best guess</Text>
+        </View>
+      )}
+
       {/* Saved badge */}
       {saved && (
         <View style={styles.savedBadge}>
@@ -314,6 +328,22 @@ const styles = StyleSheet.create({
   },
   assistantText: {
     color: Colors.text,
+  },
+  confidenceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 4,
+  },
+  confidenceDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  confidenceText: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   savedBadge: {
     flexDirection: 'row',

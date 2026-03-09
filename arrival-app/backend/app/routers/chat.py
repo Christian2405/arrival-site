@@ -176,6 +176,7 @@ async def chat(
                 )
 
             simple = _is_simple_message(request.message) and not request.image_base64
+            team_id = None  # Will be set in full path
 
             if simple:
                 # ── FAST PATH ── Skip memory & RAG for simple greetings
@@ -190,17 +191,13 @@ async def chat(
                     ),
                 )
 
-                # Fire-and-forget: store memory + log (no await)
+                # Fire-and-forget: store memory (no await)
                 asyncio.create_task(_safe_task(
                     store_memory(user_id, [
                         {"role": "user", "content": request.message},
                         {"role": "assistant", "content": result["response"]},
                     ]),
                     task_name="store_memory",
-                ))
-                asyncio.create_task(_safe_task(
-                    _log_query(user_id, request, result),
-                    task_name="log_query",
                 ))
             else:
                 # ── FULL PATH ── Memory + team_id + RAG all in parallel for speed
@@ -301,13 +298,16 @@ async def chat(
                     ]),
                     task_name="store_memory",
                 ))
-                asyncio.create_task(_safe_task(
-                    _log_query(user_id, request, result, team_id=team_id),
-                    task_name="log_query",
-                ))
 
         elapsed = time.monotonic() - t0
+        elapsed_ms = int(elapsed * 1000)
         logger.info(f"[chat] Responded in {elapsed:.2f}s")
+
+        # Log query with timing + mode (fire-and-forget, after elapsed is calculated)
+        asyncio.create_task(_safe_task(
+            _log_query(user_id, request, result, team_id=team_id if not simple else None, mode="text", response_time_ms=elapsed_ms),
+            task_name="log_query",
+        ))
 
         return ChatResponse(
             response=result["response"],
@@ -329,7 +329,14 @@ async def chat(
         raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
 
 
-async def _log_query(user_id: str, request: ChatRequest, result: dict, team_id: str | None = None):
+async def _log_query(
+    user_id: str,
+    request: ChatRequest,
+    result: dict,
+    team_id: str | None = None,
+    mode: str = "text",
+    response_time_ms: int | None = None,
+):
     """Background helper to log the query to Supabase.
     Bug fix: Accept team_id as param to avoid redundant Supabase call."""
     if team_id is None:
@@ -342,4 +349,7 @@ async def _log_query(user_id: str, request: ChatRequest, result: dict, team_id: 
         confidence=result.get("confidence"),
         has_image=bool(request.image_base64),
         team_id=team_id,
+        mode=mode,
+        rag_chunks_used=result.get("rag_chunks_used"),
+        response_time_ms=response_time_ms,
     )

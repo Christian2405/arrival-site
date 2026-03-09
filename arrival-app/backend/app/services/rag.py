@@ -419,15 +419,19 @@ async def retrieve_context(
             )
 
             context = []
+            all_scores = []
             for hit in results.result.hits:
                 score = hit.get("_score", 0)
-                if score > 0.3:  # Relevance threshold
+                all_scores.append(score)
+                if score > 0.2:  # Relevance threshold — lowered from 0.3 to catch more valid results
                     fields = hit.get("fields", {})
                     context.append({
                         "text": fields.get("text", ""),
                         "filename": fields.get("filename", ""),
                         "score": score,
                     })
+            if all_scores:
+                logger.debug(f"[rag] {namespace}: scores={[round(s,3) for s in all_scores[:5]]}, kept={len(context)}")
             return context
         except (ConnectionError, OSError, TimeoutError) as conn_err:
             # Bug #7: Reset cached index on connection errors
@@ -478,7 +482,12 @@ async def retrieve_context(
         merged.sort(key=lambda x: x["score"], reverse=True)
         final = merged[:top_k]
         ns_label = "+".join(task_labels)
-        logger.info(f"[rag] Search {ns_label} → {len(final)} results in {time.monotonic()-t0:.2f}s")
+        elapsed = time.monotonic() - t0
+        if final:
+            top_files = [f"{r['filename']}({r['score']:.0%})" for r in final[:3]]
+            logger.info(f"[rag] Search {ns_label} → {len(final)} results in {elapsed:.2f}s: {', '.join(top_files)}")
+        else:
+            logger.info(f"[rag] Search {ns_label} → 0 results in {elapsed:.2f}s")
         return final
 
     except asyncio.TimeoutError:

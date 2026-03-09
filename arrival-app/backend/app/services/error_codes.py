@@ -4352,6 +4352,1272 @@ EMERSON_THERMOSTAT_CODES = {
     },
 }
 
+YORK_FURNACE_CODES = {
+    "1": {
+        "meaning": "No previous error code stored.",
+        "causes": ["Normal operation — no faults in history"],
+        "action": "No action needed. Informational code only.",
+    },
+    "2": {
+        "meaning": "System lockout — unit locked out after repeated failed ignition.",
+        "causes": [
+            "Gas supply issue (shut-off valve, meter, low pressure)",
+            "Failed igniter",
+            "Dirty flame sensor",
+            "Gas valve failure",
+        ],
+        "action": "Cycle power to reset lockout. Check gas supply first, then clean flame sensor, inspect igniter. If relocks, check gas valve.",
+    },
+    "3": {
+        "meaning": "Pressure switch fault — didn't close or opened during operation.",
+        "causes": [
+            "Plugged condensate drain or trap (most common on 90%+ units)",
+            "Failed or weak inducer motor",
+            "Blocked flue or intake pipe",
+            "Cracked or water-logged pressure switch hose",
+            "Defective pressure switch",
+        ],
+        "action": "Check condensate drain/trap first — blow out with compressed air. Verify inducer is running and pulling proper vacuum. Inspect hose from inducer to switch for cracks or water. Check flue/intake for blockages.",
+    },
+    "4": {
+        "meaning": "High temperature limit switch open.",
+        "causes": [
+            "Dirty air filter (check first — most common)",
+            "Blocked or closed supply/return registers",
+            "Failed blower motor or weak capacitor",
+            "Dirty blower wheel",
+            "Cracked heat exchanger (if limit trips repeatedly with good airflow)",
+        ],
+        "action": "Replace filter. Open all registers. Check blower operation and capacitor. If trips with good airflow, suspect heat exchanger — run combustion analysis.",
+    },
+    "5": {
+        "meaning": "Flame sensed when no flame should be present.",
+        "causes": [
+            "Leaking gas valve (internal valve seal failure)",
+            "Flame sensor wiring shorted to ground",
+            "Residual flame or hot surface near sensor",
+        ],
+        "action": "SAFETY — shut off gas supply immediately. Check gas valve for internal leak. Inspect flame sensor wiring for shorts to chassis ground.",
+    },
+    "6": {
+        "meaning": "Power or low voltage problem.",
+        "causes": [
+            "24V transformer failure or weak output",
+            "Blown low-voltage fuse on control board",
+            "Thermostat wiring short",
+            "Loose connections on control board terminals",
+        ],
+        "action": "Check 24V transformer output (should read 24-28VAC). Check board fuse. Inspect thermostat wiring for shorts. Tighten board connections.",
+    },
+    "7": {
+        "meaning": "Gas valve circuit failure — board can't energize gas valve.",
+        "causes": [
+            "Failed gas valve (coil open or shorted)",
+            "Open wiring between board and gas valve",
+            "Control board gas valve relay failed",
+        ],
+        "action": "Check for 24V at gas valve terminals during call for heat. If voltage present but valve doesn't open, replace gas valve. If no voltage at valve, check wiring then board.",
+    },
+    "8": {
+        "meaning": "Igniter failure — igniter not reaching temperature.",
+        "causes": [
+            "Cracked or worn-out hot surface igniter",
+            "Open circuit in igniter wiring",
+            "Board igniter relay failure",
+            "Wrong igniter resistance for control board",
+        ],
+        "action": "Check igniter resistance (silicon nitride: 40-90 ohms cold, silicon carbide: 9-45 ohms cold). If open or out of range, replace. Check for 120V at igniter connector during ignition sequence.",
+    },
+    "9": {
+        "meaning": "Ignition failure — no flame detected after ignition trial.",
+        "causes": [
+            "Dirty flame sensor (most common — carbon buildup)",
+            "Gas supply off or low gas pressure",
+            "Cracked or weak igniter not getting hot enough",
+            "Gas valve not opening",
+        ],
+        "action": "Clean flame sensor with fine emery cloth first — this fixes it 80% of the time. Check gas supply and pressure. Verify igniter glows bright orange/white during trial.",
+    },
+    "10": {
+        "meaning": "Polarity or grounding issue.",
+        "causes": [
+            "Hot and neutral reversed at furnace outlet",
+            "Poor or missing chassis ground",
+            "Floating neutral in electrical panel",
+        ],
+        "action": "Check polarity at furnace outlet — hot on narrow blade. Verify solid chassis ground. Check panel neutral connection.",
+    },
+    "11": {
+        "meaning": "Rollout switch open — flames escaping combustion chamber.",
+        "causes": [
+            "Cracked heat exchanger (PRIMARY concern — most serious cause)",
+            "Blocked flue or vent pipe causing backdraft",
+            "Blocked heat exchanger cells (debris/scale buildup)",
+        ],
+        "action": "SAFETY — do NOT reset rollout without thorough inspection. Inspect heat exchanger for cracks with mirror/flashlight. Run combustion analyzer — check CO in supply duct. If heat exchanger is cracked, condemn unit. Check flue for blockages.",
+    },
+    "12": {
+        "meaning": "Blower motor fault — motor didn't reach target speed or failed to start.",
+        "causes": [
+            "Failed blower motor",
+            "Bad motor capacitor (PSC motors)",
+            "ECM motor control fault",
+            "Dirty blower wheel causing excessive load",
+            "Wiring issue between board and motor",
+        ],
+        "action": "PSC motors: check capacitor with meter (must be within 5% of rated µF). ECM motors: check for power at motor connector (3-4 pin Molex). Clean blower wheel. Check wiring connections.",
+    },
+    "13": {
+        "meaning": "Limit circuit lockout — high temp limit tripped 3+ consecutive cycles.",
+        "causes": [
+            "Dirty/clogged air filter (most common)",
+            "Multiple closed registers restricting airflow",
+            "Failed blower motor or weak capacitor",
+            "Undersized or restricted ductwork",
+        ],
+        "action": "Replace filter immediately. Open all registers. Check blower operation. Measure static pressure (should be under 0.5\" WC). If static is high with clean filter, ductwork is undersized.",
+    },
+}
+
+TAKAGI_TANKLESS_CODES = {
+    "3": {
+        "meaning": "Exhaust temperature too high — exhaust thermistor reading above limit.",
+        "causes": [
+            "Scale buildup in heat exchanger (most common — restricts flow, increases temps)",
+            "Blocked or restricted exhaust vent",
+            "Failed exhaust thermistor giving false reading",
+        ],
+        "action": "Flush the heat exchanger with white vinegar (descale procedure). Check exhaust vent for blockages or restrictions. If recently flushed, check exhaust thermistor resistance.",
+    },
+    "11": {
+        "meaning": "No ignition — unit failed to ignite.",
+        "causes": [
+            "Gas supply off or low gas pressure",
+            "Failed igniter (no spark)",
+            "Gas valve not opening",
+            "Air in gas line (new install or after gas work)",
+        ],
+        "action": "Verify gas supply is on and pressure is correct (Takagi typically needs 3.5-10.5\" WC for NG). Check igniter for spark. If new install, purge air from gas line. Check error history — if intermittent, suspect gas pressure fluctuation.",
+    },
+    "12": {
+        "meaning": "Flame loss — flame established then lost during operation.",
+        "causes": [
+            "Low gas pressure or pressure fluctuation",
+            "Dirty flame rod",
+            "Wind causing flame blowout (exterior venting)",
+            "Scale buildup in heat exchanger",
+        ],
+        "action": "Check gas pressure during firing (should be stable). Clean flame rod with emery cloth. If exterior vented, check for wind conditions and vent termination. Descale heat exchanger if overdue.",
+    },
+    "31": {
+        "meaning": "Low water flow — flow below minimum activation threshold.",
+        "causes": [
+            "Inlet water filter clogged (check this first)",
+            "Scale buildup restricting flow through heat exchanger",
+            "Flow sensor failure",
+            "Partially closed isolation valve",
+        ],
+        "action": "Clean the inlet water filter screen first (most common fix). Check isolation valves are fully open. If filter is clean, descale the unit. If flow still low, test flow sensor.",
+    },
+    "101": {
+        "meaning": "Abnormal combustion — incomplete combustion detected.",
+        "causes": [
+            "Insufficient combustion air supply",
+            "Blocked or undersized venting",
+            "Scale buildup in heat exchanger",
+            "Gas pressure out of spec",
+        ],
+        "action": "Check combustion air supply — make sure intake isn't blocked or too close to exhaust. Verify vent sizing matches installation manual. Descale heat exchanger. Check gas pressure.",
+    },
+    "111": {
+        "meaning": "Ignition failure — repeated no-ignition attempts.",
+        "causes": [
+            "Gas supply issue",
+            "Igniter failure",
+            "Gas solenoid valve stuck",
+            "Ground wire issue",
+        ],
+        "action": "Same as code 011 but indicates persistent problem. Check ground wire connection. If igniter sparks but no flame, focus on gas supply. Replace igniter if no spark visible.",
+    },
+    "121": {
+        "meaning": "Flame failure — repeated flame loss.",
+        "causes": [
+            "Chronic low gas pressure",
+            "Failing flame rod",
+            "Heat exchanger heavily scaled",
+            "Condensation dripping onto burner",
+        ],
+        "action": "Same as code 012 but persistent. Measure gas pressure during operation — if it drops when unit fires, gas line may be undersized. Replace flame rod if corroded. Descale unit.",
+    },
+    "200": {
+        "meaning": "Fuse blown on PC board.",
+        "causes": [
+            "Power surge or lightning damage",
+            "Short in wiring",
+            "PC board failure",
+        ],
+        "action": "Check fuse on PC board — if blown, look for the short before replacing. Inspect wiring for damage. May need new PC board if surge damaged it.",
+    },
+    "251": {
+        "meaning": "Overheat protection — water temperature exceeded limit.",
+        "causes": [
+            "Scale buildup in heat exchanger (most common)",
+            "Flow rate too low",
+            "Temperature sensor failure",
+        ],
+        "action": "Descale the heat exchanger — this is the #1 cause. Check for adequate flow. Test temperature sensor.",
+    },
+    "281": {
+        "meaning": "Fan (combustion blower) fault — fan not running at expected speed.",
+        "causes": [
+            "Fan motor failure",
+            "Debris in fan assembly",
+            "Wiring issue to fan motor",
+            "PC board fan circuit failure",
+        ],
+        "action": "Check fan for debris or obstruction. Verify fan spins freely by hand. Check wiring connections. If wiring good and fan is clear, likely fan motor or PC board.",
+    },
+    "311": {
+        "meaning": "Inlet thermistor short — temperature sensor reading abnormally low resistance.",
+        "causes": [
+            "Thermistor failed short",
+            "Wiring short in thermistor circuit",
+            "Water damage to connector",
+        ],
+        "action": "Measure thermistor resistance (should match Takagi spec chart for current water temp). If shorted, replace thermistor. Check connector for corrosion.",
+    },
+    "321": {
+        "meaning": "Inlet thermistor open — temperature sensor reading infinite resistance.",
+        "causes": [
+            "Thermistor failed open",
+            "Disconnected or broken wire",
+            "Corroded connector",
+        ],
+        "action": "Check thermistor connector — push firmly. Measure resistance. If open, replace thermistor.",
+    },
+    "391": {
+        "meaning": "Exhaust bypass servo fault — bypass damper not responding.",
+        "causes": [
+            "Servo motor failure",
+            "Mechanical obstruction in bypass",
+            "Wiring issue to servo",
+        ],
+        "action": "Check servo motor operation. Look for mechanical obstruction. Check wiring. May need servo motor replacement.",
+    },
+    "611": {
+        "meaning": "Flow control / water valve fault.",
+        "causes": [
+            "Water flow control valve stuck or failed",
+            "Debris in flow control mechanism",
+            "Wiring issue",
+        ],
+        "action": "Check flow control valve for debris. Verify valve moves freely. Check electrical connections. Replace valve if stuck.",
+    },
+    "710": {
+        "meaning": "Gas solenoid valve fault — valve not responding properly.",
+        "causes": [
+            "Gas solenoid coil failure",
+            "Wiring issue to solenoid",
+            "PC board output failure",
+        ],
+        "action": "Check for voltage at solenoid during operation. If voltage present but valve doesn't open, replace solenoid. If no voltage, check PC board.",
+    },
+    "991": {
+        "meaning": "Communication error — remote controller or external device communication failure.",
+        "causes": [
+            "Loose or damaged communication wire",
+            "Remote controller failure",
+            "PC board communication circuit failure",
+        ],
+        "action": "Check wiring between unit and remote. Try disconnecting remote — if error clears, replace remote. If error persists, check PC board.",
+    },
+}
+
+LOCHINVAR_BOILER_CODES = {
+    "E01": {
+        "meaning": "Ignition failure — no flame established.",
+        "causes": [
+            "Gas supply off or low pressure",
+            "Failed igniter/spark electrode",
+            "Gas valve not opening",
+            "Air in gas line",
+        ],
+        "action": "Verify gas supply and pressure. Check spark electrode for proper gap and condition. If new install, purge gas line. Check gas valve operation.",
+    },
+    "E02": {
+        "meaning": "False flame — flame signal detected before ignition sequence.",
+        "causes": [
+            "Flame sensor contaminated or failing",
+            "Gas valve leaking internally",
+            "Residual heat near sensor",
+        ],
+        "action": "Clean flame sensor rod. Check gas valve for internal leak. Inspect for any residual combustion.",
+    },
+    "E03": {
+        "meaning": "Fan/blower fault — combustion fan not reaching target speed.",
+        "causes": [
+            "Fan motor failure",
+            "Debris in fan housing",
+            "Wiring issue to fan",
+            "PCB fan circuit failure",
+        ],
+        "action": "Check fan for obstruction. Verify fan spins freely. Check wiring. If mechanical and electrical are good, suspect fan motor or PCB.",
+    },
+    "E04": {
+        "meaning": "High limit — water temperature exceeded safety limit.",
+        "causes": [
+            "Low water flow through boiler",
+            "Circulator pump failure",
+            "Air locked in system",
+            "Dirty heat exchanger (scale buildup)",
+        ],
+        "action": "Check circulator pump operation. Bleed air from system. Verify adequate flow. Descale heat exchanger if needed.",
+    },
+    "E05": {
+        "meaning": "Sensor fault — supply or return temperature sensor out of range.",
+        "causes": [
+            "Temperature sensor failure",
+            "Loose or corroded sensor connector",
+            "Wiring issue",
+        ],
+        "action": "Check sensor resistance against Lochinvar spec chart. Check connector. Replace sensor if out of spec.",
+    },
+    "E06": {
+        "meaning": "Low water pressure — system pressure below minimum.",
+        "causes": [
+            "Leak in system piping or components",
+            "Expansion tank waterlogged (failed bladder)",
+            "Pressure relief valve weeping",
+            "Fill valve not maintaining pressure",
+        ],
+        "action": "Check system for leaks. Check expansion tank pre-charge (should be at fill pressure with tank isolated). Inspect pressure relief valve. Verify auto-fill valve operation.",
+    },
+    "E07": {
+        "meaning": "Exhaust temperature too high — exhaust thermistor above limit.",
+        "causes": [
+            "Scale buildup in heat exchanger",
+            "Low water flow",
+            "Blocked or restricted exhaust vent",
+            "Over-firing (gas pressure too high)",
+        ],
+        "action": "Check water flow rate. Descale heat exchanger. Verify exhaust vent is clear and properly sized. Check gas pressure — should match nameplate.",
+    },
+    "E10": {
+        "meaning": "Flame loss during operation — flame established then lost.",
+        "causes": [
+            "Gas pressure fluctuation",
+            "Dirty flame sensor",
+            "Condensate drain blocked (condensing models)",
+            "Wind downdraft on venting",
+        ],
+        "action": "Check gas pressure during firing (should be stable). Clean flame sensor. Check condensate drain. Verify vent termination for wind exposure.",
+    },
+    "E12": {
+        "meaning": "Freeze protection activated — low temperature detected.",
+        "causes": [
+            "Unit exposed to near-freezing temperatures",
+            "Temperature sensor in cold draft",
+            "Sensor failure giving false low reading",
+        ],
+        "action": "If actually cold, address heating of mechanical space. Check sensor location. Test sensor resistance against temp chart.",
+    },
+    "E15": {
+        "meaning": "DHW (domestic hot water) sensor fault — sensor out of range.",
+        "causes": [
+            "DHW sensor failure",
+            "Loose connector",
+            "Wiring damage",
+        ],
+        "action": "Check DHW sensor resistance. Check connector and wiring. Replace sensor if faulty.",
+    },
+    "L01": {
+        "meaning": "Lockout — unit locked out after repeated ignition failures.",
+        "causes": [
+            "Persistent gas supply issue",
+            "Failed ignition components",
+            "Venting issue",
+        ],
+        "action": "Requires manual reset. Address root cause from E01 diagnostics before resetting. Check error history to identify pattern.",
+    },
+    "L02": {
+        "meaning": "Lockout — safety limit exceeded.",
+        "causes": [
+            "Repeated high limit trips (E04)",
+            "System flow issue not resolved",
+            "Critical sensor failure",
+        ],
+        "action": "Manual reset required. Must resolve underlying flow/temperature issue before resetting. Check circulator, air locks, and heat exchanger.",
+    },
+}
+
+LOCHINVAR_TANKLESS_CODES = {
+    "E01": {
+        "meaning": "Ignition failure — no flame established.",
+        "causes": [
+            "Gas supply off or low pressure",
+            "Igniter failure",
+            "Gas valve not opening",
+        ],
+        "action": "Check gas supply and pressure. Inspect igniter. If new install, purge gas line.",
+    },
+    "E02": {
+        "meaning": "False flame detection.",
+        "causes": ["Contaminated flame sensor", "Gas valve leak", "Sensor wiring issue"],
+        "action": "Clean flame sensor. Check gas valve. Inspect wiring.",
+    },
+    "E03": {
+        "meaning": "Fan fault — combustion fan issue.",
+        "causes": ["Fan motor failure", "Obstruction in fan", "Wiring fault"],
+        "action": "Check fan for debris. Verify fan operation. Check wiring and motor.",
+    },
+    "E04": {
+        "meaning": "Over temperature — water too hot.",
+        "causes": [
+            "Scale buildup in heat exchanger (most common)",
+            "Low water flow",
+            "Temperature sensor issue",
+        ],
+        "action": "Descale heat exchanger. Check for adequate water flow. Test temperature sensor.",
+    },
+    "E05": {
+        "meaning": "Temperature sensor fault.",
+        "causes": ["Sensor failure", "Loose connector", "Wiring issue"],
+        "action": "Check sensor resistance. Inspect connector. Replace if out of spec.",
+    },
+    "E10": {
+        "meaning": "Flame loss during operation.",
+        "causes": [
+            "Gas pressure fluctuation",
+            "Dirty flame sensor",
+            "Vent blockage or wind issue",
+        ],
+        "action": "Check gas pressure under load. Clean flame sensor. Inspect venting.",
+    },
+}
+
+MIDEA_MINI_SPLIT_CODES = {
+    "E1": {
+        "meaning": "Indoor unit coil temperature sensor fault.",
+        "causes": [
+            "Coil thermistor failed (open or short)",
+            "Connector loose or corroded",
+            "Wiring issue between sensor and PCB",
+        ],
+        "action": "Check coil thermistor resistance (typically 10kΩ at 77°F). Check connector. Replace thermistor if out of spec.",
+    },
+    "E2": {
+        "meaning": "Indoor ambient temperature sensor fault.",
+        "causes": [
+            "Room temp thermistor failed",
+            "Loose connector on indoor PCB",
+            "Wiring damage",
+        ],
+        "action": "Check room sensor resistance. Inspect connector on PCB. Replace sensor if faulty.",
+    },
+    "E3": {
+        "meaning": "Outdoor unit coil temperature sensor fault.",
+        "causes": [
+            "Outdoor coil thermistor failure",
+            "Connector issue at outdoor PCB",
+            "Wire damage from UV exposure or rodents",
+        ],
+        "action": "Check outdoor coil sensor resistance. Inspect wiring for physical damage. Replace if faulty.",
+    },
+    "E4": {
+        "meaning": "Indoor unit EEPROM error — memory chip fault.",
+        "causes": [
+            "Power surge corrupted EEPROM data",
+            "PCB failure",
+            "Manufacturing defect",
+        ],
+        "action": "Try power cycling (disconnect for 30 seconds). If error persists, replace indoor PCB.",
+    },
+    "E5": {
+        "meaning": "Communication error between indoor and outdoor units.",
+        "causes": [
+            "Wiring issue between indoor and outdoor units (most common)",
+            "Loose terminal connections",
+            "Indoor or outdoor PCB failure",
+            "Voltage mismatch",
+        ],
+        "action": "Check communication wiring between units — must be proper gauge and properly terminated. Check terminal connections at both boards. Verify voltage at outdoor unit. Try power cycling both units.",
+    },
+    "E6": {
+        "meaning": "Indoor fan motor fault.",
+        "causes": [
+            "Fan motor failure",
+            "Fan blade obstructed or frozen",
+            "Wiring issue to fan motor",
+            "PCB fan driver failure",
+        ],
+        "action": "Check fan for obstructions. Verify motor spins freely. Check wiring connections. If motor hums but doesn't spin, motor is likely failed.",
+    },
+    "E8": {
+        "meaning": "Indoor unit overload or overcurrent.",
+        "causes": [
+            "Indoor fan motor drawing excessive current",
+            "Dirty indoor coil restricting airflow",
+            "PCB issue",
+        ],
+        "action": "Clean indoor coil. Check fan motor current draw. If motor is drawing high amps, replace motor.",
+    },
+    "F1": {
+        "meaning": "Outdoor ambient temperature sensor fault.",
+        "causes": [
+            "Outdoor temp sensor failure",
+            "Connector corrosion from weather exposure",
+            "Wire damage",
+        ],
+        "action": "Check outdoor ambient sensor resistance. Inspect for weather damage. Replace sensor if faulty.",
+    },
+    "F2": {
+        "meaning": "Outdoor coil (condenser) temperature sensor fault.",
+        "causes": [
+            "Condenser coil sensor failure",
+            "Loose or corroded connection",
+            "Wire damage",
+        ],
+        "action": "Check condenser coil sensor resistance. Clean connector. Replace if out of spec.",
+    },
+    "F3": {
+        "meaning": "Outdoor discharge temperature sensor fault.",
+        "causes": [
+            "Discharge temp sensor failure",
+            "Sensor not properly mounted on discharge line",
+            "Wiring issue",
+        ],
+        "action": "Verify sensor is firmly clamped to discharge line with insulation. Check resistance. Replace if faulty.",
+    },
+    "F4": {
+        "meaning": "Outdoor unit EEPROM error.",
+        "causes": ["Power surge", "PCB failure"],
+        "action": "Power cycle outdoor unit. If persists, replace outdoor PCB.",
+    },
+    "P0": {
+        "meaning": "IPM (Intelligent Power Module) protection — inverter module fault.",
+        "causes": [
+            "IPM module overheating",
+            "Compressor winding fault",
+            "DC bus voltage issue",
+            "Insufficient refrigerant causing compressor overheating",
+        ],
+        "action": "Check refrigerant charge. Verify outdoor coil is clean. Check compressor winding resistance. If IPM module is shorted, replace outdoor PCB.",
+    },
+    "P1": {
+        "meaning": "Over/under voltage protection — power supply out of acceptable range.",
+        "causes": [
+            "High or low line voltage (should be 198-253V for 220V units)",
+            "Voltage fluctuation from utility",
+            "Loose power connections causing voltage drop",
+        ],
+        "action": "Measure line voltage at outdoor unit disconnect. Check for loose connections. If voltage is consistently out of range, install a voltage stabilizer or address utility issue.",
+    },
+    "P2": {
+        "meaning": "Compressor overcurrent protection.",
+        "causes": [
+            "Compressor mechanical fault (locked rotor)",
+            "Low refrigerant charge",
+            "Dirty outdoor coil restricting heat rejection",
+            "Compressor winding fault",
+        ],
+        "action": "Check refrigerant pressures. Clean outdoor coil. Measure compressor winding resistance (check for shorts to ground). If compressor is locked, try a hard start kit — if still won't start, compressor is failed.",
+    },
+    "P3": {
+        "meaning": "Compressor high discharge temperature protection.",
+        "causes": [
+            "Low refrigerant charge (most common — superheat too high)",
+            "Restriction in refrigerant circuit (filter drier, TXV, kink in line)",
+            "Dirty outdoor coil",
+            "Compressor valve failure",
+        ],
+        "action": "Check refrigerant charge — low charge causes high discharge temps. Check superheat. Inspect for restrictions (frosted component = restriction). Clean outdoor coil.",
+    },
+    "P4": {
+        "meaning": "High pressure protection — head pressure exceeded limit.",
+        "causes": [
+            "Dirty outdoor coil (most common)",
+            "Outdoor fan not running",
+            "Refrigerant overcharge",
+            "Restriction in liquid line",
+            "High ambient temperature exceeding unit rating",
+        ],
+        "action": "Clean outdoor coil thoroughly. Verify outdoor fan is running. Check refrigerant charge (subcooling). If fan is good and coil is clean, check for liquid line restriction.",
+    },
+    "P5": {
+        "meaning": "Low pressure protection — suction pressure dropped below limit.",
+        "causes": [
+            "Low refrigerant charge (leak)",
+            "Dirty indoor coil or filter restricting airflow",
+            "Indoor fan not running",
+            "Restriction in refrigerant circuit",
+            "TXV stuck closed or underfeeding",
+        ],
+        "action": "Check indoor filter and coil. Verify indoor fan operation. Check refrigerant pressures — low suction with normal-to-low subcooling = low charge (find and fix leak). Low suction with high subcooling = restriction.",
+    },
+    "P6": {
+        "meaning": "Outdoor unit overheating — PCB or module temperature too high.",
+        "causes": [
+            "Poor ventilation around outdoor unit",
+            "Outdoor unit in direct sun with restricted airflow",
+            "Fan motor failure reducing airflow across PCB",
+        ],
+        "action": "Check outdoor unit airflow. Verify fan is running. Ensure unit has proper clearance. Clean outdoor coil.",
+    },
+}
+
+GREE_MINI_SPLIT_CODES = {
+    "E1": {
+        "meaning": "High pressure protection — system head pressure exceeded limit.",
+        "causes": [
+            "Dirty outdoor coil",
+            "Outdoor fan motor failure",
+            "Refrigerant overcharge",
+            "Restriction in liquid line",
+        ],
+        "action": "Clean outdoor coil. Verify outdoor fan runs. Check subcooling (overcharge shows high subcooling). Check for restrictions.",
+    },
+    "E2": {
+        "meaning": "Indoor unit freeze protection — indoor coil temperature below threshold.",
+        "causes": [
+            "Dirty air filter (most common)",
+            "Low refrigerant charge",
+            "Indoor fan running too slow",
+            "Dirty indoor coil",
+        ],
+        "action": "Check/replace air filter first. Clean indoor coil. Check fan speed. If filter and coil are clean, check refrigerant charge.",
+    },
+    "E3": {
+        "meaning": "Low pressure protection — suction pressure below minimum.",
+        "causes": [
+            "Low refrigerant charge (likely a leak)",
+            "Restriction in refrigerant circuit",
+            "Dirty indoor coil/filter",
+            "TXV or EEV malfunction",
+        ],
+        "action": "Check refrigerant pressures. If low, find and fix leak before recharging. Check indoor filter/coil. Check for restrictions (frosted components indicate restriction point).",
+    },
+    "E4": {
+        "meaning": "Compressor discharge temperature too high.",
+        "causes": [
+            "Low refrigerant charge (high superheat causes high discharge temp)",
+            "Restriction in system",
+            "Compressor valve wear",
+            "Dirty condenser coil",
+        ],
+        "action": "Check refrigerant charge. Check superheat. Clean outdoor coil. If charge and airflow are good, suspect compressor valve leak.",
+    },
+    "E5": {
+        "meaning": "Compressor overcurrent protection — compressor drawing too many amps.",
+        "causes": [
+            "Compressor mechanical fault",
+            "Low or high voltage",
+            "Dirty outdoor coil (high head pressure = high amps)",
+            "Compressor winding short",
+        ],
+        "action": "Measure voltage at outdoor unit. Clean outdoor coil. Measure compressor amp draw vs nameplate RLA. Check winding resistance for shorts to ground.",
+    },
+    "E6": {
+        "meaning": "Communication error between indoor and outdoor units.",
+        "causes": [
+            "Communication wiring fault (loose, broken, wrong gauge)",
+            "PCB failure on indoor or outdoor unit",
+            "Power supply issue to one unit",
+            "Terminal connection loose at board",
+        ],
+        "action": "Check wiring between units — verify proper gauge, tight connections, no damage. Check power to both units. Try power cycling. If wiring is good, suspect PCB.",
+    },
+    "E7": {
+        "meaning": "Mode conflict — indoor units requesting different modes (multi-zone systems).",
+        "causes": [
+            "One indoor unit requesting heat while another requests cool",
+            "Indoor unit DIP switch misconfiguration",
+        ],
+        "action": "Set all active indoor units to the same mode (all heat or all cool). Check DIP switch settings on indoor PCBs match installation requirements.",
+    },
+    "E8": {
+        "meaning": "Indoor unit anti-high temperature protection — indoor coil too hot in heat mode.",
+        "causes": [
+            "Indoor fan not running or running too slow",
+            "Dirty indoor coil",
+            "Indoor fan motor failure",
+        ],
+        "action": "Check indoor fan operation. Clean indoor coil. If fan is failed, replace fan motor.",
+    },
+    "E9": {
+        "meaning": "Full water protection — condensate pan full (cooling mode).",
+        "causes": [
+            "Plugged condensate drain line",
+            "Condensate pump failure (if equipped)",
+            "Drain line not properly pitched",
+            "Float switch triggered",
+        ],
+        "action": "Clear condensate drain line — use compressed air or wet/dry vac. Check drain pitch. If pump equipped, verify pump operation. Check float switch.",
+    },
+    "F0": {
+        "meaning": "Refrigerant charge insufficient — low charge detection.",
+        "causes": [
+            "Refrigerant leak",
+            "Undercharged at installation",
+            "Schrader valve leak",
+        ],
+        "action": "Check pressures. Perform leak detection — soap bubbles, electronic detector, or nitrogen pressure test. Fix leak and recharge to nameplate spec.",
+    },
+    "F1": {
+        "meaning": "Indoor ambient temperature sensor fault.",
+        "causes": ["Sensor failure", "Loose connector", "Wiring damage"],
+        "action": "Check sensor resistance (typically 10kΩ at 77°F). Replace if out of spec.",
+    },
+    "F2": {
+        "meaning": "Indoor coil temperature sensor fault.",
+        "causes": ["Sensor failure", "Connector issue", "Sensor not properly mounted to coil"],
+        "action": "Check sensor resistance. Ensure sensor is firmly attached to coil with thermal paste/clip. Replace if faulty.",
+    },
+    "F3": {
+        "meaning": "Outdoor ambient temperature sensor fault.",
+        "causes": ["Sensor failure", "Weather damage to wiring", "Connector corrosion"],
+        "action": "Check outdoor ambient sensor resistance. Inspect for physical damage. Replace if needed.",
+    },
+    "F4": {
+        "meaning": "Outdoor coil temperature sensor fault.",
+        "causes": ["Sensor failure", "Corrosion from outdoor exposure", "Wire damage"],
+        "action": "Check condenser coil sensor resistance. Inspect wiring for damage. Replace sensor.",
+    },
+    "F5": {
+        "meaning": "Outdoor discharge temperature sensor fault.",
+        "causes": ["Sensor failure", "Not properly clamped to discharge line", "Wiring issue"],
+        "action": "Verify sensor is clamped tightly to discharge line with insulation. Check resistance. Replace if faulty.",
+    },
+    "H1": {
+        "meaning": "Defrosting — unit is in defrost mode (heat pump mode).",
+        "causes": [
+            "Normal operation — outdoor coil frosted and unit is melting ice",
+            "If defrost is too frequent: low charge, dirty outdoor coil, or outdoor fan issue",
+        ],
+        "action": "H1 is usually normal — wait 5-10 minutes for defrost to complete. If unit is constantly defrosting, check refrigerant charge, clean outdoor coil, and verify outdoor fan operation.",
+    },
+    "H3": {
+        "meaning": "Compressor overload protection.",
+        "causes": [
+            "Compressor running at maximum capacity for extended period",
+            "High ambient temperature",
+            "Dirty coils reducing heat transfer efficiency",
+        ],
+        "action": "Clean both indoor and outdoor coils. Verify adequate airflow. May indicate unit is undersized for the load. Check refrigerant charge.",
+    },
+    "H5": {
+        "meaning": "IPM (Intelligent Power Module) protection — inverter fault.",
+        "causes": [
+            "IPM module overheating",
+            "Compressor winding issue",
+            "Voltage fluctuation",
+            "Outdoor PCB failure",
+        ],
+        "action": "Check voltage at outdoor unit. Check compressor winding resistance (phase-to-phase should be balanced, no shorts to ground). If windings are good, suspect IPM module on outdoor PCB.",
+    },
+    "H6": {
+        "meaning": "Indoor fan motor no-feedback protection — motor not sending speed signal.",
+        "causes": [
+            "Indoor fan motor failure",
+            "Fan motor feedback wire disconnected",
+            "Indoor PCB issue",
+        ],
+        "action": "Check fan motor connector — ensure feedback wire (usually thin wire separate from power wires) is connected. If connected, check motor operation. Replace motor if failed.",
+    },
+    "H7": {
+        "meaning": "Compressor desynchronization — compressor lost sync with inverter.",
+        "causes": [
+            "Compressor mechanical issue",
+            "Refrigerant liquid slugging",
+            "IPM or inverter board issue",
+        ],
+        "action": "Check refrigerant charge (overcharge can cause liquid slugging). Check compressor winding resistance. If intermittent, may be liquid return during startup — check TXV/EEV operation.",
+    },
+}
+
+COOPER_HUNTER_MINI_SPLIT_CODES = {
+    "E1": {
+        "meaning": "Indoor/outdoor communication error.",
+        "causes": [
+            "Communication wiring fault between units",
+            "Loose terminal connections",
+            "PCB failure",
+        ],
+        "action": "Check wiring between indoor and outdoor units. Verify tight connections. Power cycle both units. If persists, check PCBs.",
+    },
+    "E2": {
+        "meaning": "Zero-crossing signal error — power supply issue.",
+        "causes": [
+            "Unstable power supply",
+            "Indoor PCB fault",
+            "Power line interference",
+        ],
+        "action": "Check power supply voltage. Try dedicated circuit. If voltage is stable, suspect indoor PCB.",
+    },
+    "E3": {
+        "meaning": "Indoor fan motor speed fault.",
+        "causes": [
+            "Fan motor failure",
+            "Fan blade obstruction",
+            "Motor feedback signal lost",
+        ],
+        "action": "Check fan for obstructions. Verify motor feedback wire connected. Replace motor if failed.",
+    },
+    "E4": {
+        "meaning": "Indoor coil temperature sensor fault.",
+        "causes": ["Sensor failure", "Loose connector", "Wiring issue"],
+        "action": "Check sensor resistance (10kΩ at 77°F typical). Replace if out of spec.",
+    },
+    "E5": {
+        "meaning": "Indoor ambient temperature sensor fault.",
+        "causes": ["Sensor failure", "Connector issue"],
+        "action": "Check sensor resistance. Replace if faulty.",
+    },
+    "F1": {
+        "meaning": "Outdoor ambient temperature sensor fault.",
+        "causes": ["Sensor failure", "Weather damage", "Connector corrosion"],
+        "action": "Check outdoor sensor resistance. Replace if needed.",
+    },
+    "F2": {
+        "meaning": "Outdoor coil temperature sensor fault.",
+        "causes": ["Sensor failure", "Corrosion", "Wire damage"],
+        "action": "Check condenser coil sensor. Replace if faulty.",
+    },
+    "F3": {
+        "meaning": "Outdoor discharge temperature sensor fault.",
+        "causes": ["Sensor failure", "Improper mounting", "Wire damage"],
+        "action": "Verify sensor clamped to discharge line. Check resistance. Replace if needed.",
+    },
+    "P0": {
+        "meaning": "IPM module protection — inverter fault.",
+        "causes": [
+            "Module overheating",
+            "Compressor winding fault",
+            "Voltage issue",
+        ],
+        "action": "Check voltage. Check compressor winding resistance. Clean outdoor coil for better heat rejection. If windings and voltage good, suspect outdoor PCB.",
+    },
+    "P1": {
+        "meaning": "Over/under voltage protection.",
+        "causes": ["Line voltage out of range", "Loose connections", "Utility fluctuation"],
+        "action": "Measure voltage at disconnect. Should be within ±10% of nameplate. Fix loose connections or install voltage stabilizer.",
+    },
+    "P2": {
+        "meaning": "Compressor overcurrent.",
+        "causes": ["Compressor fault", "Low/high voltage", "Dirty outdoor coil"],
+        "action": "Check voltage. Clean outdoor coil. Measure compressor amps. Check windings.",
+    },
+    "P3": {
+        "meaning": "High compressor discharge temperature.",
+        "causes": ["Low charge", "Restriction", "Dirty coil", "Compressor valve wear"],
+        "action": "Check refrigerant charge and superheat. Clean outdoor coil. If charge is correct, suspect compressor.",
+    },
+    "P4": {
+        "meaning": "High pressure protection.",
+        "causes": ["Dirty outdoor coil", "Fan not running", "Overcharge", "Restriction"],
+        "action": "Clean outdoor coil. Check fan. Check subcooling (high = overcharge, low = restriction).",
+    },
+    "P5": {
+        "meaning": "Low pressure protection.",
+        "causes": ["Low charge (leak)", "Dirty filter/coil", "Indoor fan issue", "Restriction"],
+        "action": "Check filter and indoor coil. Verify fan operation. Check pressures — if low, find leak before recharging.",
+    },
+}
+
+HAIER_MINI_SPLIT_CODES = {
+    "E1": {
+        "meaning": "Indoor/outdoor communication error.",
+        "causes": [
+            "Communication wiring fault (most common)",
+            "Terminal connections loose",
+            "Indoor or outdoor PCB failure",
+        ],
+        "action": "Check communication wiring between units. Tighten all terminal connections. Power cycle both units. If wiring is good, check PCBs.",
+    },
+    "E2": {
+        "meaning": "Zero-crossing detection fault — AC power issue.",
+        "causes": [
+            "Unstable AC power supply",
+            "Indoor PCB zero-crossing circuit failure",
+            "Electrical noise on power line",
+        ],
+        "action": "Check power supply voltage and stability. Try a different circuit. If voltage is stable, indoor PCB may need replacement.",
+    },
+    "E3": {
+        "meaning": "Indoor fan motor fault — motor not running or no speed feedback.",
+        "causes": [
+            "Fan motor failure",
+            "Fan blade jammed or obstructed",
+            "Motor connector disconnected",
+            "PCB fan driver circuit failure",
+        ],
+        "action": "Check for obstructions on fan wheel. Verify motor connector is firmly plugged in. Check if motor hums (locked rotor) or is silent (no power/dead motor). Replace motor if confirmed failed.",
+    },
+    "E4": {
+        "meaning": "Indoor coil temperature sensor fault.",
+        "causes": ["Thermistor failure", "Loose connection", "Wiring damage"],
+        "action": "Check coil sensor resistance (10kΩ at 77°F typical for NTC). Replace if out of spec.",
+    },
+    "E5": {
+        "meaning": "Indoor ambient (room) temperature sensor fault.",
+        "causes": ["Sensor failure", "Connector loose", "Wire break"],
+        "action": "Check room temp sensor resistance. Replace if faulty.",
+    },
+    "E7": {
+        "meaning": "Water overflow protection — condensate pan full.",
+        "causes": [
+            "Plugged condensate drain line",
+            "Condensate pump failure",
+            "Drain line not pitched properly",
+        ],
+        "action": "Clear drain line with compressed air or wet/dry vac. Check drain pitch. Verify pump operation if equipped.",
+    },
+    "F1": {
+        "meaning": "Outdoor ambient temperature sensor fault.",
+        "causes": ["Sensor failure", "Weather/UV damage to wiring", "Corrosion"],
+        "action": "Check outdoor ambient sensor resistance. Inspect for physical damage. Replace if needed.",
+    },
+    "F2": {
+        "meaning": "Outdoor coil temperature sensor fault.",
+        "causes": ["Sensor failure", "Corroded connector", "Wire damage"],
+        "action": "Check condenser coil sensor resistance. Replace if out of range.",
+    },
+    "F3": {
+        "meaning": "Outdoor discharge temperature sensor fault.",
+        "causes": ["Sensor failure", "Sensor not clamped to discharge line properly"],
+        "action": "Verify sensor is tightly clamped to discharge line with insulation wrap. Check resistance. Replace if faulty.",
+    },
+    "F5": {
+        "meaning": "Outdoor defrost temperature sensor fault.",
+        "causes": ["Sensor failure", "Weather damage"],
+        "action": "Check defrost sensor resistance. Replace if out of spec.",
+    },
+    "F6": {
+        "meaning": "Overload protection — system overloaded.",
+        "causes": [
+            "Dirty coils (indoor or outdoor)",
+            "High ambient temperature beyond unit rating",
+            "Refrigerant charge issue",
+        ],
+        "action": "Clean both coils. Check refrigerant charge. Verify unit isn't undersized for the load.",
+    },
+    "F7": {
+        "meaning": "Compressor overcurrent protection.",
+        "causes": [
+            "Compressor mechanical fault",
+            "Voltage out of range",
+            "Winding short",
+        ],
+        "action": "Check voltage. Measure compressor current vs RLA. Check winding resistance for shorts to ground.",
+    },
+    "F8": {
+        "meaning": "Compressor discharge temperature too high.",
+        "causes": [
+            "Low refrigerant charge",
+            "Restriction in refrigerant circuit",
+            "Dirty outdoor coil",
+            "Compressor valve failure",
+        ],
+        "action": "Check refrigerant charge and superheat. Clean outdoor coil. If charge is correct and coil is clean, suspect compressor.",
+    },
+    "F9": {
+        "meaning": "Outdoor fan motor fault.",
+        "causes": [
+            "Fan motor failure",
+            "Fan blade obstructed",
+            "Motor connector disconnected",
+        ],
+        "action": "Check fan for obstructions. Verify motor spins freely. Check connector. Replace motor if failed.",
+    },
+    "FA": {
+        "meaning": "Low pressure protection — suction pressure too low.",
+        "causes": [
+            "Low refrigerant charge (leak)",
+            "Dirty indoor filter/coil",
+            "Indoor fan not running",
+            "Restriction (TXV/EEV, filter drier)",
+        ],
+        "action": "Check indoor filter and coil. Verify indoor fan operation. Check refrigerant pressures. If low, find and fix leak before recharging.",
+    },
+    "FC": {
+        "meaning": "High pressure protection — head pressure too high.",
+        "causes": [
+            "Dirty outdoor coil (most common)",
+            "Outdoor fan not running",
+            "Refrigerant overcharge",
+            "Non-condensables in system",
+        ],
+        "action": "Clean outdoor coil. Verify outdoor fan operation. Check subcooling. If coil is clean and fan is running, may have non-condensables — recover, evacuate, and recharge.",
+    },
+}
+
+BUDERUS_BOILER_CODES = {
+    "A01": {
+        "meaning": "Burner fault — no flame established after ignition attempt.",
+        "causes": [
+            "Gas supply off or low pressure",
+            "Ignition electrode failed or dirty",
+            "Gas valve not opening",
+            "Air in gas line (new install or after service)",
+        ],
+        "action": "Check gas supply and pressure. Inspect ignition electrode — clean or replace. Check gas valve operation. If new install, purge gas line.",
+    },
+    "A11": {
+        "meaning": "Flame signal during standby — flame detected when burner should be off.",
+        "causes": [
+            "Ionization electrode dirty or cross-wired",
+            "Gas valve leaking internally",
+            "Residual ionization from hot electrode",
+        ],
+        "action": "Clean ionization electrode. Check gas valve for internal leak. Check electrode wiring.",
+    },
+    "A21": {
+        "meaning": "Flue gas temperature too high.",
+        "causes": [
+            "Scale buildup in heat exchanger",
+            "Low water flow through boiler",
+            "Flue gas sensor failure",
+            "Over-firing",
+        ],
+        "action": "Check water flow through boiler. Descale heat exchanger if needed. Check firing rate against nameplate. Test flue gas sensor.",
+    },
+    "C01": {
+        "meaning": "Fan fault — combustion fan not reaching target speed.",
+        "causes": [
+            "Fan motor failure",
+            "Debris in fan housing",
+            "Wiring issue to fan",
+            "PCB fan circuit failure",
+        ],
+        "action": "Check fan for obstruction. Verify fan spins freely. Check wiring. If all good mechanically, suspect fan motor or PCB.",
+    },
+    "C04": {
+        "meaning": "Flame loss during operation — flame established then lost.",
+        "causes": [
+            "Gas pressure fluctuation",
+            "Dirty ionization electrode",
+            "Condensate backup (condensing models)",
+            "Vent/intake issue",
+        ],
+        "action": "Check gas pressure during firing. Clean ionization electrode. Check condensate drain. Verify vent/intake not blocked.",
+    },
+    "C32": {
+        "meaning": "Pressure differential fault — air pressure switch issue.",
+        "causes": [
+            "Blocked flue or intake pipe",
+            "Fan not providing adequate pressure",
+            "Pressure switch failure",
+            "Condensate blocking flue",
+        ],
+        "action": "Check flue and intake for blockages. Verify fan operation. Check condensate drain (condensate can back up into flue on condensing models). Test pressure switch.",
+    },
+    "C42": {
+        "meaning": "Coding plug missing or fault — boiler configuration plug not detected.",
+        "causes": [
+            "Coding plug not installed",
+            "Coding plug not fully seated",
+            "Wrong coding plug for boiler model",
+        ],
+        "action": "Check that the coding plug is properly inserted on the PCB. It's a small plug that identifies the boiler model to the control. Reseat or replace if damaged.",
+    },
+    "C64": {
+        "meaning": "Gas valve fault — abnormal gas valve operation.",
+        "causes": [
+            "Gas valve coil failure",
+            "Wiring issue between PCB and gas valve",
+            "PCB gas valve driver failure",
+        ],
+        "action": "Check gas valve wiring. Measure coil resistance. If coil is open, replace gas valve. If coil is good, suspect PCB.",
+    },
+    "C73": {
+        "meaning": "Water pressure sensor fault — pressure reading out of range.",
+        "causes": [
+            "Pressure sensor failure",
+            "Air in system near sensor",
+            "Wiring issue to sensor",
+        ],
+        "action": "Compare sensor reading to an external gauge. Check wiring. Replace sensor if reading doesn't match actual pressure.",
+    },
+    "C76": {
+        "meaning": "Supply temperature sensor short — sensor reading below range.",
+        "causes": ["Temperature sensor shorted", "Wiring short", "Water damage to connector"],
+        "action": "Measure sensor resistance (should match NTC curve for current temp). If zero or near-zero ohms, sensor is shorted — replace it.",
+    },
+    "C77": {
+        "meaning": "Supply temperature sensor open — sensor reading above range.",
+        "causes": ["Temperature sensor open circuit", "Disconnected wire", "Corroded connector"],
+        "action": "Check sensor connector. Measure resistance — if infinite, sensor is open. Replace sensor.",
+    },
+    "D01": {
+        "meaning": "Outdoor temperature sensor fault.",
+        "causes": ["Sensor failure", "Wire damage (outdoor exposure)", "Connector issue"],
+        "action": "Check outdoor sensor resistance. Inspect wiring for weather damage. Replace if faulty.",
+    },
+    "D30": {
+        "meaning": "Flue gas temperature sensor short.",
+        "causes": ["Sensor shorted", "Wiring issue"],
+        "action": "Check flue gas sensor resistance. Replace if shorted.",
+    },
+    "D31": {
+        "meaning": "Flue gas temperature sensor open.",
+        "causes": ["Sensor open", "Disconnected wire"],
+        "action": "Check connector. Measure resistance. Replace if open.",
+    },
+    "H01": {
+        "meaning": "Return temperature sensor fault.",
+        "causes": ["Sensor failure", "Connector issue", "Wiring damage"],
+        "action": "Check return temp sensor resistance against spec chart. Replace if out of range.",
+    },
+    "H11": {
+        "meaning": "DHW (domestic hot water) temperature sensor fault.",
+        "causes": ["DHW sensor failure", "Connector corrosion", "Wiring issue"],
+        "action": "Check DHW sensor resistance. Inspect connector. Replace sensor if faulty.",
+    },
+}
+
+VIESSMANN_BOILER_CODES = {
+    "C": {
+        "meaning": "Burner flame failure during startup — no flame established.",
+        "causes": [
+            "Gas supply off or low pressure",
+            "Ignition electrode fouled or failed",
+            "Gas valve fault",
+            "Air in gas line",
+        ],
+        "action": "Check gas supply and pressure. Clean or replace ignition electrode. Verify gas valve operation. Purge air from gas line if recently serviced.",
+    },
+    "F": {
+        "meaning": "Unit lockout — safety shutdown requiring manual reset.",
+        "causes": [
+            "Repeated ignition failures",
+            "Safety limit exceeded",
+            "Critical sensor fault",
+        ],
+        "action": "Check error history to identify root cause. Address underlying issue before resetting. Press reset button to clear lockout.",
+    },
+    "10": {
+        "meaning": "Outdoor temperature sensor fault.",
+        "causes": [
+            "Sensor failure",
+            "Wire damage from weather exposure",
+            "Sensor not connected",
+        ],
+        "action": "Check outdoor sensor resistance against Viessmann spec chart. Inspect wiring. Replace sensor if faulty.",
+    },
+    "18": {
+        "meaning": "Mixing valve / actuator fault.",
+        "causes": [
+            "Mixing valve actuator motor failure",
+            "Actuator disconnected",
+            "Valve mechanically stuck",
+        ],
+        "action": "Check actuator power and wiring. Verify valve moves freely by hand (with actuator disconnected). Replace actuator if failed.",
+    },
+    "20": {
+        "meaning": "Supply temperature sensor fault — reading out of range.",
+        "causes": [
+            "Temperature sensor failure",
+            "Connector loose or corroded",
+            "Wiring damage",
+        ],
+        "action": "Check supply temp sensor resistance (NTC sensor — compare to Viessmann chart). Check connector. Replace sensor if out of spec.",
+    },
+    "28": {
+        "meaning": "Flue gas temperature too high — exhaust temp exceeded limit.",
+        "causes": [
+            "Scale buildup in heat exchanger reducing heat transfer",
+            "Low water flow through boiler",
+            "System pump failure",
+            "Boiler firing rate too high for current conditions",
+        ],
+        "action": "Check system pump operation and flow rate. Descale heat exchanger. Verify firing rate. Check flue gas sensor for accuracy.",
+    },
+    "30": {
+        "meaning": "Burner control unit fault.",
+        "causes": [
+            "Burner controller failure",
+            "Wiring issue between controller and main PCB",
+            "Power supply issue to controller",
+        ],
+        "action": "Check wiring connections to burner controller. Power cycle. If error persists, controller may need replacement.",
+    },
+    "38": {
+        "meaning": "Gas valve fault — valve not operating correctly.",
+        "causes": [
+            "Gas valve coil failure",
+            "Wiring issue to gas valve",
+            "Control PCB gas valve circuit failure",
+        ],
+        "action": "Check gas valve coil resistance. Verify wiring. If coil and wiring are good, suspect control PCB.",
+    },
+    "40": {
+        "meaning": "Return temperature sensor fault.",
+        "causes": ["Sensor failure", "Connector issue", "Wiring damage"],
+        "action": "Check return sensor resistance against spec chart. Inspect connector. Replace if out of range.",
+    },
+    "50": {
+        "meaning": "Short circuit — supply temperature sensor reading abnormally low resistance.",
+        "causes": ["Sensor shorted", "Wiring short", "Moisture in connector"],
+        "action": "Check sensor resistance — if near zero, sensor is shorted. Check connector for moisture. Replace sensor.",
+    },
+    "58": {
+        "meaning": "Open circuit — supply temperature sensor reading infinite resistance.",
+        "causes": ["Sensor open", "Disconnected wire", "Broken connector"],
+        "action": "Check sensor connector. If disconnected, reconnect. If connected and reading infinite, replace sensor.",
+    },
+    "60": {
+        "meaning": "DHW temperature sensor fault.",
+        "causes": ["DHW sensor failure", "Connector corrosion", "Wiring issue"],
+        "action": "Check DHW sensor resistance. Inspect connector for corrosion. Replace sensor if faulty.",
+    },
+    "A0": {
+        "meaning": "Low water pressure — system pressure below minimum threshold.",
+        "causes": [
+            "Leak in system piping, fittings, or components",
+            "Expansion tank bladder failure (waterlogged tank)",
+            "Pressure relief valve weeping",
+            "Air removal causing gradual pressure loss",
+        ],
+        "action": "Check system for visible leaks. Check expansion tank pre-charge (isolate tank and check air side with tire gauge — should match cold fill pressure). Inspect PRV. Top off system and monitor.",
+    },
+    "F0": {
+        "meaning": "Internal control fault — controller self-diagnostic failure.",
+        "causes": [
+            "Control PCB failure",
+            "Power surge damage",
+            "Firmware corruption",
+        ],
+        "action": "Try power cycling (off 30 seconds, then on). If error persists, control board likely needs replacement.",
+    },
+    "F2": {
+        "meaning": "Safety shutdown — burner lockout on critical fault.",
+        "causes": [
+            "Repeated flame failures",
+            "High limit switch tripped repeatedly",
+            "Critical component failure detected",
+        ],
+        "action": "Check error log for specific failure sequence. Address root cause. Manual reset required after fixing issue.",
+    },
+    "F3": {
+        "meaning": "Flame signal fault — abnormal flame signal reading.",
+        "causes": [
+            "Ionization electrode dirty or mispositioned",
+            "Electrode ceramic cracked (grounding to burner)",
+            "Wiring issue in flame sense circuit",
+        ],
+        "action": "Clean ionization electrode. Check electrode gap and position per manual. Inspect electrode ceramic for cracks. Check wiring.",
+    },
+    "F4": {
+        "meaning": "No flame established — ignition failure.",
+        "causes": [
+            "Gas supply issue",
+            "Ignition electrode failure",
+            "Gas valve not energizing",
+            "Flue/intake blocked",
+        ],
+        "action": "Check gas supply. Inspect ignition electrode. Verify gas valve gets signal from controller. Check flue and combustion air intake for blockages.",
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Brand aliases — maps variations to the canonical brand key
 # ---------------------------------------------------------------------------
@@ -4446,6 +5712,49 @@ BRAND_ALIASES = {
     "sensi": "emerson",
     "white rodgers": "emerson",
     "white-rodgers": "emerson",
+    # York / Coleman / Luxaire — Johnson Controls family
+    "york": "york",
+    "coleman": "york",  # Same parent company (Johnson Controls)
+    "luxaire": "york",  # Same parent company
+    "evcon": "york",  # Same parent company
+    # Takagi — STT may say "takagi" or "ta kagi"
+    "takagi": "takagi",
+    "ta kagi": "takagi",
+    "tokagi": "takagi",
+    # Lochinvar — STT may split it
+    "lochinvar": "lochinvar",
+    "lock in var": "lochinvar",
+    "loch in var": "lochinvar",
+    # Midea — also sold as Mr. Cool, Klimaire, Pioneer
+    "midea": "midea",
+    "mr cool": "midea",  # Midea subsidiary
+    "mrcool": "midea",
+    "mr. cool": "midea",
+    "mister cool": "midea",
+    "klimaire": "midea",  # Uses Midea internals
+    "pioneer": "midea",  # Uses Midea internals (Pioneer mini-splits)
+    # Gree — world's largest AC manufacturer
+    "gree": "gree",
+    "grey": "gree",  # STT common mishearing
+    "gri": "gree",
+    # Cooper & Hunter — STT may split or garble
+    "cooper hunter": "cooper_hunter",
+    "cooper & hunter": "cooper_hunter",
+    "cooper and hunter": "cooper_hunter",
+    "c&h": "cooper_hunter",
+    # Haier — GE Appliances parent company
+    "haier": "haier",
+    "higher": "haier",  # STT common mishearing
+    "hi er": "haier",
+    # Buderus — Bosch subsidiary, common in northeast US
+    "buderus": "buderus",
+    "bud eris": "buderus",
+    "boo deris": "buderus",
+    # Viessmann — premium European boiler brand
+    "viessmann": "viessmann",
+    "veesman": "viessmann",
+    "v s man": "viessmann",
+    "vis man": "viessmann",
 }
 
 # ---------------------------------------------------------------------------
@@ -4558,6 +5867,48 @@ ERROR_CODE_DB = {
     "emerson": {
         "thermostat": EMERSON_THERMOSTAT_CODES,
         "controller": EMERSON_THERMOSTAT_CODES,
+    },
+    "york": {
+        "furnace": YORK_FURNACE_CODES,
+    },
+    "takagi": {
+        "tankless": TAKAGI_TANKLESS_CODES,
+        "water heater": TAKAGI_TANKLESS_CODES,
+    },
+    "lochinvar": {
+        "boiler": LOCHINVAR_BOILER_CODES,
+        "tankless": LOCHINVAR_TANKLESS_CODES,
+        "water heater": LOCHINVAR_TANKLESS_CODES,
+    },
+    "midea": {
+        "mini split": MIDEA_MINI_SPLIT_CODES,
+        "minisplit": MIDEA_MINI_SPLIT_CODES,
+        "air conditioner": MIDEA_MINI_SPLIT_CODES,
+        "heat pump": MIDEA_MINI_SPLIT_CODES,
+    },
+    "gree": {
+        "mini split": GREE_MINI_SPLIT_CODES,
+        "minisplit": GREE_MINI_SPLIT_CODES,
+        "air conditioner": GREE_MINI_SPLIT_CODES,
+        "heat pump": GREE_MINI_SPLIT_CODES,
+    },
+    "cooper_hunter": {
+        "mini split": COOPER_HUNTER_MINI_SPLIT_CODES,
+        "minisplit": COOPER_HUNTER_MINI_SPLIT_CODES,
+        "air conditioner": COOPER_HUNTER_MINI_SPLIT_CODES,
+        "heat pump": COOPER_HUNTER_MINI_SPLIT_CODES,
+    },
+    "haier": {
+        "mini split": HAIER_MINI_SPLIT_CODES,
+        "minisplit": HAIER_MINI_SPLIT_CODES,
+        "air conditioner": HAIER_MINI_SPLIT_CODES,
+        "heat pump": HAIER_MINI_SPLIT_CODES,
+    },
+    "buderus": {
+        "boiler": BUDERUS_BOILER_CODES,
+    },
+    "viessmann": {
+        "boiler": VIESSMANN_BOILER_CODES,
     },
 }
 

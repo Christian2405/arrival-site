@@ -400,6 +400,8 @@ async def voice_chat(
         logger.info(f"[voice-chat] Total pipeline: {total_elapsed:.2f}s")
 
         # 5. Fire-and-forget: log query only (memory skipped for voice speed)
+        _voice_elapsed_ms = int(total_elapsed * 1000)
+        _voice_mode = "job" if request.mode == "job" else "voice"
         async def _log():
             await log_query(
                 user_id=user_id,
@@ -408,6 +410,9 @@ async def voice_chat(
                 source=chat_result.get("source"),
                 confidence=chat_result.get("confidence"),
                 has_image=bool(request.image_base64),
+                mode=_voice_mode,
+                rag_chunks_used=chat_result.get("rag_chunks_used"),
+                response_time_ms=_voice_elapsed_ms,
             )
         asyncio.create_task(_safe_task(_log(), task_name="voice_chat_log_query"))
 

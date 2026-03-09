@@ -111,6 +111,23 @@ The following excerpts are from the user's uploaded documents. Reference them wh
 {context_block}
 When you use information from these documents, cite the filename as your source."""
 
+    # Confidence-aware tone guidance
+    # Pre-score evidence quality to shape Claude's tone
+    _evidence_strength = "none"
+    if rag_context:
+        _top = max(ctx.get("score", 0) for ctx in rag_context)
+        if _top > 0.5 or (_top > 0.3 and len(rag_context) >= 2):
+            _evidence_strength = "strong"
+        else:
+            _evidence_strength = "weak"
+
+    if _evidence_strength == "strong":
+        system_prompt += "\n\nYou have strong documentation backing this answer. Be direct and authoritative."
+    elif _evidence_strength == "weak":
+        system_prompt += "\n\nYour documentation matches are weak for this question. Prefix your answer with a brief hedge like 'I think' or 'You might want to verify, but...' — be honest about your certainty without being overly cautious. Never say the word 'confidence' or mention percentages."
+    elif _evidence_strength == "none" and not user_memories:
+        system_prompt += "\n\nYou're answering from general trade knowledge without documentation. If the question is specific to a model or procedure, briefly note you're going from general experience, not their docs."
+
     # Bug #16: Use await with the async client
     use_model = model or config.ANTHROPIC_MODEL
     t0 = time.monotonic()
@@ -147,6 +164,10 @@ When you use information from these documents, cite the filename as your source.
         "response": resp_text,
         "source": source,
         "confidence": confidence,
+        "rag_chunks_used": [
+            {"id": ctx.get("filename", ""), "score": round(ctx.get("score", 0), 3)}
+            for ctx in (rag_context or [])
+        ],
     }
 
 
@@ -227,6 +248,22 @@ Use this context to personalize your response. Reference their equipment, trade,
 The following excerpts are from the user's uploaded documents. Reference them when answering.
 {context_block}
 When you use information from these documents, cite the filename as your source."""
+
+    # Confidence-aware tone guidance (same logic as chat_with_claude)
+    _evidence_strength = "none"
+    if rag_context:
+        _top = max(ctx.get("score", 0) for ctx in rag_context)
+        if _top > 0.5 or (_top > 0.3 and len(rag_context) >= 2):
+            _evidence_strength = "strong"
+        else:
+            _evidence_strength = "weak"
+
+    if _evidence_strength == "strong":
+        system_prompt += "\n\nYou have strong documentation backing this answer. Be direct and authoritative."
+    elif _evidence_strength == "weak":
+        system_prompt += "\n\nYour documentation matches are weak for this question. Prefix your answer with a brief hedge like 'I think' or 'You might want to verify, but...' — be honest about your certainty without being overly cautious. Never say the word 'confidence' or mention percentages."
+    elif _evidence_strength == "none" and not user_memories:
+        system_prompt += "\n\nYou're answering from general trade knowledge without documentation. If the question is specific to a model or procedure, briefly note you're going from general experience, not their docs."
 
     use_model = model or config.ANTHROPIC_MODEL
     t0 = time.monotonic()

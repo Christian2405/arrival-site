@@ -257,9 +257,12 @@ async def log_query(
     confidence: str | None = None,
     has_image: bool = False,
     team_id: str | None = None,
+    mode: str | None = None,
+    rag_chunks_used: list[dict] | None = None,
+    response_time_ms: int | None = None,
 ) -> None:
     """
-    Log a chat query to the queries table for team activity tracking.
+    Log a chat query to the queries table for team activity tracking + data flywheel.
     Uses service role to bypass RLS (backend is trusted).
     Non-blocking — failures are silently logged.
     """
@@ -279,6 +282,12 @@ async def log_query(
         row["confidence"] = confidence
     if team_id:
         row["team_id"] = team_id
+    if mode:
+        row["mode"] = mode
+    if rag_chunks_used:
+        row["rag_chunks_used"] = rag_chunks_used
+    if response_time_ms is not None:
+        row["response_time_ms"] = response_time_ms
 
     try:
         client = _get_client()

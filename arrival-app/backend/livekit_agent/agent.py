@@ -114,9 +114,24 @@ logger.info("[arrival-agent] ============================")
 # Proactive vision config
 # ---------------------------------------------------------------------------
 PROACTIVE_CHECK_INTERVAL = 5    # seconds between proactive analysis cycles
-PROACTIVE_MIN_COOLDOWN = 12     # min seconds between proactive speech
-PROACTIVE_PUSHBACK_COOLDOWN = 60  # cooldown after user pushes back
 FRAME_CHANGE_THRESHOLD = 8     # out of 100 sampled positions
+
+# Severity-based cooldowns (seconds)
+SEVERITY_COOLDOWNS = {
+    "SAFETY": 0,     # Immediate — no cooldown for safety
+    "NOTICE": 20,    # Wait 20s between notices
+    "INFO": 45,      # Low-priority observations
+}
+PROACTIVE_PUSHBACK_COOLDOWN = 60   # After user says "stop"/"quiet"
+PROACTIVE_MUTE_DURATION = 300      # 5 min mute when user explicitly silences
+
+# Engagement scoring
+ENGAGEMENT_INITIAL = 50
+ENGAGEMENT_BOOST = 15       # User engaged with observation
+ENGAGEMENT_DECAY = 10       # User ignored observation
+ENGAGEMENT_MIN = 10
+ENGAGEMENT_MAX = 100
+ENGAGEMENT_RESPONSE_WINDOW = 30  # seconds to wait for user response
 
 # ---------------------------------------------------------------------------
 # Voice prompts
@@ -215,9 +230,21 @@ class ArrivalAgent(Agent):
         self._last_analyzed_hash: str = ""
         self._recent_observations: list[str] = []
         self._last_proactive_time: float = 0
+        self._last_proactive_severity: str = "NOTICE"
         self._user_pushback_count: int = 0
         self._proactive_enabled: bool = True
+        self._proactive_muted_until: float = 0  # timestamp when mute expires
         self._last_user_speech_time: float = 0
+        # Conversation context for proactive analyzer
+        self._conversation_context: list[dict] = []  # last N exchanges
+        # Engagement tracking
+        self._engagement_score: int = ENGAGEMENT_INITIAL
+        self._awaiting_engagement: bool = False  # True after proactive speak
+        self._engagement_timer_start: float = 0
+        self._last_observation_text: str = ""
+        self._observations_ignored: int = 0  # consecutive ignores
+        # Category-based de-duplication
+        self._observation_categories: dict[str, float] = {}  # category → timestamp
 
     def update_camera_frame(self, frame_b64: str):
         """Store the latest camera frame from the mobile app."""
@@ -363,13 +390,30 @@ class ArrivalAgent(Agent):
 # Proactive Vision — background analysis loop
 # ---------------------------------------------------------------------------
 
-async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str]) -> Optional[str]:
-    """Analyze a frame directly with Claude Vision for proactive monitoring."""
+async def _analyze_frame_proactive(
+    frame_b64: str,
+    recent_observations: list[str],
+    conversation_context: list[dict] | None = None,
+) -> Optional[tuple[str, str, str]]:
+    """
+    Analyze a frame for proactive monitoring.
+    Returns: (severity, observation, category) or None if nothing notable.
+    severity: "SAFETY", "NOTICE", or "INFO"
+    category: "safety", "error_code", "model_number", "condition", "part_id", "tip"
+    """
     client = _get_anthropic_client()
 
-    context = ""
+    obs_context = ""
     if recent_observations:
-        context = f"\nYou already mentioned: {'; '.join(recent_observations[-3:])}. Don't repeat these."
+        obs_context = f"\nYou already mentioned: {'; '.join(recent_observations[-3:])}. Don't repeat these."
+
+    conv_context = ""
+    if conversation_context:
+        lines = []
+        for msg in conversation_context[-3:]:
+            role = "Tech" if msg.get("role") == "user" else "You"
+            lines.append(f"- {role}: {msg.get('content', '')[:80]}")
+        conv_context = f"\nRecent conversation:\n" + "\n".join(lines) + "\nDon't repeat what was just discussed.\n"
 
     response = await client.messages.create(
         model=config.ANTHROPIC_VISION_MODEL,
@@ -386,19 +430,24 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
                     "text": (
                         "You're a 50-year trade veteran watching a job through a phone camera. "
                         "You're their experienced buddy — observant, helpful, not annoying.\n\n"
-                        "SPEAK UP about:\n"
-                        "- Safety hazards (exposed wires, flame issues, water near electrical, gas leaks)\n"
-                        "- Visible problems (wrong fitting, corroded connections, code violations)\n"
-                        "- Readable model/serial numbers the tech might want to know\n"
-                        "- Something that looks off based on what you'd expect to see\n"
-                        "- A helpful tip based on what equipment you see (like a veteran would share)\n\n"
-                        "STAY QUIET about:\n"
-                        "- Things that look normal and fine\n"
-                        "- Blurry or unclear frames where you can't make out details\n"
-                        "- Things you already mentioned\n\n"
-                        f"{context}\n\n"
-                        "If something is worth mentioning, give ONE short sentence a veteran would casually say. "
-                        "If nothing notable, respond with exactly: NOTHING"
+                        f"{conv_context}{obs_context}\n\n"
+                        "RESPOND IN THIS EXACT FORMAT (one line):\n"
+                        "SEVERITY|CATEGORY|observation\n\n"
+                        "SEVERITY must be one of:\n"
+                        "- SAFETY: Immediate danger — exposed wiring, gas indicators, active leak, no disconnect, fire hazard\n"
+                        "- NOTICE: Worth mentioning — wrong part, corrosion, code violation, readable model/serial number, dirty coils\n"
+                        "- INFO: Low priority — general observation, equipment brand visible, helpful tip\n\n"
+                        "CATEGORY must be one of: safety, error_code, model_number, condition, part_id, tip\n\n"
+                        "RULES:\n"
+                        "- ONE observation per frame, ONE short sentence\n"
+                        "- If nothing notable, respond with exactly: NOTHING\n"
+                        "- Be confident about what you see, hedge on what you're guessing\n"
+                        "- A shadow is not a leak. A stain is not active water.\n\n"
+                        "Examples:\n"
+                        "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
+                        "NOTICE|condition|Those coils look pretty caked up, might want to clean those.\n"
+                        "NOTICE|model_number|I can see that's a Carrier 24ACC636 on the data plate.\n"
+                        "INFO|tip|That's a Goodman — check the capacitor, they run small from the factory."
                     ),
                 },
             ],
@@ -406,6 +455,7 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
     )
     result = response.content[0].text.strip()
 
+    # Parse "NOTHING"
     if result.upper() == "NOTHING" or len(result) < 5:
         return None
     if "nothing" in result.lower() and len(result) < 30:
@@ -413,11 +463,55 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
     if "don't see" in result.lower() or "can't see" in result.lower():
         return None
 
-    return result
+    # Parse structured response: SEVERITY|CATEGORY|observation
+    parts = result.split("|", 2)
+    if len(parts) == 3:
+        severity = parts[0].strip().upper()
+        category = parts[1].strip().lower()
+        observation = parts[2].strip()
+
+        # Validate severity
+        if severity not in ("SAFETY", "NOTICE", "INFO"):
+            severity = "NOTICE"
+        # Validate category
+        valid_categories = {"safety", "error_code", "model_number", "condition", "part_id", "tip"}
+        if category not in valid_categories:
+            category = "condition"
+
+        return (severity, observation, category)
+
+    # Fallback: unstructured response — treat as NOTICE
+    return ("NOTICE", result, "condition")
+
+
+def _get_speech_instruction(severity: str, observation: str, agent: "ArrivalAgent") -> str:
+    """Generate varied, natural speech instructions based on severity and context."""
+    obs_count = len(agent._recent_observations)
+    time_since_last = time.time() - agent._last_proactive_time if agent._last_proactive_time else 999
+
+    if severity == "SAFETY":
+        return f"Alert the tech immediately — this is a safety issue: {observation}"
+    elif obs_count == 0:
+        # First observation on this job
+        return f"You just got a look at what they're working on. Mention casually: {observation}"
+    elif time_since_last < 60:
+        # Recent follow-up
+        return f"While they're still working on this, you also noticed: {observation}"
+    else:
+        # After a long pause
+        return f"Hey, one more thing you're seeing: {observation}"
 
 
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
-    """Background task: continuously watches camera and speaks up when something's notable."""
+    """Background task: continuously watches camera and speaks up when something's notable.
+
+    Human-like behavior:
+    - Safety observations interrupt immediately, regardless of cooldown
+    - Notice/Info observations wait for natural pauses
+    - Adapts frequency based on whether user engages with observations
+    - Tracks observation categories to avoid repeating the same type
+    - Uses varied, natural speech patterns
+    """
     logger.info("[proactive] Monitor started — waiting for greeting to finish...")
 
     await asyncio.sleep(6)
@@ -433,14 +527,22 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             now = time.time()
 
-            # Cooldown — don't spam
-            cooldown = PROACTIVE_PUSHBACK_COOLDOWN if agent._user_pushback_count > 2 else PROACTIVE_MIN_COOLDOWN
-            if now - agent._last_proactive_time < cooldown:
+            # Check if muted (user said "stop"/"quiet")
+            if now < agent._proactive_muted_until:
                 continue
 
-            # Don't interrupt active conversation
-            if now - agent._last_user_speech_time < 6:
-                continue
+            # Check engagement — if we're waiting for user response
+            if agent._awaiting_engagement:
+                elapsed = now - agent._engagement_timer_start
+                if elapsed > ENGAGEMENT_RESPONSE_WINDOW:
+                    # User didn't respond — decrease engagement
+                    agent._observations_ignored += 1
+                    agent._engagement_score = max(
+                        ENGAGEMENT_MIN,
+                        agent._engagement_score - ENGAGEMENT_DECAY
+                    )
+                    agent._awaiting_engagement = False
+                    logger.debug(f"[proactive] Observation ignored (#{agent._observations_ignored}), engagement={agent._engagement_score}")
 
             # Get frame
             frame = None
@@ -456,33 +558,76 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not force_analyze and not agent._frame_changed(frame):
                 continue
 
-            # Analyze
+            # Analyze with conversation context
             agent._last_analyzed_hash = agent._frame_hash(frame)
             last_analysis_time = now
 
             try:
-                observation = await _analyze_frame_proactive(frame, agent._recent_observations)
+                result = await _analyze_frame_proactive(
+                    frame,
+                    agent._recent_observations,
+                    conversation_context=agent._conversation_context,
+                )
             except Exception as e:
                 logger.warning(f"[proactive] Vision failed: {e}")
                 continue
 
-            if observation:
-                # Check for repeats
-                is_repeat = any(
-                    obs.lower() in observation.lower() or observation.lower() in obs.lower()
-                    for obs in agent._recent_observations[-3:]
-                )
-                if is_repeat:
+            if not result:
+                continue
+
+            severity, observation, category = result
+
+            # Severity-based cooldown check
+            cooldown = SEVERITY_COOLDOWNS.get(severity, 20)
+
+            # Adjust cooldown by engagement score (higher engagement = shorter cooldowns)
+            if severity != "SAFETY":
+                engagement_factor = agent._engagement_score / ENGAGEMENT_INITIAL  # 0.2 to 2.0
+                cooldown = int(cooldown / max(engagement_factor, 0.5))
+
+                # Extra cooldown after pushback
+                if agent._user_pushback_count > 2:
+                    cooldown = max(cooldown, PROACTIVE_PUSHBACK_COOLDOWN)
+
+            if severity != "SAFETY" and (now - agent._last_proactive_time) < cooldown:
+                continue
+
+            # Don't interrupt active conversation (except for SAFETY)
+            if severity != "SAFETY" and (now - agent._last_user_speech_time) < 6:
+                continue
+
+            # Category-based de-duplication (safety never suppressed)
+            if severity != "SAFETY" and category in agent._observation_categories:
+                last_category_time = agent._observation_categories[category]
+                if now - last_category_time < 60:
                     continue
 
-                logger.info(f"[proactive] ★ ALERT: {observation}")
-                await session.generate_reply(
-                    instructions=f"You just noticed something while watching the camera. Tell the tech briefly and casually: {observation}"
-                )
-                agent._last_proactive_time = now
-                agent._recent_observations.append(observation)
-                if len(agent._recent_observations) > 5:
-                    agent._recent_observations.pop(0)
+            # String-based de-duplication
+            is_repeat = any(
+                obs.lower() in observation.lower() or observation.lower() in obs.lower()
+                for obs in agent._recent_observations[-3:]
+            )
+            if is_repeat and severity != "SAFETY":
+                continue
+
+            # ── Speak the observation ──
+            instruction = _get_speech_instruction(severity, observation, agent)
+            logger.info(f"[proactive] ★ [{severity}|{category}] {observation}")
+
+            await session.generate_reply(instructions=instruction)
+
+            # Update state
+            agent._last_proactive_time = now
+            agent._last_proactive_severity = severity
+            agent._last_observation_text = observation
+            agent._recent_observations.append(observation)
+            if len(agent._recent_observations) > 5:
+                agent._recent_observations.pop(0)
+            agent._observation_categories[category] = now
+
+            # Start engagement timer (did user respond to this?)
+            agent._awaiting_engagement = True
+            agent._engagement_timer_start = now
 
         except asyncio.CancelledError:
             break
@@ -617,10 +762,61 @@ async def entrypoint(ctx: JobContext):
 
         logger.info("[arrival-agent] ✓ Data channel listener registered")
 
-        # Track user speech for proactive monitor
+        # Track user speech for proactive monitor + engagement + mute detection
+        _MUTE_PHRASES = {"stop", "shut up", "quiet", "be quiet", "enough", "shh", "hush", "stop talking"}
+        _PUSHBACK_PHRASES = {"it's fine", "that's fine", "not an issue", "i know", "already know", "don't worry"}
+
         @session.on("user_input_transcribed")
         def on_user_speech(ev):
             agent._last_user_speech_time = time.time()
+            transcript = getattr(ev, "text", "") or getattr(ev, "transcript", "") or ""
+            if not transcript:
+                return
+
+            text_lower = transcript.lower().strip()
+
+            # Store conversation context (for proactive analyzer)
+            agent._conversation_context.append({"role": "user", "content": transcript})
+            if len(agent._conversation_context) > 6:
+                agent._conversation_context.pop(0)
+
+            # Detect mute commands — "stop", "quiet", "shut up"
+            if any(phrase in text_lower for phrase in _MUTE_PHRASES):
+                agent._proactive_muted_until = time.time() + PROACTIVE_MUTE_DURATION
+                agent._awaiting_engagement = False
+                logger.info(f"[proactive] Muted for {PROACTIVE_MUTE_DURATION}s — user said: '{text_lower}'")
+                return
+
+            # Detect pushback — "it's fine", "i know"
+            if any(phrase in text_lower for phrase in _PUSHBACK_PHRASES):
+                agent._user_pushback_count += 1
+                agent._awaiting_engagement = False
+                logger.info(f"[proactive] Pushback #{agent._user_pushback_count} — user said: '{text_lower}'")
+                return
+
+            # Engagement detection — did user respond to our observation?
+            if agent._awaiting_engagement and agent._last_observation_text:
+                elapsed = time.time() - agent._engagement_timer_start
+                if elapsed < ENGAGEMENT_RESPONSE_WINDOW:
+                    # Check if response is related (simple keyword overlap)
+                    obs_words = set(agent._last_observation_text.lower().split())
+                    user_words = set(text_lower.split())
+                    overlap = obs_words & user_words - {"the", "a", "is", "it", "that", "this", "i", "you", "and", "or", "to"}
+                    if len(overlap) >= 1 or "?" in transcript:
+                        # User engaged! Boost engagement score
+                        agent._engagement_score = min(ENGAGEMENT_MAX, agent._engagement_score + ENGAGEMENT_BOOST)
+                        agent._observations_ignored = 0
+                        agent._awaiting_engagement = False
+                        logger.info(f"[proactive] User engaged (overlap: {overlap}), engagement={agent._engagement_score}")
+
+        # Track assistant responses for conversation context
+        @session.on("agent_speech_committed")
+        def on_agent_speech(ev):
+            text = getattr(ev, "text", "") or getattr(ev, "content", "") or ""
+            if text:
+                agent._conversation_context.append({"role": "assistant", "content": text})
+                if len(agent._conversation_context) > 6:
+                    agent._conversation_context.pop(0)
 
         # Background task: keep injecting latest frame into agent context
         async def frame_injector():
