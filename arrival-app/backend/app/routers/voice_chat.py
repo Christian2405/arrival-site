@@ -410,6 +410,7 @@ async def voice_chat(
                 source=chat_result.get("source"),
                 confidence=chat_result.get("confidence"),
                 has_image=bool(request.image_base64),
+                team_id=team_id,
                 mode=_voice_mode,
                 rag_chunks_used=chat_result.get("rag_chunks_used"),
                 response_time_ms=_voice_elapsed_ms,

@@ -342,7 +342,7 @@ async def index_document(
                 logger.warning(f"[rag] Partial index: {total_upserted}/{len(records)} chunks for {filename}")
                 return total_upserted
 
-        logger.warning(f"[rag] Indexed {total_upserted} chunks for {filename}")
+        logger.info(f"[rag] Indexed {total_upserted} chunks for {filename}")
         return total_upserted
     except Exception as e:
         # Bug #7: Reset on unexpected errors
@@ -381,7 +381,7 @@ async def delete_document_vectors(document_id: str, user_id: str, team_id: str |
                 if "not found" not in err_str and "no vectors" not in err_str:
                     logger.warning(f"[rag] Vector batch delete error: {batch_err}")
 
-        logger.warning(f"[rag] Deleted vectors for document {document_id}")
+        logger.info(f"[rag] Deleted vectors for document {document_id}")
     except (ConnectionError, OSError, TimeoutError) as conn_err:
         # Bug #7: Reset cached index on connection errors
         _reset_pinecone_index()

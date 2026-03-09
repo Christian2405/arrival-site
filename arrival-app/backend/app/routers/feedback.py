@@ -8,6 +8,7 @@ On any feedback, updates chunk_scores for the RAG data flywheel.
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -87,7 +88,7 @@ async def _update_chunk_scores(user_id: str, question: str, rating: str):
                             "Content-Type": "application/json",
                         },
                         params={"chunk_id": f"eq.{chunk_id}"},
-                        json={column: new_val, "last_updated": "now()"},
+                        json={column: new_val, "last_updated": datetime.now(timezone.utc).isoformat()},
                     )
                 else:
                     # Insert new

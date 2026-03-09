@@ -8,6 +8,7 @@ Auth: simple secret-based (ADMIN_SECRET env var). Good enough for a solo founder
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -107,7 +108,7 @@ async def submit_correction(
     # Promote to Pinecone if requested
     if promote:
         feedback = rows[0]
-        asyncio.create_task(_promote_to_pinecone(feedback_id, feedback, body.correction))
+        asyncio.create_task(_safe_promote(feedback_id, feedback, body.correction))
 
     return {"success": True, "promoted": promote, "id": feedback_id}
 
@@ -163,6 +164,16 @@ async def feedback_stats(secret: str = Query("")):
 # ---------------------------------------------------------------------------
 # Pinecone promotion
 # ---------------------------------------------------------------------------
+
+async def _safe_promote(feedback_id: str, feedback: dict, correction: str):
+    """Safe wrapper that logs exceptions instead of swallowing them."""
+    try:
+        await _promote_to_pinecone(feedback_id, feedback, correction)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error(f"[admin] Pinecone promotion task failed: {e}", exc_info=True)
+
 
 async def _promote_to_pinecone(feedback_id: str, feedback: dict, correction: str):
     """Push a verified correction to Pinecone global_knowledge namespace."""

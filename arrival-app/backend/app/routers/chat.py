@@ -162,6 +162,14 @@ async def chat(
                     detail=f"Demo rate limit exceeded. Max {DEMO_RATE_LIMIT} requests per minute."
                 )
             result = get_demo_chat_response(request.message)
+
+            elapsed = time.monotonic() - t0
+            logger.info(f"[chat] Demo responded in {elapsed:.2f}s")
+            return ChatResponse(
+                response=result["response"],
+                source=result.get("source"),
+                confidence=result.get("confidence"),
+            )
         else:
             # 1. Get authenticated user
             user = await get_current_user(req)

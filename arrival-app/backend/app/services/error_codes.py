@@ -5635,7 +5635,7 @@ BRAND_ALIASES = {
     "bryant": "carrier",  # Same parent company
     "brian t": "carrier",  # STT misspelling of Bryant
     "payne": "carrier",  # Same parent company
-    "pain": "carrier",  # STT misspelling of Payne
+    # "pain" removed — too common a word, causes false positives
     # Goodman
     "goodman": "goodman",
     "amana": "goodman",  # Same manufacturer
@@ -5645,7 +5645,7 @@ BRAND_ALIASES = {
     "lennocks": "lennox",
     # Trane — STT may say "train"
     "trane": "trane",
-    "train": "trane",
+    # "train" removed — too common a word, causes false positives
     "american standard": "trane",  # Same manufacturer
     # Rinnai — STT may say "rin eye", "rennai"
     "rinnai": "rinnai",
@@ -5735,7 +5735,7 @@ BRAND_ALIASES = {
     "pioneer": "midea",  # Uses Midea internals (Pioneer mini-splits)
     # Gree — world's largest AC manufacturer
     "gree": "gree",
-    "grey": "gree",  # STT common mishearing
+    # "grey" removed — too common a word, causes false positives
     "gri": "gree",
     # Cooper & Hunter — STT may split or garble
     "cooper hunter": "cooper_hunter",
@@ -5744,7 +5744,7 @@ BRAND_ALIASES = {
     "c&h": "cooper_hunter",
     # Haier — GE Appliances parent company
     "haier": "haier",
-    "higher": "haier",  # STT common mishearing
+    # "higher" removed — too common a word, causes false positives
     "hi er": "haier",
     # Buderus — Bosch subsidiary, common in northeast US
     "buderus": "buderus",
@@ -5948,7 +5948,6 @@ EQUIPMENT_ALIASES = {
     "oven": "oven",
     "range": "oven",
     "stove": "oven",
-    "tankless water heater": "tankless",
 }
 
 # Patterns to extract error codes from natural language queries

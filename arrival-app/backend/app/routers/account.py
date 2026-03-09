@@ -39,7 +39,7 @@ async def delete_account(request: Request):
             # Delete in order: dependent data first
             # 1. Query logs
             await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/query_logs",
+                f"{config.SUPABASE_URL}/rest/v1/queries",
                 headers=headers,
                 params={"user_id": f"eq.{user_id}"},
             )
@@ -61,6 +61,20 @@ async def delete_account(request: Request):
             # 4. Subscriptions
             await client.delete(
                 f"{config.SUPABASE_URL}/rest/v1/subscriptions",
+                headers=headers,
+                params={"user_id": f"eq.{user_id}"},
+            )
+
+            # 4b. Feedback
+            await client.delete(
+                f"{config.SUPABASE_URL}/rest/v1/feedback",
+                headers=headers,
+                params={"user_id": f"eq.{user_id}"},
+            )
+
+            # 4c. User preferences
+            await client.delete(
+                f"{config.SUPABASE_URL}/rest/v1/user_preferences",
                 headers=headers,
                 params={"user_id": f"eq.{user_id}"},
             )

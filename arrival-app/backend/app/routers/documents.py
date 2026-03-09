@@ -5,8 +5,6 @@ Uses the documents table as source of truth (matches website).
 """
 
 import logging
-import re
-import tempfile
 import os
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Query
@@ -214,53 +212,47 @@ async def index_doc(body: IndexRequest, request: Request):
             f"{config.SUPABASE_STORAGE_BUCKET}/{trusted_storage_path}"
         )
 
-        # Bug #21: Use a temp file instead of holding entire file in memory
-        tmp_path = None
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.get(
-                    storage_url,
-                    headers={
-                        "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
-                        "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
-                    },
-                )
-                resp.raise_for_status()
-                file_bytes = resp.content
-
-            # Guess content type from filename
-            filename = trusted_storage_path.split("/")[-1]
-            # Strip the timestamp prefix (e.g., "1700000000000_manual.pdf" -> "manual.pdf")
-            if "_" in filename:
-                filename = filename.split("_", 1)[1]
-
-            content_type = "application/octet-stream"
-            lower = filename.lower()
-            if lower.endswith(".pdf"):
-                content_type = "application/pdf"
-            elif lower.endswith((".txt", ".md", ".csv")):
-                content_type = "text/plain"
-            elif lower.endswith(".docx"):
-                content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-            # Index via RAG pipeline (Bug #1: pass team_id)
-            chunks = await index_document(
-                document_id=document_id,
-                user_id=user_id,
-                filename=filename,
-                file_bytes=file_bytes,
-                content_type=content_type,
-                team_id=doc_team_id,
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                storage_url,
+                headers={
+                    "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                },
             )
+            resp.raise_for_status()
+            file_bytes = resp.content
 
-            return IndexResponse(
-                success=True,
-                chunks_indexed=chunks,
-                message=f"Indexed {chunks} chunks from {filename}",
-            )
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+        # Guess content type from filename
+        filename = trusted_storage_path.split("/")[-1]
+        # Strip the timestamp prefix (e.g., "1700000000000_manual.pdf" -> "manual.pdf")
+        if "_" in filename:
+            filename = filename.split("_", 1)[1]
+
+        content_type = "application/octet-stream"
+        lower = filename.lower()
+        if lower.endswith(".pdf"):
+            content_type = "application/pdf"
+        elif lower.endswith((".txt", ".md", ".csv")):
+            content_type = "text/plain"
+        elif lower.endswith(".docx"):
+            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+        # Index via RAG pipeline
+        chunks = await index_document(
+            document_id=document_id,
+            user_id=user_id,
+            filename=filename,
+            file_bytes=file_bytes,
+            content_type=content_type,
+            team_id=doc_team_id,
+        )
+
+        return IndexResponse(
+            success=True,
+            chunks_indexed=chunks,
+            message=f"Indexed {chunks} chunks from {filename}",
+        )
 
     except HTTPException:
         raise

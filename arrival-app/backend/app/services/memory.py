@@ -11,6 +11,7 @@ Gracefully degrades if Supabase is not configured.
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 
 from app import config
 
@@ -150,7 +151,7 @@ async def store_memory(user_id: str, messages: list[dict]) -> None:
                         json={
                             "common_brands": list(new_brands)[:20],  # Cap at 20
                             "equipment_types": list(new_equipment)[:15],  # Cap at 15
-                            "updated_at": "now()",
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
                         },
                     )
                     logger.info(f"[memory] Updated preferences: +{len(mentioned_brands)} brands, +{len(mentioned_equipment)} equipment")

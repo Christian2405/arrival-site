@@ -415,33 +415,34 @@ async def _analyze_frame_proactive(
             lines.append(f"- {role}: {msg.get('content', '')[:80]}")
         conv_context = f"\nRecent conversation:\n" + "\n".join(lines) + "\nDon't repeat what was just discussed.\n"
 
-    response = await client.messages.create(
-        model=config.ANTHROPIC_VISION_MODEL,
-        max_tokens=150,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
-                },
-                {
-                    "type": "text",
-                    "text": (
-                        "You're a 50-year trade veteran watching a job through a phone camera. "
-                        "You're their experienced buddy — observant, helpful, not annoying.\n\n"
-                        f"{conv_context}{obs_context}\n\n"
-                        "RESPOND IN THIS EXACT FORMAT (one line):\n"
-                        "SEVERITY|CATEGORY|observation\n\n"
-                        "SEVERITY must be one of:\n"
-                        "- SAFETY: Immediate danger — exposed wiring, gas indicators, active leak, no disconnect, fire hazard\n"
-                        "- NOTICE: Worth mentioning — wrong part, corrosion, code violation, readable model/serial number, dirty coils\n"
-                        "- INFO: Low priority — general observation, equipment brand visible, helpful tip\n\n"
-                        "CATEGORY must be one of: safety, error_code, model_number, condition, part_id, tip\n\n"
-                        "RULES:\n"
-                        "- ONE observation per frame, ONE short sentence\n"
-                        "- If nothing notable, respond with exactly: NOTHING\n"
-                        "- Be confident about what you see, hedge on what you're guessing\n"
+    response = await asyncio.wait_for(
+        client.messages.create(
+            model=config.ANTHROPIC_VISION_MODEL,
+            max_tokens=150,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "You're a 50-year trade veteran watching a job through a phone camera. "
+                            "You're their experienced buddy — observant, helpful, not annoying.\n\n"
+                            f"{conv_context}{obs_context}\n\n"
+                            "RESPOND IN THIS EXACT FORMAT (one line):\n"
+                            "SEVERITY|CATEGORY|observation\n\n"
+                            "SEVERITY must be one of:\n"
+                            "- SAFETY: Immediate danger — exposed wiring, gas indicators, active leak, no disconnect, fire hazard\n"
+                            "- NOTICE: Worth mentioning — wrong part, corrosion, code violation, readable model/serial number, dirty coils\n"
+                            "- INFO: Low priority — general observation, equipment brand visible, helpful tip\n\n"
+                            "CATEGORY must be one of: safety, error_code, model_number, condition, part_id, tip\n\n"
+                            "RULES:\n"
+                            "- ONE observation per frame, ONE short sentence\n"
+                            "- If nothing notable, respond with exactly: NOTHING\n"
+                            "- Be confident about what you see, hedge on what you're guessing\n"
                         "- A shadow is not a leak. A stain is not active water.\n\n"
                         "Examples:\n"
                         "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
@@ -452,6 +453,8 @@ async def _analyze_frame_proactive(
                 },
             ],
         }],
+        ),
+        timeout=15.0,  # Don't let proactive analysis hang the monitor
     )
     result = response.content[0].text.strip()
 
@@ -559,18 +562,21 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                 continue
 
             # Analyze with conversation context
-            agent._last_analyzed_hash = agent._frame_hash(frame)
             last_analysis_time = now
+            new_hash = agent._frame_hash(frame)
 
             try:
                 result = await _analyze_frame_proactive(
                     frame,
-                    agent._recent_observations,
-                    conversation_context=agent._conversation_context,
+                    list(agent._recent_observations),
+                    conversation_context=list(agent._conversation_context),
                 )
             except Exception as e:
                 logger.warning(f"[proactive] Vision failed: {e}")
                 continue
+
+            # Only update hash after successful analysis (so failed frames get retried)
+            agent._last_analyzed_hash = new_hash
 
             if not result:
                 continue
@@ -763,6 +769,8 @@ async def entrypoint(ctx: JobContext):
         logger.info("[arrival-agent] ✓ Data channel listener registered")
 
         # Track user speech for proactive monitor + engagement + mute detection
+        # Only match mute/pushback in SHORT utterances to avoid false positives
+        # (e.g., "stop valve" or "it's fine copper tubing" should NOT trigger)
         _MUTE_PHRASES = {"stop", "shut up", "quiet", "be quiet", "enough", "shh", "hush", "stop talking"}
         _PUSHBACK_PHRASES = {"it's fine", "that's fine", "not an issue", "i know", "already know", "don't worry"}
 
@@ -780,15 +788,17 @@ async def entrypoint(ctx: JobContext):
             if len(agent._conversation_context) > 6:
                 agent._conversation_context.pop(0)
 
-            # Detect mute commands — "stop", "quiet", "shut up"
-            if any(phrase in text_lower for phrase in _MUTE_PHRASES):
+            # Detect mute commands — only on short utterances (< 6 words)
+            # to avoid false positives like "stop valve" or "that's quiet today"
+            word_count = len(text_lower.split())
+            if word_count <= 5 and any(phrase in text_lower for phrase in _MUTE_PHRASES):
                 agent._proactive_muted_until = time.time() + PROACTIVE_MUTE_DURATION
                 agent._awaiting_engagement = False
                 logger.info(f"[proactive] Muted for {PROACTIVE_MUTE_DURATION}s — user said: '{text_lower}'")
                 return
 
-            # Detect pushback — "it's fine", "i know"
-            if any(phrase in text_lower for phrase in _PUSHBACK_PHRASES):
+            # Detect pushback — only on short utterances (< 8 words)
+            if word_count <= 7 and any(phrase in text_lower for phrase in _PUSHBACK_PHRASES):
                 agent._user_pushback_count += 1
                 agent._awaiting_engagement = False
                 logger.info(f"[proactive] Pushback #{agent._user_pushback_count} — user said: '{text_lower}'")
@@ -801,11 +811,14 @@ async def entrypoint(ctx: JobContext):
                     # Check if response is related (simple keyword overlap)
                     obs_words = set(agent._last_observation_text.lower().split())
                     user_words = set(text_lower.split())
-                    overlap = obs_words & user_words - {"the", "a", "is", "it", "that", "this", "i", "you", "and", "or", "to"}
+                    overlap = (obs_words & user_words) - {"the", "a", "is", "it", "that", "this", "i", "you", "and", "or", "to"}
                     if len(overlap) >= 1 or "?" in transcript:
                         # User engaged! Boost engagement score
                         agent._engagement_score = min(ENGAGEMENT_MAX, agent._engagement_score + ENGAGEMENT_BOOST)
                         agent._observations_ignored = 0
+                        # Reset pushback when user is actively engaging
+                        if agent._user_pushback_count > 0:
+                            agent._user_pushback_count = max(0, agent._user_pushback_count - 1)
                         agent._awaiting_engagement = False
                         logger.info(f"[proactive] User engaged (overlap: {overlap}), engagement={agent._engagement_score}")
 
