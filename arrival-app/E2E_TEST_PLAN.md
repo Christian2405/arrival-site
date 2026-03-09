@@ -331,7 +331,7 @@ Test on both desktop browser and mobile browser (Safari on iPhone).
 | 19.1 | **Home page loads** | Visit arrivalcompany.com | Hero section, stats (<3s response, trades, 24/7), feature highlights all render |
 | 19.2 | **Navigation links** | Click each nav item (Product, Pricing, For Businesses, Contact, Help) | Each page loads correctly |
 | 19.3 | **Product page** | Click Product in nav | Feature showcase loads — voice Q&A, camera analysis, code compliance |
-| 19.4 | **Pricing page** | Click Pricing in nav | Individual plans (Free $0, Pro $20) and Business plans ($250/seat, Enterprise) display |
+| 19.4 | **Pricing page** | Click Pricing in nav | Individual plans (Free $0, Pro $20) and Business plans ($200/seat, Enterprise) display |
 | 19.5 | **Plan toggle** | Toggle between Individual and Business plans on pricing | Cards switch correctly |
 | 19.6 | **FAQ section** | Scroll to FAQ on pricing page | 7 FAQ categories expand/collapse correctly |
 | 19.7 | **For Businesses page** | Click For Businesses | Hero, Problem/Solution sections, Job Mode, Getting Started render |

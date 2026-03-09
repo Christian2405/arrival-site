@@ -79,7 +79,7 @@ function welcomeEmail(firstName) {
 function subscriptionConfirmedEmail(firstName, plan) {
   const name = escapeHtml(firstName) || 'there';
   const planName = plan === 'business' ? 'Business' : 'Pro';
-  const price = plan === 'business' ? '$250/month' : '$25/month';
+  const price = plan === 'business' ? '$200/month' : '$25/month';
   const dashboardUrl = plan === 'business'
     ? 'https://arrivalcompany.com/dashboard-business'
     : 'https://arrivalcompany.com/dashboard-individual';

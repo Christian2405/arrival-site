@@ -57,7 +57,7 @@ Arrival is a mobile-first AI assistant for trade workers (HVAC, plumbing, electr
 │   ├── dashboard.css         # Dashboard styles
 │   ├── netlify.toml          # Netlify config
 │   ├── netlify/functions/    # Serverless functions
-│   │   ├── create-checkout.js    # Stripe Checkout (Pro $25/mo, Business $250/mo)
+│   │   ├── create-checkout.js    # Stripe Checkout (Pro $25/mo, Business $200/mo)
 │   │   ├── stripe-webhook.js     # Handles checkout, sub updates, cancellation, payment failures
 │   │   ├── create-portal.js      # Stripe Customer Portal
 │   │   ├── get-billing.js        # Fetch billing info
@@ -110,7 +110,7 @@ All AI endpoints accept `?demo=true` for canned trade responses without needing 
 
 ## Subscription Tiers
 
-| Feature | Free | Pro ($25/mo) | Business ($250/mo) |
+| Feature | Free | Pro ($25/mo) | Business ($200/mo) |
 |---------|------|-------------|-------------------|
 | Max Documents | 10 | 50 | Unlimited |
 | Job Mode | No | No | Yes |

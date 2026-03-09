@@ -157,7 +157,7 @@
                 <div class="seat-card-bar">
                     <div class="seat-card-bar-fill" id="seat-bar-fill" style="width:0%"></div>
                 </div>
-                <div class="seat-card-detail">Additional seats: $250/month each</div>
+                <div class="seat-card-detail">Additional seats: $200/month each</div>
             </div>
             <button class="btn btn-outline" onclick="handleAddSeats()">Add Seats</button>
         </div>
@@ -192,10 +192,10 @@
         <div class="plan-card" id="billing-plan-card">
             <div class="plan-card-info">
                 <div class="plan-card-name" id="billing-plan-name">Business Plan</div>
-                <div class="plan-card-price" id="billing-plan-price">$250/month</div>
+                <div class="plan-card-price" id="billing-plan-price">$200/month</div>
                 <div class="plan-card-detail" id="billing-seats-detail">10 seats included, 0 additional seats</div>
                 <div class="plan-card-detail" id="billing-next-date">Next billing date: March 1, 2026</div>
-                <div class="plan-card-detail" id="billing-total" style="font-weight:600;margin-top:4px;">Monthly total: $250.00</div>
+                <div class="plan-card-detail" id="billing-total" style="font-weight:600;margin-top:4px;">Monthly total: $200.00</div>
             </div>
             <div class="plan-card-actions" id="billing-actions">
                 <button class="btn btn-outline" id="billing-add-seats-btn">Add Seats</button>
@@ -389,7 +389,7 @@
 <div class="modal-overlay" id="add-seats-modal" onclick="if(event.target===this)closeModal('add-seats-modal')">
     <div class="modal">
         <h2>Add Seats</h2>
-        <p style="color:var(--text-muted);margin-bottom:16px;">Each additional seat costs <strong>$250/month</strong>, added to your next billing cycle.</p>
+        <p style="color:var(--text-muted);margin-bottom:16px;">Each additional seat costs <strong>$200/month</strong>, added to your next billing cycle.</p>
         <div class="form-group">
             <label>Number of seats to add</label>
             <input type="number" id="add-seats-count" min="1" max="100" value="1" style="max-width:120px;">

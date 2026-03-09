@@ -164,7 +164,7 @@ exports.handler = async (event) => {
         const user = await getUserInfo(userId);
         if (user.email) {
           const planName = plan === 'business' ? 'Business' : 'Pro';
-          const price = plan === 'business' ? '$250/month' : '$25/month';
+          const price = plan === 'business' ? '$200/month' : '$25/month';
           const dashUrl = plan === 'business'
             ? 'https://arrivalcompany.com/dashboard-business'
             : 'https://arrivalcompany.com/dashboard-individual';
