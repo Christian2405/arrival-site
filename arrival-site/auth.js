@@ -334,12 +334,17 @@ async function handlePasswordUpdate(event) {
 // LOGOUT
 // ============================================
 
-function handleLogout() {
-    // Clear local state immediately so redirect is instant
+async function handleLogout() {
+    // Clear ALL Supabase-related storage to prevent stale sessions
     localStorage.removeItem('arrival_dashboard');
-    localStorage.removeItem('sb-' + window.location.hostname + '-auth-token');
-    // Fire signOut but don't wait for it
-    sb.auth.signOut().catch(function () {});
+    // Clear all possible Supabase token keys (hostname varies between environments)
+    Object.keys(localStorage).forEach(function(key) {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
+    // Hide nav links immediately so user sees logged-out state
+    updateNavForAuth(null);
+    // Actually sign out — await it so the server session is invalidated
+    try { await sb.auth.signOut(); } catch(e) { /* ignore */ }
     window.location.href = '/';
 }
 
@@ -412,8 +417,19 @@ async function ensureProfileExists(user) {
 // DASHBOARD NAVIGATION
 // ============================================
 
-function navigateToDashboard() {
-    // Go straight to dashboard — the dashboard page handles auth + routing
+async function navigateToDashboard() {
+    // Verify session is still valid before navigating
+    try {
+        var result = await sb.auth.getSession();
+        if (!result.data.session) {
+            updateNavForAuth(null);
+            showPage('login');
+            return;
+        }
+    } catch(e) {
+        showPage('login');
+        return;
+    }
     var lastDash = localStorage.getItem('arrival_dashboard') || 'individual';
     window.location.href = '/dashboard-' + lastDash;
 }

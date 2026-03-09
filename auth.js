@@ -335,7 +335,13 @@ async function handlePasswordUpdate(event) {
 // ============================================
 
 async function handleLogout() {
-    await sb.auth.signOut();
+    // Clear ALL Supabase-related storage to prevent stale sessions
+    localStorage.removeItem('arrival_dashboard');
+    Object.keys(localStorage).forEach(function(key) {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
+    updateNavForAuth(null);
+    try { await sb.auth.signOut(); } catch(e) { /* ignore */ }
     window.location.href = '/';
 }
 
@@ -415,11 +421,8 @@ async function navigateToDashboard() {
         var session = sessionResult.data.session;
 
         if (!session || !session.user) {
-            if (typeof _originalShowPage === 'function') {
-                _originalShowPage('login');
-            } else {
-                showPage('login');
-            }
+            updateNavForAuth(null);
+            showPage('login');
             return;
         }
 
