@@ -330,7 +330,7 @@ class ArrivalAgent(Agent):
         try:
             client = _get_anthropic_client()
             response = await client.messages.create(
-                model=config.ANTHROPIC_VOICE_MODEL,
+                model=config.ANTHROPIC_VISION_MODEL,
                 max_tokens=300,
                 messages=[{
                     "role": "user",
@@ -372,7 +372,7 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
         context = f"\nYou already mentioned: {'; '.join(recent_observations[-3:])}. Don't repeat these."
 
     response = await client.messages.create(
-        model=config.ANTHROPIC_VOICE_MODEL,
+        model=config.ANTHROPIC_VISION_MODEL,
         max_tokens=150,
         messages=[{
             "role": "user",
