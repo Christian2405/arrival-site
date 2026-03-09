@@ -17,6 +17,11 @@ print('AgentServer imported OK', flush=True)
 
     echo "SDK test done (exit $?)" >> "$AGENT_LOG"
 
+    # Download turn detector model if not cached
+    echo "Downloading turn detector model..." >> "$AGENT_LOG"
+    python -u -m livekit_agent.agent download-files >> "$AGENT_LOG" 2>&1
+    echo "Model download done (exit $?)" >> "$AGENT_LOG"
+
     # Start agent with unbuffered output
     echo "Launching agent..." >> "$AGENT_LOG"
     python -u -m livekit_agent.agent start \
