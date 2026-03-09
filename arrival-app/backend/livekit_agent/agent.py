@@ -1,21 +1,21 @@
 """
 Arrival AI — LiveKit Voice Agent (Proactive Job Mode)
 
-Full-duplex voice agent for trade workers with proactive camera vision.
+Full-duplex voice agent for trade workers with always-on camera vision.
 
 Pipeline:
   - Silero VAD (ML-based, works next to compressors)
   - Deepgram Nova-2 STT (streaming, noise-immune)
-  - Claude Haiku LLM (fast real-time responses)
+  - Claude Sonnet LLM (accurate real-time responses + vision)
   - ElevenLabs Flash v2.5 TTS (<300ms to first audio)
   - LiveKit WebRTC transport (full-duplex, <1s end-to-end)
   - MultilingualModel turn detection (semantic, not silence-based)
-  - Proactive Vision: background loop analyzes camera and speaks up
+  - Always-on Vision: frames continuously injected into LLM context
 
-Vision Architecture (data channel mediated):
-  Agent sends "vision_request" via data channel → Frontend captures frame →
-  Frontend calls /api/analyze-frame → Frontend sends "vision_result" back.
-  This avoids ALL cross-process communication issues between agent and FastAPI.
+Vision Architecture:
+  Frontend captures frames every 2-5s → sends via data channel + HTTP store →
+  Agent always has latest frame → injected into every LLM call as context →
+  No tool call needed, no "let me take a look" delay.
 
 Run:
   python -m livekit_agent.agent start
@@ -90,8 +90,7 @@ _FRAME_URLS = [
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Shared Anthropic client — reused across all vision calls (avoids creating
-# a new HTTP client on every proactive check or camera look)
+# Shared Anthropic client — reused across all vision calls
 # ---------------------------------------------------------------------------
 _anthropic_client: Optional[anthropic_sdk.AsyncAnthropic] = None
 
@@ -101,87 +100,83 @@ def _get_anthropic_client() -> anthropic_sdk.AsyncAnthropic:
         _anthropic_client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
     return _anthropic_client
 
-# Startup banner — visible in Render logs for diagnostics
+# Startup banner
 logger.info("[arrival-agent] ============================")
-logger.info("[arrival-agent] LiveKit Voice Agent Loading (Data Channel Vision)")
+logger.info("[arrival-agent] LiveKit Voice Agent Loading (Always-On Vision)")
 logger.info(f"[arrival-agent] LIVEKIT_URL: {config.LIVEKIT_URL[:40] if config.LIVEKIT_URL else '(NOT SET)'}")
 logger.info(f"[arrival-agent] DEEPGRAM: {'set' if config.DEEPGRAM_API_KEY else 'NOT SET'}")
 logger.info(f"[arrival-agent] ANTHROPIC: {'set' if config.ANTHROPIC_API_KEY else 'NOT SET'}")
 logger.info(f"[arrival-agent] ELEVENLABS: {'set' if config.ELEVENLABS_API_KEY else 'NOT SET'}")
+logger.info(f"[arrival-agent] VOICE MODEL: {config.ANTHROPIC_VOICE_MODEL}")
 logger.info("[arrival-agent] ============================")
 
 # ---------------------------------------------------------------------------
 # Proactive vision config
 # ---------------------------------------------------------------------------
-PROACTIVE_CHECK_INTERVAL = 3   # seconds between vision checks — fast enough to catch things
-PROACTIVE_MIN_COOLDOWN = 8     # min seconds between proactive speech
-PROACTIVE_PUSHBACK_COOLDOWN = 45  # cooldown after user pushes back
-FRAME_CHANGE_THRESHOLD = 8    # out of 100 sampled positions — slightly more sensitive
+PROACTIVE_CHECK_INTERVAL = 5    # seconds between proactive analysis cycles
+PROACTIVE_MIN_COOLDOWN = 12     # min seconds between proactive speech
+PROACTIVE_PUSHBACK_COOLDOWN = 60  # cooldown after user pushes back
+FRAME_CHANGE_THRESHOLD = 8     # out of 100 sampled positions
 
 # ---------------------------------------------------------------------------
 # Voice prompts
 # ---------------------------------------------------------------------------
 
 JOB_MODE_PROMPT = (
-    "You're a 50-year vet working alongside a tech on a job. You're their buddy — "
-    "you talk about anything, answer anything. Short, confident, natural. "
-    "1-3 sentences max. This is spoken aloud — don't drone on.\n\n"
+    "You're a 50-year trade veteran working side by side with a tech on a job. "
+    "You can ALWAYS see what the tech's phone camera sees — it's always on, always streaming to you. "
+    "You are NEVER blind. You are ALWAYS watching.\n\n"
+
+    "YOUR CAMERA IS ALWAYS ON. You can see what the tech sees RIGHT NOW. "
+    "When they ask 'what am I looking at' or 'what do you see' — you ALREADY see it. "
+    "Answer immediately from what you see. NEVER say 'let me take a look' or 'let me check' — "
+    "you're already looking. Just describe what you see.\n\n"
 
     "TOOLS — USE THEM:\n"
     "- lookup_error_code: For ANY error code, blink code, fault code, or status light question. ALWAYS try this first.\n"
     "- search_knowledge: For ANY technical question about codes, specs, sizing, manuals, building codes, "
     "refrigerant charging, clearances, installation requirements, or anything where you need reference data. "
-    "USE THIS whenever you're not 100% sure of a specific number, spec, or code requirement. "
-    "It searches manuals, building codes (NEC, UPC, IMC, IRC), and technical references.\n"
-    "- look_at_camera: When they ask you to LOOK at something visual.\n\n"
+    "USE THIS whenever you're not 100% sure of a specific number, spec, or code requirement.\n\n"
 
-    "RULES:\n"
+    "VISION RULES:\n"
+    "- You can see the camera feed at all times. When a frame is attached, describe what you ACTUALLY see.\n"
+    "- Read any text, model numbers, brands, labels, error codes visible in the frame.\n"
+    "- If you spot something wrong (safety hazard, code violation, wrong fitting, corrosion), speak up.\n"
+    "- Be specific: 'I see a Carrier furnace, model 58STA' not 'I see some equipment'.\n"
+    "- If the image is blurry or dark, say what you CAN see and ask them to steady the camera.\n"
+    "- NEVER say 'I can't see anything' or 'I don't have camera access' — you ALWAYS have the camera.\n"
+    "- If no frame is available for some reason, work with what the tech tells you verbally.\n\n"
+
+    "CONVERSATION RULES:\n"
     "- Answer what they asked, nothing extra. Simple question = simple answer.\n"
+    "- 1-3 sentences max. This is spoken aloud — don't drone on.\n"
     "- Lead with the most likely cause. Don't list 5 things.\n"
     "- If they ask about a specific error code or blink code, use lookup_error_code first. "
     "If it returns nothing, try search_knowledge. If both fail, say 'I don't have that code memorized — "
     "what does the chart on the unit show?' NEVER guess error codes.\n"
-    "- For technical specs, sizing, code requirements, or manufacturer-specific questions, use search_knowledge. "
-    "Don't guess specs — look them up.\n"
-    "- If they ask something non-trade (weather, sports, lunch), just chat naturally. You're a person, not a manual.\n"
-    "- If you tell them to check something, ask what they find.\n"
+    "- For technical specs, sizing, code requirements, or manufacturer-specific questions, use search_knowledge.\n"
+    "- If they ask something non-trade (weather, sports, lunch), just chat naturally.\n"
     "- If they confirm ('yeah I see it'), give the next step.\n"
-    "- If they say 'it's fine' or 'no' or push back, DROP IT IMMEDIATELY. Say 'Fair enough' or 'Got it, I'll watch quietly' and move on.\n"
-    "- If they challenge something you said ('what are you talking about', 'there's no leak', 'that's wrong'), "
-    "IMMEDIATELY back off. Say 'My bad' or 'Alright, scratch that'. NEVER double down. NEVER insist.\n"
-    "- If they tell you to stop, shut up, or be quiet about proactive observations, say 'Got it, I'll just watch' and go silent on proactive stuff.\n"
-    "- NEVER make something up. If you're not sure, say so. A wrong answer wastes the tech's time.\n"
+    "- If they say 'it's fine' or push back, DROP IT. Say 'Fair enough' and move on.\n"
+    "- If they challenge something ('that's wrong'), IMMEDIATELY back off. Say 'My bad'. NEVER double down.\n"
+    "- If they tell you to stop or be quiet, say 'Got it, I'll just watch' and go silent.\n"
+    "- NEVER make something up. If you're not sure, say so.\n"
     "- No filler: no 'Great question', no 'Let me know if you need anything'.\n"
-    "- NEVER tell the user to 'point their phone at' something, 'show me', or 'hold up the camera'. "
-    "The camera is ALWAYS running and pointed at the work. If the tool fails, say 'my camera's acting up, just describe it' — "
-    "do NOT imply the user isn't holding the phone right.\n"
-    "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
-    "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
+    "- NEVER say 'point your phone at' or 'show me' — the camera is ALWAYS running.\n"
+    "- Use trade terminology: AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
+    "- Give specific numbers: '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
-    "- Use contractions. Say 'you're' not 'you are', 'don't' not 'do not'.\n\n"
+    "- Use contractions. Say 'you're' not 'you are'.\n\n"
 
-    "CRITICAL TRADE KNOWLEDGE (use these when relevant):\n"
-    "- Superheat target on a cap tube / fixed orifice system: 10-15°F (this IS a thing — cap tubes absolutely have a target superheat)\n"
-    "- Superheat target on a TXV system: Measure SUBCOOLING instead, 10-12°F target\n"
-    "- Subcooling target (TXV): 10-12°F\n"
-    "- R-410A operating pressures: ~118 psi suction / ~340 psi discharge at 75°F ambient\n"
-    "- R-22 operating pressures: ~68 psi suction / ~250 psi discharge at 75°F ambient\n"
-    "- Standard residential gas pressure: 7\" WC natural gas, 11\" WC propane\n"
-    "- Minimum furnace clearances: 1\" sides, 1\" back, varies by manufacturer for combustibles\n"
-    "- Wire sizing: 15A=14AWG, 20A=12AWG, 30A=10AWG, 40A=8AWG, 50A=6AWG, 60A=4AWG\n"
-    "- GFCI required: bathrooms, kitchens (countertop), garages, outdoors, crawlspaces, unfinished basements\n"
-    "- Water heater T&P valve: must terminate 6\" from floor, cannot be threaded/capped/reduced\n"
-    "- Gas furnace flue: single wall = 6\" clearance to combustibles, B-vent = 1\" clearance\n"
-    "- Drain line slope: 1/4\" per foot for 2\" and smaller, 1/8\" per foot for 3\" and larger\n\n"
-
-    "EXAMPLES:\n"
-    "Q: 'Superheat target on a cap tube?' → '10 to 15 degrees on a cap tube. What are you reading?'\n"
-    "Q: 'Superheat target on a TXV?' → 'On a TXV you want subcooling, not superheat — 10 to 12 degrees. What are you reading?'\n"
-    "Q: 'Carrier keeps short cycling' → 'Flame sensor. Pull it, emery cloth, fixes it 80% of the time.'\n"
-    "Q: 'What size wire for 40 amps?' → '8 gauge copper. Over 50 feet, bump to 6.'\n"
-    "Q: 'Yeah I see the corrosion' → 'Emery cloth and NoOx. Want me to walk you through it?'\n"
-    "Q: 'There's no leak here' → 'My bad, must have misread that. What are you looking at?'\n"
-    "Q: 'What do you think about the Bears game?' → 'Don't get me started. What a season though.'"
+    "CRITICAL TRADE KNOWLEDGE:\n"
+    "- Superheat on cap tube / fixed orifice: 10-15°F\n"
+    "- Superheat on TXV: Measure SUBCOOLING instead, 10-12°F\n"
+    "- R-410A: ~118 psi suction / ~340 psi discharge at 75°F\n"
+    "- R-22: ~68 psi suction / ~250 psi discharge at 75°F\n"
+    "- Gas pressure: 7\" WC natural gas, 11\" WC propane\n"
+    "- Wire: 15A=14AWG, 20A=12AWG, 30A=10AWG, 40A=8AWG, 50A=6AWG\n"
+    "- GFCI: bathrooms, kitchens countertop, garages, outdoors, crawlspaces\n"
+    "- Drain slope: 1/4\" per foot for 2\" and smaller, 1/8\" for 3\" and larger\n"
 )
 
 
@@ -190,128 +185,68 @@ DEFAULT_MODE_PROMPT = (
 
     "TOOLS — USE THEM:\n"
     "- lookup_error_code: For ANY error code, blink code, fault code, or status light question.\n"
-    "- search_knowledge: For technical specs, building codes, manual references, sizing questions, "
-    "or anything where you need precise reference data. USE THIS — don't guess.\n"
-    "- look_at_camera: When they ask you to LOOK at something visual.\n\n"
+    "- search_knowledge: For technical specs, building codes, manual references, sizing questions.\n\n"
 
     "RULES FOR VOICE:\n"
     "- Lead with the answer. No preamble, no filler.\n"
     "- Keep responses to 1-3 sentences max. Be specific.\n"
-    "- Use trade terminology naturally — AFUE, SEER, BTU, CFM, AWG, NEC, UPC.\n"
-    "- When giving specs, give the number. '8 AWG copper, 40A breaker' not 'appropriate wire size.'\n"
+    "- Use trade terminology naturally.\n"
+    "- When giving specs, give the number.\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
-    "- If they ask about a specific error code or blink code, use lookup_error_code first.\n"
-    "- For technical specs or code requirements, use search_knowledge to get exact data.\n"
-    "- If you don't know, say so in one sentence. Don't ramble.\n"
-    "- You're talking to someone on a job site. Respect their time."
+    "- If you don't know, say so in one sentence."
 )
 
 
 # ---------------------------------------------------------------------------
-# Agent with tools + proactive vision state
+# Agent with tools + always-on vision
 # ---------------------------------------------------------------------------
 
 class ArrivalAgent(Agent):
-    """Trade worker voice agent with error code lookup, camera vision, and proactive monitoring."""
+    """Trade worker voice agent with error code lookup, always-on vision, and proactive monitoring."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Camera state — frames come from data channel OR HTTP frame store
         self._latest_frame: Optional[str] = None
         self._frame_received_at: float = 0
-        self._room_name: str = ""  # Set by entrypoint for HTTP frame store lookup
-        self._room = None  # LiveKit Room reference — for data channel messaging
-        # Data channel vision — frontend-mediated analysis (PRIMARY method)
-        self._pending_vision_result: Optional[str] = None
-        self._vision_event: Optional[asyncio.Event] = None
+        self._room_name: str = ""
+        self._room = None
         # Proactive vision state
         self._last_analyzed_hash: str = ""
         self._recent_observations: list[str] = []
         self._last_proactive_time: float = 0
         self._user_pushback_count: int = 0
         self._proactive_enabled: bool = True
-        self._last_user_speech_time: float = 0  # Don't interrupt active conversation
+        self._last_user_speech_time: float = 0
 
     def update_camera_frame(self, frame_b64: str):
-        """Store the latest camera frame from the mobile app (data channel path)."""
+        """Store the latest camera frame from the mobile app."""
         self._latest_frame = frame_b64
         self._frame_received_at = time.time()
 
-    def on_vision_result(self, analysis: str):
-        """Called when the frontend sends back a vision analysis result via data channel."""
-        logger.info(f"[arrival-agent] ✓ Vision result from frontend ({len(analysis)} chars): {analysis[:80]}...")
-        self._pending_vision_result = analysis
-        if self._vision_event:
-            self._vision_event.set()
-
-    async def _request_vision_via_frontend(self, question: str) -> Optional[str]:
-        """Ask the frontend to capture a frame, analyze it via API, and send back the result.
-        This is the most reliable path — the phone can always talk to the backend."""
-        if not self._room:
-            logger.warning("[arrival-agent] No room reference — can't request vision from frontend")
-            return None
-
-        # Clear any stale result
-        self._pending_vision_result = None
-        self._vision_event = asyncio.Event()
-
-        # Send request to frontend via data channel
-        request_msg = json.dumps({
-            "type": "vision_request",
-            "question": question,
-            "room_name": self._room_name,
-        })
-        try:
-            await self._room.local_participant.publish_data(
-                request_msg.encode("utf-8"),
-                reliable=True,
-            )
-            logger.info(f"[arrival-agent] Sent vision_request to frontend: {question[:60]}...")
-        except Exception as e:
-            logger.error(f"[arrival-agent] Failed to send vision_request: {e}")
-            return None
-
-        # Wait for frontend to capture, analyze, and send back result
-        # Budget: ~1s capture + ~3s API call + ~1s latency = ~5s typical
-        try:
-            await asyncio.wait_for(self._vision_event.wait(), timeout=10.0)
-            result = self._pending_vision_result
-            self._pending_vision_result = None
-            self._vision_event = None
-            return result
-        except asyncio.TimeoutError:
-            logger.warning("[arrival-agent] Vision request to frontend timed out (10s)")
-            self._vision_event = None
-            return None
-
     async def get_current_frame(self) -> Optional[str]:
         """Get the best available frame — tries data channel, HTTP, file store."""
-        # 1. Data channel frame (if recent) — fastest, no I/O
+        # 1. Data channel frame (if recent) — fastest
         if self._latest_frame and (time.time() - self._frame_received_at) < 30:
-            logger.info(f"[arrival-agent] Using data channel frame ({len(self._latest_frame)} chars)")
             return self._latest_frame
 
-        # 2. Async HTTP from FastAPI — non-blocking, cross-process
+        # 2. HTTP from FastAPI
         if self._room_name:
             http_frame = await self._fetch_frame_async(self._room_name)
             if http_frame:
                 return http_frame
-
             # 3. File store fallback
             file_frame = get_frame(self._room_name)
             if file_frame:
-                logger.info(f"[arrival-agent] Using file store frame ({len(file_frame)} chars)")
                 return file_frame
 
-        # 4. Stale data channel frame as last resort
-        if self._latest_frame:
-            logger.info("[arrival-agent] Using stale data channel frame")
+        # 4. Stale frame as last resort
         return self._latest_frame
 
     async def _fetch_frame_async(self, room_name: str) -> Optional[str]:
-        """Fetch frame via async HTTP — doesn't block the LiveKit event loop."""
+        """Fetch frame via async HTTP."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:
                 for url_template in _FRAME_URLS:
                     url = url_template.format(room=room_name)
                     try:
@@ -319,12 +254,11 @@ class ArrivalAgent(Agent):
                         if resp.status_code == 200:
                             frame = resp.json().get("frame")
                             if frame:
-                                logger.info(f"[arrival-agent] ✓ Frame via HTTP ({len(frame)} chars)")
                                 return frame
-                    except Exception as e:
-                        logger.debug(f"[arrival-agent] Frame fetch failed ({url[:40]}): {e}")
-        except Exception as e:
-            logger.debug(f"[arrival-agent] HTTP client error: {e}")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         return None
 
     def _frame_hash(self, frame: str) -> str:
@@ -350,34 +284,24 @@ class ArrivalAgent(Agent):
         result = lookup_error_code(query)
         if result:
             context = format_error_code_context(result)
-            logger.info(f"[arrival-agent] Found: {result['brand']} {result['code']}")
             return context
-        logger.info("[arrival-agent] No error code match found")
         return ("No verified error code found for that query. "
                 "Tell the tech you don't have that code memorized and "
                 "ask what the chart on the unit shows.")
 
     @function_tool()
     async def search_knowledge(self, query: str) -> str:
-        """Search the knowledge base for manuals, building codes, specs, troubleshooting guides,
-        and technical reference material. Use this when the tech asks about:
-        - Building codes, permits, or regulations (NEC, UPC, IMC, IRC)
-        - Equipment specs, installation requirements, or clearances
-        - Manufacturer manuals or technical bulletins
-        - Pipe sizing, wire sizing, duct sizing tables
-        - Refrigerant charging, superheat/subcooling targets
-        - Any technical question where you need reference data to give a precise answer.
-        Pass the question naturally, like 'wire size for 40 amp circuit' or 'Rheem water heater manual'."""
+        """Search the knowledge base for manuals, building codes, specs, troubleshooting guides.
+        Use for building codes, equipment specs, manufacturer manuals, pipe/wire/duct sizing,
+        refrigerant charging, or any technical question needing reference data."""
         logger.info(f"[arrival-agent] Knowledge search: {query}")
         try:
-            # Search global knowledge + user docs (user_id "voice_agent" for global-only access)
             results = await retrieve_context(
                 user_id="voice_agent",
                 query=query,
                 top_k=3,
             )
             if results:
-                # Format results for the LLM
                 context_parts = []
                 for r in results:
                     source = r.get("filename", "knowledge base")
@@ -385,103 +309,54 @@ class ArrivalAgent(Agent):
                     score = r.get("score", 0)
                     context_parts.append(f"[Source: {source} (relevance: {score:.2f})]\n{text}")
                 context = "\n\n---\n\n".join(context_parts)
-                logger.info(f"[arrival-agent] Knowledge search returned {len(results)} results")
-                return f"## Reference Material Found\n\n{context}\n\nUse this information to answer the tech's question accurately. Cite specific numbers and specs."
-            logger.info("[arrival-agent] No knowledge base results")
-            return "No matching reference material found in the knowledge base. Answer from your training knowledge, but be upfront if you're not 100% sure."
+                return f"## Reference Material Found\n\n{context}\n\nUse this to answer accurately. Cite specific numbers."
+            return "No matching reference material found. Answer from training knowledge, but be upfront if not sure."
         except Exception as e:
             logger.warning(f"[arrival-agent] Knowledge search failed: {e}")
-            return "Knowledge base search failed. Answer from your training knowledge, but be upfront if you're not 100% sure."
-
-    async def _analyze_frame_local(self, frame_b64: str, question: str) -> Optional[str]:
-        """Analyze a frame directly with Claude Vision — fastest path, no network roundtrip."""
-        client = _get_anthropic_client()
-        response = await client.messages.create(
-            model=config.ANTHROPIC_VOICE_MODEL,
-            max_tokens=300,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "You're a 50-year trade veteran looking at this through a tech's phone camera. "
-                            f"{question}. Be specific and practical, 1-3 sentences. "
-                            "If you can read any model numbers, brands, or error codes, mention them."
-                        ),
-                    },
-                ],
-            }],
-        )
-        return response.content[0].text
+            return "Knowledge search failed. Answer from training knowledge, but be upfront if not sure."
 
     @function_tool()
     async def look_at_camera(self, question: str) -> str:
-        """Look at what the user's phone camera sees. Use this when they ask you to
-        look at something, identify something, check something, read a model number,
-        or ask 'what do you see' / 'what am I looking at' / 'what's wrong here'."""
-        logger.info(f"[arrival-agent] ★ look_at_camera called — room={self._room_name}, q={question[:60]}")
+        """Look at what the camera sees RIGHT NOW. Use when the tech asks you to look at,
+        identify, check, or read something visual. You already see the camera feed —
+        this just gives you a detailed look. NEVER say 'let me take a look' — just answer."""
+        logger.info(f"[arrival-agent] ★ look_at_camera: {question[:60]}")
 
-        # METHOD 1 (fastest): Direct — use cached frame + local Claude Vision
-        # Frame is already in memory from data channel or HTTP fetch. No roundtrip needed.
+        # Use cached frame — no roundtrip, instant
         frame = await self.get_current_frame()
-        if frame:
-            logger.info(f"[arrival-agent] METHOD 1: direct vision ({len(frame)} chars)...")
-            try:
-                result = await self._analyze_frame_local(frame, question)
-                if result:
-                    logger.info(f"[arrival-agent] ✓ METHOD 1 SUCCESS: {result[:80]}...")
-                    return result
-            except Exception as e:
-                logger.warning(f"[arrival-agent] METHOD 1 failed: {e}")
+        if not frame:
+            return "Camera feed is momentarily unavailable. Just describe what you're looking at."
 
-        # METHOD 2: Ask frontend to capture fresh frame + analyze via API
-        # Frontend can always reach the backend — more reliable than agent→FastAPI
-        logger.info("[arrival-agent] METHOD 2: frontend data channel...")
-        result = await self._request_vision_via_frontend(question)
-        if result:
-            logger.info(f"[arrival-agent] ✓ METHOD 2 SUCCESS: {result[:80]}...")
+        try:
+            client = _get_anthropic_client()
+            response = await client.messages.create(
+                model=config.ANTHROPIC_VOICE_MODEL,
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/jpeg", "data": frame},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "You're a 50-year trade veteran looking at this through a tech's phone camera. "
+                                f"{question}. Be specific and practical, 1-3 sentences. "
+                                "Read any model numbers, brands, labels, or error codes you can see. "
+                                "If something looks wrong, say what and why."
+                            ),
+                        },
+                    ],
+                }],
+            )
+            result = response.content[0].text
+            logger.info(f"[arrival-agent] ✓ Vision result: {result[:80]}...")
             return result
-
-        # METHOD 3: Direct API call from agent to FastAPI (least reliable)
-        logger.info("[arrival-agent] METHOD 3: API call...")
-        result = await self._analyze_via_api(self._room_name, question)
-        if result:
-            logger.info(f"[arrival-agent] ✓ METHOD 3 SUCCESS: {result[:80]}...")
-            return result
-
-        # ALL METHODS FAILED
-        logger.error(f"[arrival-agent] ✗ ALL VISION METHODS FAILED — room={self._room_name}")
-        return ("My camera connection is having a technical glitch right now. "
-                "Just describe what you're looking at and I'll help you out.")
-
-    async def _analyze_via_api(self, room_name: str, question: str) -> Optional[str]:
-        """Ask FastAPI to analyze the frame — it has the frame in its own process."""
-        urls = [
-            f"http://127.0.0.1:{_FASTAPI_PORT}/api/livekit-analyze",
-            "https://arrival-backend-81x7.onrender.com/api/livekit-analyze",
-        ]
-        for url in urls:
-            try:
-                async with httpx.AsyncClient(timeout=6.0) as client:
-                    resp = await client.post(url, json={
-                        "room_name": room_name,
-                        "question": question,
-                    })
-                    if resp.status_code == 200:
-                        result = resp.json().get("analysis")
-                        if result:
-                            logger.info(f"[arrival-agent] ✓ Vision via API ({url[:40]}): {result[:60]}...")
-                            return result
-                    else:
-                        logger.warning(f"[arrival-agent] API {resp.status_code} ({url[:40]}): {resp.text[:100]}")
-            except Exception as e:
-                logger.warning(f"[arrival-agent] API call failed ({url[:40]}): {type(e).__name__}: {e}")
-        return None
+        except Exception as e:
+            logger.warning(f"[arrival-agent] Vision failed: {e}")
+            return "Camera glitch — just describe what you're looking at and I'll help."
 
 
 # ---------------------------------------------------------------------------
@@ -489,18 +364,16 @@ class ArrivalAgent(Agent):
 # ---------------------------------------------------------------------------
 
 async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str]) -> Optional[str]:
-    """Analyze a frame directly with Claude Vision for proactive monitoring.
-    Returns a short observation string or None if nothing notable."""
+    """Analyze a frame directly with Claude Vision for proactive monitoring."""
     client = _get_anthropic_client()
 
-    # Build context from recent observations to avoid repeats
     context = ""
     if recent_observations:
         context = f"\nYou already mentioned: {'; '.join(recent_observations[-3:])}. Don't repeat these."
 
     response = await client.messages.create(
         model=config.ANTHROPIC_VOICE_MODEL,
-        max_tokens=100,
+        max_tokens=150,
         messages=[{
             "role": "user",
             "content": [
@@ -511,15 +384,20 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
                 {
                     "type": "text",
                     "text": (
-                        "You're a 50-year trade veteran watching a job site through a phone camera. "
-                        "Is there anything worth speaking up about RIGHT NOW?\n\n"
-                        "SPEAK UP about: safety hazards (exposed wires, flame, water near electrical, gas), "
-                        "visible problems (wrong fitting, corroded connections, code violations), "
-                        "readable model/serial numbers the tech might need.\n\n"
-                        "STAY QUIET about: normal equipment, tools, general scene, things that look fine, "
-                        "blurry or unclear frames.\n\n"
+                        "You're a 50-year trade veteran watching a job through a phone camera. "
+                        "You're their experienced buddy — observant, helpful, not annoying.\n\n"
+                        "SPEAK UP about:\n"
+                        "- Safety hazards (exposed wires, flame issues, water near electrical, gas leaks)\n"
+                        "- Visible problems (wrong fitting, corroded connections, code violations)\n"
+                        "- Readable model/serial numbers the tech might want to know\n"
+                        "- Something that looks off based on what you'd expect to see\n"
+                        "- A helpful tip based on what equipment you see (like a veteran would share)\n\n"
+                        "STAY QUIET about:\n"
+                        "- Things that look normal and fine\n"
+                        "- Blurry or unclear frames where you can't make out details\n"
+                        "- Things you already mentioned\n\n"
                         f"{context}\n\n"
-                        "If something is worth mentioning, respond with ONE short sentence a veteran would say. "
+                        "If something is worth mentioning, give ONE short sentence a veteran would casually say. "
                         "If nothing notable, respond with exactly: NOTHING"
                     ),
                 },
@@ -528,7 +406,6 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
     )
     result = response.content[0].text.strip()
 
-    # Filter out non-observations
     if result.upper() == "NOTHING" or len(result) < 5:
         return None
     if "nothing" in result.lower() and len(result) < 30:
@@ -540,19 +417,10 @@ async def _analyze_frame_proactive(frame_b64: str, recent_observations: list[str
 
 
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
-    """Background task: reads camera frames and speaks up when something's notable.
-
-    Uses TWO frame sources (in priority order):
-    1. Data channel frame cached on agent (fastest, no I/O)
-    2. File-based frame store in /tmp (shared between agent + FastAPI processes)
-
-    Analyzes directly with Claude Vision API — no frontend roundtrip.
-    Falls back to frontend data channel if no local frames available.
-    """
+    """Background task: continuously watches camera and speaks up when something's notable."""
     logger.info("[proactive] Monitor started — waiting for greeting to finish...")
 
-    # Wait for greeting to finish then start watching immediately
-    await asyncio.sleep(5)
+    await asyncio.sleep(6)
 
     last_analysis_time = 0
 
@@ -560,63 +428,43 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
         try:
             await asyncio.sleep(PROACTIVE_CHECK_INTERVAL)
 
-            # Skip if proactive disabled or no room
             if not agent._proactive_enabled or not agent._room_name:
                 continue
 
             now = time.time()
 
-            # Cooldown check — don't spam the tech
+            # Cooldown — don't spam
             cooldown = PROACTIVE_PUSHBACK_COOLDOWN if agent._user_pushback_count > 2 else PROACTIVE_MIN_COOLDOWN
             if now - agent._last_proactive_time < cooldown:
                 continue
 
-            # Don't interrupt active conversation — wait 8s after user last spoke
-            if now - agent._last_user_speech_time < 8:
-                logger.debug("[proactive] User recently spoke — skipping to avoid interrupt")
+            # Don't interrupt active conversation
+            if now - agent._last_user_speech_time < 6:
                 continue
 
-            # --- Get frame (local first, then fallback) ---
+            # Get frame
             frame = None
-
-            # Source 1: Data channel frame cached on agent
             if agent._latest_frame and (now - agent._frame_received_at) < 30:
                 frame = agent._latest_frame
-                logger.debug("[proactive] Using data channel frame")
-
-            # Source 2: File-based frame store (/tmp — shared filesystem)
             if not frame:
                 frame = get_frame(agent._room_name)
-                if frame:
-                    logger.debug("[proactive] Using frame store frame")
-
             if not frame:
-                logger.debug("[proactive] No frame available — skipping cycle")
                 continue
 
-            # Frame diffing — skip if scene hasn't changed (saves API calls)
-            force_analyze = (now - last_analysis_time) > 15  # Re-analyze at least every 15s
+            # Frame diffing — skip if scene hasn't changed
+            force_analyze = (now - last_analysis_time) > 20
             if not force_analyze and not agent._frame_changed(frame):
-                logger.debug("[proactive] Frame unchanged — skipping")
                 continue
 
-            # --- Analyze frame directly with Claude Vision ---
-            logger.debug("[proactive] Analyzing frame directly...")
+            # Analyze
             agent._last_analyzed_hash = agent._frame_hash(frame)
             last_analysis_time = now
 
             try:
                 observation = await _analyze_frame_proactive(frame, agent._recent_observations)
             except Exception as e:
-                logger.warning(f"[proactive] Direct vision failed: {e} — trying frontend fallback")
-                # Fallback: ask frontend to do it
-                observation = await agent._request_vision_via_frontend(
-                    "Is there anything worth speaking up about RIGHT NOW? "
-                    "Safety hazards, visible problems, readable model/serial numbers. "
-                    "If nothing notable, respond with exactly: NOTHING"
-                )
-                if observation and ("NOTHING" in observation.upper() or len(observation) < 5):
-                    observation = None
+                logger.warning(f"[proactive] Vision failed: {e}")
+                continue
 
             if observation:
                 # Check for repeats
@@ -625,7 +473,6 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     for obs in agent._recent_observations[-3:]
                 )
                 if is_repeat:
-                    logger.debug(f"[proactive] Skipping repeat: {observation[:60]}...")
                     continue
 
                 logger.info(f"[proactive] ★ ALERT: {observation}")
@@ -638,11 +485,30 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     agent._recent_observations.pop(0)
 
         except asyncio.CancelledError:
-            logger.info("[proactive] Monitor cancelled — shutting down")
             break
         except Exception as e:
             logger.warning(f"[proactive] Error: {e}")
             await asyncio.sleep(5)
+
+
+# ---------------------------------------------------------------------------
+# Frame injection — attach latest frame to every LLM call
+# ---------------------------------------------------------------------------
+
+def _build_frame_context(frame_b64: Optional[str]) -> list[dict]:
+    """Build multimodal content blocks with the current frame for LLM context."""
+    if not frame_b64:
+        return []
+    return [
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+        },
+        {
+            "type": "text",
+            "text": "[This is what the tech's phone camera is showing you RIGHT NOW. You can always see this. Describe what you see when asked.]",
+        },
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -680,8 +546,7 @@ async def entrypoint(ctx: JobContext):
         # Select prompt based on mode
         prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
 
-        # Load ML models with fallback — these download on first use and may fail
-        # on memory-constrained environments (Render free tier = 512MB)
+        # Load ML models with fallback
         vad = None
         turn_det = None
         if silero is not None:
@@ -689,25 +554,15 @@ async def entrypoint(ctx: JobContext):
                 vad = silero.VAD.load()
                 logger.info("[arrival-agent] ✓ Silero VAD loaded")
             except Exception as e:
-                logger.warning(f"[arrival-agent] Silero VAD failed: {e} — running without VAD")
-        else:
-            logger.info("[arrival-agent] Silero not available — skipping VAD")
-
+                logger.warning(f"[arrival-agent] Silero VAD failed: {e}")
         if MultilingualModel is not None:
             try:
                 turn_det = MultilingualModel()
                 logger.info("[arrival-agent] ✓ Turn detector loaded")
             except Exception as e:
-                logger.warning(f"[arrival-agent] Turn detector failed: {e} — using default")
-        else:
-            logger.info("[arrival-agent] MultilingualModel not available — skipping turn detection")
+                logger.warning(f"[arrival-agent] Turn detector failed: {e}")
 
-        # Log API key status
-        logger.info(f"[arrival-agent] DEEPGRAM key: {'set' if config.DEEPGRAM_API_KEY else 'MISSING'}")
-        logger.info(f"[arrival-agent] ANTHROPIC key: {'set' if config.ANTHROPIC_API_KEY else 'MISSING'}")
-        logger.info(f"[arrival-agent] ELEVENLABS key: {'set' if config.ELEVENLABS_API_KEY else 'MISSING'}")
-
-        # Create the voice pipeline — optimized for speed
+        # Create the voice pipeline
         session_kwargs = dict(
             stt=deepgram.STT(
                 model="nova-2",
@@ -736,18 +591,18 @@ async def entrypoint(ctx: JobContext):
         agent = ArrivalAgent(
             instructions=prompt,
             allow_interruptions=True,
-            min_endpointing_delay=0.5,
-            max_endpointing_delay=1.5,
+            min_endpointing_delay=0.3,
+            max_endpointing_delay=1.0,
         )
 
-        # Set room name and room reference for data channel messaging
+        # Set room name and room reference
         agent._room_name = room_name
         agent._room = ctx.room
 
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")
 
-        # Listen for data channel messages from the mobile app
+        # Listen for data channel messages from mobile app
         @ctx.room.on("data_received")
         def on_data(data_packet):
             try:
@@ -755,48 +610,45 @@ async def entrypoint(ctx: JobContext):
                 msg_type = payload.get("type", "")
 
                 if msg_type == "camera_frame" and payload.get("image"):
-                    # Direct camera frame via data channel (rarely used now)
                     agent.update_camera_frame(payload["image"])
-                    logger.debug("[arrival-agent] Camera frame via data channel (%d chars)", len(payload["image"]))
 
-                elif msg_type == "vision_result":
-                    # Frontend analyzed a frame and sent back the result
-                    analysis = payload.get("analysis", "")
-                    if analysis:
-                        agent.on_vision_result(analysis)
-                    else:
-                        logger.warning("[arrival-agent] Empty vision_result from frontend")
-                        # Still set the event so we don't hang forever
-                        agent._pending_vision_result = "Camera frame was unclear — try pointing it more directly."
-                        if agent._vision_event:
-                            agent._vision_event.set()
+            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+                pass
 
-                elif msg_type == "vision_error":
-                    # Frontend couldn't complete the vision analysis
-                    error_msg = payload.get("error", "unknown error")
-                    logger.warning(f"[arrival-agent] Vision error from frontend: {error_msg}")
-                    agent._pending_vision_result = None
-                    if agent._vision_event:
-                        agent._vision_event.set()
+        logger.info("[arrival-agent] ✓ Data channel listener registered")
 
-            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError) as e:
-                logger.debug(f"[arrival-agent] Data channel parse error: {e}")
-
-        logger.info("[arrival-agent] ✓ Data channel listener registered (camera + vision)")
-
-        # Track user speech so proactive monitor doesn't interrupt conversations
+        # Track user speech for proactive monitor
         @session.on("user_input_transcribed")
         def on_user_speech(ev):
             agent._last_user_speech_time = time.time()
 
-        # Start proactive vision monitor (job mode only)
+        # Background task: keep injecting latest frame into agent context
+        async def frame_injector():
+            """Continuously update the agent's context with the latest camera frame."""
+            while True:
+                try:
+                    await asyncio.sleep(3)
+                    frame = await agent.get_current_frame()
+                    if frame:
+                        # Update the agent's instructions with frame context
+                        # This makes the frame available to the LLM on every turn
+                        agent._latest_frame = frame
+                        agent._frame_received_at = time.time()
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.debug(f"[frame-injector] Error: {e}")
+
+        # Start background tasks
+        injector_task = asyncio.create_task(frame_injector())
+
         monitor_task = None
         if mode == "job":
             monitor_task = asyncio.create_task(proactive_monitor(agent, session))
             logger.info("[arrival-agent] ✓ Proactive vision monitor started")
 
-        # Greeting — don't lie about vision, just say hi
-        await asyncio.sleep(2)
+        # Greeting
+        await asyncio.sleep(1.5)
         await session.generate_reply(
             instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
         )
