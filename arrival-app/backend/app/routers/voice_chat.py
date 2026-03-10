@@ -216,11 +216,6 @@ async def voice_chat(
 
         logger.info(f"[voice-chat] STT done in {time.monotonic()-t0:.2f}s: '{transcript[:50]}…' (team={team_id})")
 
-        # Job mode: skip RAG entirely — the system prompt + 50-year vet personality
-        # has enough trade knowledge. RAG adds 1-3s latency and job mode needs to
-        # feel like a real conversation, not a document search.
-        _skip_rag = request.mode == "job"
-
         # ALL MODES: Strip image unless transcript contains visual keywords.
         # Without this, Claude sees the camera frame and describes it even when
         # the user asks a non-visual question like "test" or "what size wire?".
@@ -239,28 +234,22 @@ async def voice_chat(
             request.image_base64 = None
 
         # 2. Usage check + RAG doc search in parallel (searches both user + team namespaces)
+        # All modes (text, voice, job) get full RAG access to manuals + uploaded docs.
         t1 = time.monotonic()
-        if _skip_rag:
-            # Job mode: skip RAG entirely — saves 1-3s per response
-            logger.info("[voice-chat] Job mode: skipping RAG for conversational speed")
-            usage_result = await check_query_limit(user_id)
-            usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
-            rag_context = []
-        else:
-            usage_result, rag_result = await asyncio.gather(
-                check_query_limit(user_id),
-                retrieve_context(user_id, transcript, team_id=team_id),
-                return_exceptions=True,
-            )
-            # Handle usage check
-            usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
-            if isinstance(usage_result, Exception):
-                logger.warning(f"Usage check failed: {usage_result}")
+        usage_result, rag_result = await asyncio.gather(
+            check_query_limit(user_id),
+            retrieve_context(user_id, transcript, team_id=team_id),
+            return_exceptions=True,
+        )
+        # Handle usage check
+        usage = usage_result if not isinstance(usage_result, Exception) else {"allowed": True}
+        if isinstance(usage_result, Exception):
+            logger.warning(f"Usage check failed: {usage_result}")
 
-            # Handle RAG results
-            rag_context = rag_result if not isinstance(rag_result, Exception) else []
-            if isinstance(rag_result, Exception):
-                logger.warning(f"RAG retrieval failed: {rag_result}")
+        # Handle RAG results
+        rag_context = rag_result if not isinstance(rag_result, Exception) else []
+        if isinstance(rag_result, Exception):
+            logger.warning(f"RAG retrieval failed: {rag_result}")
 
         if not usage["allowed"]:
             raise HTTPException(
