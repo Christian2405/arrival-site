@@ -514,65 +514,22 @@ export default function HomeScreen() {
       const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
       const currentDemoMode = useSettingsStore.getState().demoMode;
 
-      // Create a placeholder assistant message that we'll stream into
-      const assistantId = generateId();
-      addMessage({
-        id: assistantId, role: 'assistant', content: '',
-        displayMode: 'text', timestamp: new Date(),
-      });
-
-      let fullText = '';
-      await aiAPI.chatStream(
+      const response = await aiAPI.chat(
         text,
-        // onChunk — append each text chunk to the message
-        (chunk: string) => {
-          fullText += chunk;
-          const conv = useConversationStore.getState().currentConversation;
-          if (conv) {
-            const updatedMessages = conv.messages.map(m =>
-              m.id === assistantId ? { ...m, content: fullText } : m
-            );
-            useConversationStore.setState(state => ({
-              currentConversation: state.currentConversation
-                ? { ...state.currentConversation, messages: updatedMessages }
-                : null,
-            }));
-          }
-        },
-        // onDone — update source + confidence
-        (meta: { source?: string; confidence?: string }) => {
-          const conv = useConversationStore.getState().currentConversation;
-          if (conv) {
-            const updatedMessages = conv.messages.map(m =>
-              m.id === assistantId ? { ...m, source: meta.source, confidence: validateConfidence(meta.confidence) } : m
-            );
-            useConversationStore.setState(state => ({
-              currentConversation: state.currentConversation
-                ? { ...state.currentConversation, messages: updatedMessages }
-                : null,
-            }));
-          }
-        },
-        // onError
-        (error: string) => {
-          const conv = useConversationStore.getState().currentConversation;
-          if (conv) {
-            const updatedMessages = conv.messages.map(m =>
-              m.id === assistantId ? { ...m, content: 'Something went wrong. Please try again.' } : m
-            );
-            useConversationStore.setState(state => ({
-              currentConversation: state.currentConversation
-                ? { ...state.currentConversation, messages: updatedMessages }
-                : null,
-            }));
-          }
-        },
         imageForThisMessage,
         history,
         currentDemoMode,
         useSettingsStore.getState().units,
         imageIsManual,
       );
+
+      addMessage({
+        id: generateId(), role: 'assistant',
+        content: response.response || response.message || 'No response.',
+        source: response.source,
+        confidence: validateConfidence(response.confidence),
+        displayMode: 'text', timestamp: new Date(),
+      });
 
       // Optimistic usage increment
       if (!currentDemoMode) incrementQueryCount();
