@@ -50,6 +50,44 @@ function validateConfidence(v?: string): Message['confidence'] | undefined {
   return v && ['high', 'medium', 'low'].includes(v) ? v as Message['confidence'] : undefined;
 }
 
+// Animated thinking dots indicator
+function ThinkingDots() {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animate = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 400, useNativeDriver: true }),
+        ])
+      );
+    const a1 = animate(dot1, 0);
+    const a2 = animate(dot2, 150);
+    const a3 = animate(dot3, 300);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, []);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 }}>
+      {[dot1, dot2, dot3].map((dot, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 7, height: 7, borderRadius: 3.5,
+            backgroundColor: Colors.textMuted,
+            opacity: dot,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -558,6 +596,9 @@ export default function HomeScreen() {
       return;
     }
 
+    // Dismiss keyboard when switching modes
+    Keyboard.dismiss();
+
     // Cancel in-progress work (Bug 1: use ref)
     if (recordingRef.current) {
       try { await recordingRef.current.stopAndUnloadAsync(); } catch {}
@@ -635,6 +676,7 @@ export default function HomeScreen() {
             const result = await aiAPI.analyzeFrame(frame, recentAlerts);
             if (result.alert && result.message) {
               jobAlertHistoryRef.current.push(result.message);
+              if (jobAlertHistoryRef.current.length > 20) jobAlertHistoryRef.current = jobAlertHistoryRef.current.slice(-20);
               setLastJobAlert({ message: result.message, severity: result.severity || 'warning', ts: Date.now() });
               addMessage({
                 id: generateId(), role: 'assistant', content: result.message,
@@ -666,6 +708,7 @@ export default function HomeScreen() {
         {
           onAlert: async (message, severity) => {
             jobAlertHistoryRef.current.push(message);
+            if (jobAlertHistoryRef.current.length > 20) jobAlertHistoryRef.current = jobAlertHistoryRef.current.slice(-20);
             setLastJobAlert({ message, severity, ts: Date.now() });
             addMessage({
               id: generateId(), role: 'assistant', content: message,
@@ -756,6 +799,7 @@ export default function HomeScreen() {
         {
           onAlert: async (message, severity) => {
             jobAlertHistoryRef.current.push(message);
+            if (jobAlertHistoryRef.current.length > 20) jobAlertHistoryRef.current = jobAlertHistoryRef.current.slice(-20);
             setLastJobAlert({ message, severity, ts: Date.now() });
             addMessage({
               id: generateId(), role: 'assistant', content: message,
@@ -1045,10 +1089,15 @@ export default function HomeScreen() {
                   </View>
                 )}
 
-                {/* Processing indicator */}
+                {/* Processing indicator — animated skeleton bubble */}
                 {isProcessing && (
-                  <View style={styles.processingRow}>
-                    <Text style={styles.processingText}>Thinking...</Text>
+                  <View style={styles.thinkingContainer}>
+                    <View style={styles.thinkingAvatar}>
+                      <Ionicons name="sparkles" size={IconSize.sm} color={Colors.accent} />
+                    </View>
+                    <View style={styles.thinkingBubble}>
+                      <ThinkingDots />
+                    </View>
                   </View>
                 )}
 
@@ -1530,6 +1579,34 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     fontSize: FontSize.sm,
     fontStyle: 'italic',
+  },
+  thinkingContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.xs,
+  },
+  thinkingAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.accentMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+    marginBottom: 2,
+  },
+  thinkingBubble: {
+    backgroundColor: Colors.glassBg,
+    borderRadius: Radius.lg,
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   // --- Text Mode: Input bar ---

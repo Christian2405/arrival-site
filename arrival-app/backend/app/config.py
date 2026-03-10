@@ -93,6 +93,29 @@ Example — "Rheem furnace 3 blinks":
 - AO Smith: Standard tank water heaters. Status light blink codes on gas models. Vertex is their premium condensing line.
 - Square D: QO series is commercial-grade (better trip curves). Homeline is residential/budget. Don't mix QO and HOM breakers in panels.
 - Mitsubishi/Fujitsu/Daikin: Mini-split leaders. Error codes displayed on remote or indoor unit LEDs. Refrigerant charge is critical on these.
+- Navien: Premium tankless and combi-boilers. E003 = ignition failure (most common). Annual flush critical. Uses stainless steel heat exchangers.
+- Noritz: Solid tankless units. Code 11 = ignition failure, code 90 = combustion abnormality. Dip switch settings matter on install.
+- LG/Samsung: Mini-splits and appliances. CH codes on LG (CH01 = indoor thermistor), E codes on Samsung. Samsung washer VRT+ common issue.
+- Weil-McLain: Cast iron and stainless steel boilers. E01 = ignition lockout. Purge trapped air on new installs.
+- Whirlpool/Maytag/KitchenAid: Same manufacturer. F codes on ovens, F+E codes on washers. Door latch issues on front-loaders are #1 service call.
+- Bosch: Tankless water heaters and dishwashers. E09 = heating element (dishwasher). Tankless units need annual descaling.
+- Bradford White: Commercial and residential water heaters. Defender Safety System. Icon display codes.
+- GE/Hotpoint: Appliances. F codes on ovens. GE Profile refrigerators — motherboard failures on 5-8yr units.
+
+## Construction Reference
+- Framing: 2x4 studs 16" OC standard walls. 2x6 for exterior in cold climates (better insulation). Headers: 2x6 up to 4ft span, 2x8 up to 6ft, 2x10 up to 8ft, 2x12 up to 10ft. Double top plates, single bottom plate.
+- Load-bearing walls: Run perpendicular to joists above. Removing requires properly sized beam (LVL or steel) with adequate bearing points.
+- Concrete: Standard mix 4000 PSI for residential. 28-day cure for full strength. 3-4" thickness for slabs. Rebar on 18-24" centers. Control joints every 8-12ft. Cure with water or curing compound — don't let it dry too fast.
+- Roofing: Starter strip at eaves + rake. Ice/water shield in first 24" from eave (or 2ft past interior wall). 30lb felt or synthetic underlayment. Shingles need 4 nails each (6 in high wind zones). Step flashing at walls — never just caulk.
+- Insulation R-values: Zone 1-2: R-13 walls, R-30 ceiling. Zone 3: R-13 walls, R-38 ceiling. Zone 4-5: R-20 walls, R-49 ceiling. Zone 6-7: R-21 walls, R-49 ceiling.
+- Deck: Posts on concrete piers below frost line. 4x4 posts up to 8ft, 6x6 for taller. Ledger board lag bolted to rim joist with flashing. Joist spacing per span tables — 2x8 @ 16"OC spans ~10.5ft.
+
+## Safety Quick Reference
+- Fall protection required at 6ft (OSHA 1926.502). Guardrails 42" top rail, mid-rail at 21".
+- Ladder 4:1 ratio (1ft out for every 4ft up). 3ft extension past landing. 3-point contact always.
+- Lockout/tagout: verify zero energy before touching anything electrical. Use YOUR lock, not someone else's.
+- Trenching: Anything over 5ft deep needs shoring or sloped walls. Type C soil = 1.5:1 slope (most conservative).
+- PPE minimum on any job site: hard hat, safety glasses, steel/composite toe boots, high-vis vest.
 
 ## Wire Sizing (NEC Reference)
 Quick reference — copper, THHN, 75°C column, single phase:

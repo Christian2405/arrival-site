@@ -29,6 +29,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -297,6 +298,8 @@ class ArrivalAgent(Agent):
         self._observations_ignored: int = 0  # consecutive ignores
         # Category-based de-duplication
         self._observation_categories: dict[str, float] = {}  # category → timestamp
+        # Consecutive failure tracking for proactive analysis
+        self._proactive_consecutive_failures: int = 0
         # Error code pre-injection tracking
         self._has_injected_codes: bool = False
 
@@ -547,16 +550,38 @@ def _get_speech_instruction(severity: str, observation: str, agent: "ArrivalAgen
     time_since_last = time.time() - agent._last_proactive_time if agent._last_proactive_time else 999
 
     if severity == "SAFETY":
-        return f"Alert the tech immediately — this is a safety issue: {observation}"
+        templates = [
+            f"Alert the tech immediately — this is a safety issue: {observation}",
+            f"Stop what you're doing — {observation}",
+            f"Hold on, I see something: {observation}",
+            f"Hey, heads up: {observation}",
+        ]
+        return random.choice(templates)
     elif obs_count == 0:
         # First observation on this job
-        return f"You just got a look at what they're working on. Mention casually: {observation}"
+        templates = [
+            f"You just got a look at what they're working on. Mention casually: {observation}",
+            f"Alright, I can see what you're working with. {observation}",
+            f"OK so looking at this — {observation}",
+        ]
+        return random.choice(templates)
     elif time_since_last < 60:
         # Recent follow-up
-        return f"While they're still working on this, you also noticed: {observation}"
+        templates = [
+            f"While they're still working on this, you also noticed: {observation}",
+            f"Also noticing: {observation}",
+            f"One more thing — {observation}",
+            f"And just so you know: {observation}",
+        ]
+        return random.choice(templates)
     else:
-        # After a long pause
-        return f"Hey, one more thing you're seeing: {observation}"
+        # After a gap (> 60s since last observation)
+        templates = [
+            f"Hey, one more thing you're seeing: {observation}",
+            f"Hey, something I'm seeing: {observation}",
+            f"Just spotted something: {observation}",
+        ]
+        return random.choice(templates)
 
 
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
@@ -577,7 +602,9 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
     while True:
         try:
-            await asyncio.sleep(PROACTIVE_CHECK_INTERVAL)
+            # Use longer interval (15s) if 3+ consecutive analysis failures
+            check_interval = 15 if agent._proactive_consecutive_failures >= 3 else PROACTIVE_CHECK_INTERVAL
+            await asyncio.sleep(check_interval)
 
             if not agent._proactive_enabled or not agent._room_name:
                 continue
@@ -625,8 +652,16 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     list(agent._recent_observations),
                     conversation_context=list(agent._conversation_context),
                 )
+                # Reset consecutive failure counter on successful analysis
+                if agent._proactive_consecutive_failures > 0:
+                    logger.info(f"[proactive] Analysis succeeded after {agent._proactive_consecutive_failures} failures — resetting interval to {PROACTIVE_CHECK_INTERVAL}s")
+                agent._proactive_consecutive_failures = 0
             except Exception as e:
-                logger.warning(f"[proactive] Vision failed: {e}")
+                agent._proactive_consecutive_failures += 1
+                if agent._proactive_consecutive_failures >= 3:
+                    logger.warning(f"[proactive] Vision failed {agent._proactive_consecutive_failures}x in a row: {e} — backing off to 15s")
+                else:
+                    logger.warning(f"[proactive] Vision failed ({agent._proactive_consecutive_failures}/3): {e}")
                 continue
 
             # Only update hash after successful analysis (so failed frames get retried)
@@ -829,9 +864,12 @@ async def entrypoint(ctx: JobContext):
         logger.info("[arrival-agent] ✓ Data channel listener registered")
 
         # Track user speech for proactive monitor + engagement + mute detection
-        # Only match mute/pushback in SHORT utterances to avoid false positives
-        # (e.g., "stop valve" or "it's fine copper tubing" should NOT trigger)
-        _MUTE_PHRASES = {"stop", "shut up", "quiet", "be quiet", "enough", "shh", "hush", "stop talking"}
+        # Only match mute/pushback when the ENTIRE utterance matches exactly
+        # to avoid false positives (e.g., "stop valve testing" should NOT trigger)
+        _MUTE_PHRASES = {
+            "stop", "stop talking", "be quiet", "shut up", "mute", "quiet",
+            "hush", "enough", "stop it", "that's enough", "ok stop", "okay stop",
+        }
         _PUSHBACK_PHRASES = {"it's fine", "that's fine", "not an issue", "i know", "already know", "don't worry"}
 
         @session.on("user_input_transcribed")
@@ -843,9 +881,9 @@ async def entrypoint(ctx: JobContext):
 
             text_lower = transcript.lower().strip()
 
-            # Store conversation context (for proactive analyzer)
+            # Store conversation context (for proactive analyzer) — 10 messages = 5 turns
             agent._conversation_context.append({"role": "user", "content": transcript})
-            if len(agent._conversation_context) > 6:
+            if len(agent._conversation_context) > 10:
                 agent._conversation_context.pop(0)
 
             # Pre-inject error code data so LLM has it without needing a tool call.
@@ -864,16 +902,16 @@ async def entrypoint(ctx: JobContext):
                 agent.instructions = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
                 agent._has_injected_codes = False
 
-            # Detect mute commands — only on short utterances (< 6 words)
-            # to avoid false positives like "stop valve" or "that's quiet today"
-            word_count = len(text_lower.split())
-            if word_count <= 5 and any(phrase in text_lower for phrase in _MUTE_PHRASES):
+            # Detect mute commands — entire utterance must exactly match a mute phrase
+            # to avoid false positives like "stop valve testing" or "that's quiet today"
+            if text_lower in _MUTE_PHRASES:
                 agent._proactive_muted_until = time.time() + PROACTIVE_MUTE_DURATION
                 agent._awaiting_engagement = False
                 logger.info(f"[proactive] Muted for {PROACTIVE_MUTE_DURATION}s — user said: '{text_lower}'")
                 return
 
             # Detect pushback — only on short utterances (< 8 words)
+            word_count = len(text_lower.split())
             if word_count <= 7 and any(phrase in text_lower for phrase in _PUSHBACK_PHRASES):
                 agent._user_pushback_count += 1
                 agent._awaiting_engagement = False
@@ -881,14 +919,23 @@ async def entrypoint(ctx: JobContext):
                 return
 
             # Engagement detection — did user respond to our observation?
+            _ENGAGEMENT_STOPWORDS = {
+                "the", "a", "an", "is", "it", "that", "this", "what", "yeah",
+                "yes", "no", "ok", "okay", "i", "you", "we", "my", "its",
+                "was", "were", "are", "been", "be", "have", "has", "had",
+                "do", "does", "did", "will", "would", "could", "should", "can",
+                "just", "about", "so", "but", "and", "or", "if", "not",
+                "don't", "doesn't", "to", "in", "on", "of", "for", "at",
+            }
             if agent._awaiting_engagement and agent._last_observation_text:
                 elapsed = time.time() - agent._engagement_timer_start
                 if elapsed < ENGAGEMENT_RESPONSE_WINDOW:
-                    # Check if response is related (simple keyword overlap)
+                    # Check if response is related — require 2+ non-stopword keyword matches
+                    # or any question mark (user is asking about what was said)
                     obs_words = set(agent._last_observation_text.lower().split())
                     user_words = set(text_lower.split())
-                    overlap = (obs_words & user_words) - {"the", "a", "is", "it", "that", "this", "i", "you", "and", "or", "to"}
-                    if len(overlap) >= 1 or "?" in transcript:
+                    overlap = (obs_words & user_words) - _ENGAGEMENT_STOPWORDS
+                    if len(overlap) >= 2 or "?" in transcript:
                         # User engaged! Boost engagement score
                         agent._engagement_score = min(ENGAGEMENT_MAX, agent._engagement_score + ENGAGEMENT_BOOST)
                         agent._observations_ignored = 0
@@ -904,7 +951,7 @@ async def entrypoint(ctx: JobContext):
             text = getattr(ev, "text", "") or getattr(ev, "content", "") or ""
             if text:
                 agent._conversation_context.append({"role": "assistant", "content": text})
-                if len(agent._conversation_context) > 6:
+                if len(agent._conversation_context) > 10:
                     agent._conversation_context.pop(0)
 
         # Background task: keep injecting latest frame into agent context
