@@ -192,6 +192,8 @@ JOB_MODE_PROMPT = (
     "- Wire: 15A=14AWG, 20A=12AWG, 30A=10AWG, 40A=8AWG, 50A=6AWG\n"
     "- GFCI: bathrooms, kitchens countertop, garages, outdoors, crawlspaces\n"
     "- Drain slope: 1/4\" per foot for 2\" and smaller, 1/8\" for 3\" and larger\n"
+    "- Don't list 5 things when one is 90% likely. Lead with the most common cause.\n"
+    "- Use words like 'probably', 'usually', '9 times out of 10' — that's how real techs talk.\n"
 )
 
 
@@ -208,7 +210,57 @@ DEFAULT_MODE_PROMPT = (
     "- Use trade terminology naturally.\n"
     "- When giving specs, give the number.\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
-    "- If you don't know, say so in one sentence."
+    "- If you don't know, say so in one sentence.\n"
+    "- Don't list 5 things when one is 90% likely. Lead with the most common cause.\n"
+    "- Use words like 'probably', 'usually', '9 times out of 10' — that's how real techs talk.\n"
+)
+
+
+# ---------------------------------------------------------------------------
+# Voice knowledge supplement — brand knowledge, diagnostics, reference data
+# Appended to BOTH prompts so voice mode has the same depth as text mode.
+# ---------------------------------------------------------------------------
+
+VOICE_KNOWLEDGE = (
+    "\n\n## Brand Knowledge\n"
+    "- Carrier/Bryant: Flame sensor issues 5-10yr. Board failures 10-15yr. 58 series workhorse furnace.\n"
+    "- Trane/American Standard: Built heavy, expensive repair. XV/XR series. ComfortLink proprietary communicating.\n"
+    "- Lennox: SLP98/EL296 premium. Quieter, finicky install. Old Pulse furnaces had unique problems.\n"
+    "- Rheem/Ruud: Reliable, affordable. Classic Plus, Prestige. Same manufacturer, different distribution.\n"
+    "- Goodman/Amana: Budget-friendly, parts everywhere. GMVM97 solid modulating. Amana = premium label, same guts.\n"
+    "- Rinnai: Dominates tankless water heaters. Scale buildup is #1 service issue. Error codes well-documented.\n"
+    "- AO Smith: Standard tank water heaters. Blink codes on gas models. Vertex = premium condensing line.\n"
+    "- Square D: QO = commercial-grade (better trip curves). Homeline = residential. Never mix QO/HOM breakers.\n"
+    "- Mitsubishi/Fujitsu/Daikin: Mini-split leaders. Error codes on remote or indoor unit LEDs. Refrigerant charge critical.\n\n"
+
+    "## Diagnostic Approach\n"
+    "1. Identify symptom (no heat, no cool, tripping breaker, leak, error code)\n"
+    "2. Identify system (brand, model, approximate age, fuel type)\n"
+    "3. Start with the MOST COMMON cause for this symptom on this equipment\n"
+    "4. Give steps in order of likelihood — cheapest/easiest check first\n"
+    "5. If they already checked something, skip it and move to next cause\n\n"
+
+    "## Error Code Rules — CRITICAL\n"
+    "- For ANY error code, blink code, or fault code: USE lookup_error_code tool FIRST. ALWAYS. No exceptions.\n"
+    "- NEVER guess error code meanings. A wrong code sends a tech down the wrong path and wastes hours.\n"
+    "- If lookup returns nothing: 'I don't have that code memorized for [brand]. What does the chart on the unit show?'\n"
+    "- Getting an error code wrong is the WORST thing you can do. Say 'I don't know' before guessing.\n"
+    "- If VERIFIED ERROR CODE DATA is provided below, use EXACTLY that information.\n\n"
+
+    "## Wire Sizing (NEC Quick Reference)\n"
+    "15A→14AWG, 20A→12AWG, 30A→10AWG, 40A→8AWG, 50A→6AWG, 60A→6AWG, 100A→3AWG\n"
+    "Over 50ft: bump up one size per 50ft for voltage drop. Always verify local code.\n\n"
+
+    "## Refrigerant Reference\n"
+    "R-410A: ~120 PSI suction / 350 PSI discharge at 95°F ambient. Standard since 2010.\n"
+    "R-22: Phased out. ~68 PSI suction / 250 PSI discharge at 75°F. Discuss retrofit/replacement.\n"
+    "Superheat: 10-15°F (cap tube/piston). Subcooling: 8-12°F (TXV). Always weigh in refrigerant.\n\n"
+
+    "## Plumbing Reference\n"
+    "Water heater: 120°F residential, 140°F commercial/dishwasher.\n"
+    "Gas pipe: 3/4\" black iron ≈ 150k BTU at 20ft. Tankless: 3/4\" gas minimum, some need 1\".\n"
+    "Drain slope: 1/4\" per foot for 2\" and smaller, 1/8\" for 3\" and larger.\n"
+    "Copper soldering: Lead-free on potable water. Clean, flux, heat fitting not solder.\n"
 )
 
 
@@ -245,6 +297,8 @@ class ArrivalAgent(Agent):
         self._observations_ignored: int = 0  # consecutive ignores
         # Category-based de-duplication
         self._observation_categories: dict[str, float] = {}  # category → timestamp
+        # Error code pre-injection tracking
+        self._has_injected_codes: bool = False
 
     def update_camera_frame(self, frame_b64: str):
         """Store the latest camera frame from the mobile app."""
@@ -694,8 +748,8 @@ async def entrypoint(ctx: JobContext):
 
         logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode}")
 
-        # Select prompt based on mode
-        prompt = JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT
+        # Select prompt based on mode — append VOICE_KNOWLEDGE for brand/diagnostic depth
+        prompt = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
 
         # Load ML models with fallback
         vad = None
@@ -787,6 +841,22 @@ async def entrypoint(ctx: JobContext):
             agent._conversation_context.append({"role": "user", "content": transcript})
             if len(agent._conversation_context) > 6:
                 agent._conversation_context.pop(0)
+
+            # Pre-inject error code data so LLM has it without needing a tool call.
+            # lookup_error_code is a fast dict lookup — no async/network needed.
+            error_result = lookup_error_code(transcript)
+            if error_result:
+                code_context = format_error_code_context(error_result)
+                base = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                agent.instructions = base + (
+                    f"\n\n## VERIFIED ERROR CODE — USE THIS EXACTLY:\n{code_context}"
+                )
+                agent._has_injected_codes = True
+                logger.info(f"[arrival-agent] ★ Pre-injected error code for: {transcript[:50]}")
+            elif agent._has_injected_codes:
+                # Clear stale injection so next non-code question gets clean prompt
+                agent.instructions = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                agent._has_injected_codes = False
 
             # Detect mute commands — only on short utterances (< 6 words)
             # to avoid false positives like "stop valve" or "that's quiet today"

@@ -119,6 +119,66 @@ export const aiAPI = {
     return response.data;
   },
 
+  /** Streaming chat — returns text chunks via SSE for instant perceived response */
+  chatStream: async (
+    message: string,
+    onChunk: (text: string) => void,
+    onDone: (meta: { source?: string; confidence?: string }) => void,
+    onError: (error: string) => void,
+    imageBase64?: string,
+    conversationHistory: any[] = [],
+    demoMode: boolean = false,
+    units?: string,
+    imageManual: boolean = false,
+  ) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token || '';
+    const url = `${API_URL}/chat/stream${demoMode ? '?demo=true' : ''}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        message,
+        image_base64: imageBase64,
+        image_manual: imageManual,
+        conversation_history: conversationHistory,
+        units,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      onError(err);
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) { onError('No response body'); return; }
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          if (event.type === 'text') onChunk(event.content);
+          else if (event.type === 'done') onDone({ source: event.source, confidence: event.confidence });
+          else if (event.type === 'error') onError(event.content);
+        } catch { /* skip malformed SSE */ }
+      }
+    }
+  },
+
   textToSpeech: async (text: string, demoMode: boolean = false) => {
     const response = await api.post(`/tts${demoMode ? '?demo=true' : ''}`, {
       text,

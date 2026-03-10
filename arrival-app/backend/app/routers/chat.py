@@ -9,14 +9,16 @@ Performance paths:
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.services.demo import get_demo_chat_response
-from app.services.anthropic import chat_with_claude
+from app.services.anthropic import chat_with_claude, stream_chat_with_claude
 from app.services.memory import retrieve_memories, store_memory
 from app.services.rag import retrieve_context
 from app.services.supabase import log_query, get_user_team_id
@@ -175,14 +177,6 @@ async def chat(
             user = await get_current_user(req)
             user_id = user["user_id"]
 
-            # 2. Check query limit
-            usage = await check_query_limit(user_id)
-            if not usage["allowed"]:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Daily limit reached. Resets at midnight.",
-                )
-
             simple = _is_simple_message(request.message) and not request.image_base64
             team_id = None  # Will be set in full path
 
@@ -246,14 +240,14 @@ async def chat(
                 if isinstance(parallel_results[3], Exception):
                     logger.warning(f"[chat] Feedback context failed: {parallel_results[3]}")
 
-                # Supplementary team namespace search (quick — only if team_id found)
-                if team_id and not isinstance(parallel_results[2], Exception):
+                # If team_id found, do a supplementary team RAG lookup
+                # (retrieve_context already handles team_id internally via parallel namespace search)
+                if team_id and rag_context is not None:
                     try:
                         team_rag = await asyncio.wait_for(
                             retrieve_context(user_id, request.message, team_id=team_id),
                             timeout=2.0,
                         )
-                        # Merge team results, avoiding duplicates
                         existing_texts = {r["text"][:200] for r in rag_context}
                         for item in team_rag:
                             if item["text"][:200] not in existing_texts:
@@ -261,7 +255,7 @@ async def chat(
                         rag_context.sort(key=lambda x: x.get("score", 0), reverse=True)
                         rag_context = rag_context[:5]
                     except (asyncio.TimeoutError, Exception) as e:
-                        logger.debug(f"[chat] Team RAG supplementary search skipped: {e}")
+                        logger.debug(f"[chat] Team RAG skipped: {e}")
 
                 # Strip auto-captured images unless the message contains visual keywords.
                 # Manually-attached images (user tapped camera/photo button) are always kept.
@@ -361,3 +355,159 @@ async def _log_query(
         rag_chunks_used=result.get("rag_chunks_used"),
         response_time_ms=response_time_ms,
     )
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    req: Request,
+    demo: bool = Query(False),
+):
+    """
+    Streaming AI Chat — same as /chat but returns Server-Sent Events.
+    First token appears in ~1-2s instead of waiting 15-20s for full response.
+    """
+    t0 = time.monotonic()
+
+    # Validate
+    if len(request.message) > MAX_MESSAGE_LENGTH:
+        raise HTTPException(status_code=400, detail="Message too long")
+    if request.image_base64 and len(request.image_base64) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="Image too large")
+    if len(request.conversation_history) > MAX_HISTORY_ITEMS:
+        raise HTTPException(status_code=400, detail="History too long")
+
+    request.conversation_history = [
+        {"role": msg["role"], "content": str(msg.get("content", ""))[:10_000]}
+        for msg in request.conversation_history
+        if isinstance(msg, dict) and msg.get("role") in ("user", "assistant") and msg.get("content")
+    ]
+
+    if demo:
+        client_ip = req.client.host if req.client else "unknown"
+        if not _check_demo_rate_limit(client_ip):
+            raise HTTPException(status_code=429, detail="Demo rate limit exceeded.")
+        result = get_demo_chat_response(request.message)
+
+        async def demo_gen():
+            yield f"data: {json.dumps({'type': 'text', 'content': result['response']})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'source': result.get('source'), 'confidence': result.get('confidence')})}\n\n"
+
+        return StreamingResponse(demo_gen(), media_type="text/event-stream")
+
+    # Authenticated path
+    user = await get_current_user(req)
+    user_id = user["user_id"]
+
+    simple = _is_simple_message(request.message) and not request.image_base64
+
+    async def stream_gen():
+        nonlocal simple
+        full_response = ""
+        team_id = None
+        rag_context = []
+
+        try:
+            if simple:
+                logger.info(f"[chat-stream] Fast path for '{request.message}' ({user_id[:8]}…)")
+                async for chunk in stream_chat_with_claude(
+                    message=request.message,
+                    conversation_history=request.conversation_history,
+                    max_tokens=150,
+                    system_prompt_prefix="Keep it to 1-2 sentences. Be friendly and conversational.",
+                ):
+                    full_response += chunk
+                    yield f"data: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+            else:
+                logger.info(f"[chat-stream] Full path for '{request.message[:40]}…' ({user_id[:8]}…)")
+
+                # Static lookups — instant
+                error_code_result = lookup_error_code(request.message)
+                error_code_context = format_error_code_context(error_code_result) if error_code_result else None
+
+                diagnostic_context = None
+                if not error_code_result:
+                    diag_result = lookup_diagnostic_flow(request.message)
+                    if diag_result:
+                        diagnostic_context = format_diagnostic_context(diag_result)
+
+                # Parallel context fetch
+                parallel_results = await asyncio.gather(
+                    retrieve_memories(user_id, request.message),
+                    get_user_team_id(user_id),
+                    retrieve_context(user_id, request.message),
+                    get_feedback_context(request.message),
+                    return_exceptions=True,
+                )
+                memories = parallel_results[0] if not isinstance(parallel_results[0], Exception) else []
+                team_id = parallel_results[1] if not isinstance(parallel_results[1], Exception) else None
+                rag_context = parallel_results[2] if not isinstance(parallel_results[2], Exception) else []
+                feedback_context = parallel_results[3] if not isinstance(parallel_results[3], Exception) else None
+
+                # Team RAG if applicable
+                if team_id and rag_context is not None:
+                    try:
+                        team_rag = await asyncio.wait_for(
+                            retrieve_context(user_id, request.message, team_id=team_id),
+                            timeout=2.0,
+                        )
+                        existing_texts = {r["text"][:200] for r in rag_context}
+                        for item in team_rag:
+                            if item["text"][:200] not in existing_texts:
+                                rag_context.append(item)
+                        rag_context.sort(key=lambda x: x.get("score", 0), reverse=True)
+                        rag_context = rag_context[:5]
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+
+                # Strip auto-captured images
+                if request.image_base64 and not request.image_manual:
+                    _visual_keywords = {
+                        "see", "look", "show", "camera", "picture", "photo", "image",
+                        "what's this", "what is this", "identify", "what brand",
+                    }
+                    if not any(kw in request.message.lower() for kw in _visual_keywords):
+                        request.image_base64 = None
+
+                units_note = "\n\nIMPORTANT: The user prefers METRIC units." if request.units == "metric" else ""
+
+                # Stream Claude response
+                async for chunk in stream_chat_with_claude(
+                    message=request.message,
+                    image_base64=request.image_base64,
+                    conversation_history=request.conversation_history,
+                    user_memories=memories,
+                    rag_context=rag_context,
+                    max_tokens=1024,
+                    system_prompt_prefix=(
+                        "\n\n".join(filter(None, [error_code_context, diagnostic_context, feedback_context]))
+                        + units_note
+                    ),
+                ):
+                    full_response += chunk
+                    yield f"data: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+
+            # Final event with metadata
+            source = "Claude AI Analysis"
+            if rag_context:
+                filenames = list(set(ctx["filename"] for ctx in rag_context))
+                source = f"Claude AI + {', '.join(filenames[:2])}"
+            yield f"data: {json.dumps({'type': 'done', 'source': source, 'confidence': 'medium'})}\n\n"
+
+            elapsed = time.monotonic() - t0
+            logger.info(f"[chat-stream] Responded in {elapsed:.2f}s")
+
+            # Fire-and-forget logging
+            asyncio.create_task(_safe_task(
+                store_memory(user_id, [
+                    {"role": "user", "content": request.message},
+                    {"role": "assistant", "content": full_response},
+                ]),
+                task_name="store_memory",
+            ))
+
+        except Exception as e:
+            logger.error(f"[chat-stream] Error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': 'Chat failed. Please try again.'})}\n\n"
+
+    return StreamingResponse(stream_gen(), media_type="text/event-stream")

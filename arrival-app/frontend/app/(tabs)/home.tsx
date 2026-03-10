@@ -513,35 +513,73 @@ export default function HomeScreen() {
       const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
       const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
       const currentDemoMode = useSettingsStore.getState().demoMode;
-      const response = await aiAPI.chat(text, imageForThisMessage, history, currentDemoMode, useSettingsStore.getState().units, imageIsManual);
 
+      // Create a placeholder assistant message that we'll stream into
+      const assistantId = generateId();
       addMessage({
-        id: generateId(), role: 'assistant', content: response.response,
-        source: response.source, confidence: validateConfidence(response.confidence), // Bug 14
+        id: assistantId, role: 'assistant', content: '',
         displayMode: 'text', timestamp: new Date(),
       });
 
+      let fullText = '';
+      await aiAPI.chatStream(
+        text,
+        // onChunk — append each text chunk to the message
+        (chunk: string) => {
+          fullText += chunk;
+          const conv = useConversationStore.getState().currentConversation;
+          if (conv) {
+            const updatedMessages = conv.messages.map(m =>
+              m.id === assistantId ? { ...m, content: fullText } : m
+            );
+            useConversationStore.setState(state => ({
+              currentConversation: state.currentConversation
+                ? { ...state.currentConversation, messages: updatedMessages }
+                : null,
+            }));
+          }
+        },
+        // onDone — update source + confidence
+        (meta: { source?: string; confidence?: string }) => {
+          const conv = useConversationStore.getState().currentConversation;
+          if (conv) {
+            const updatedMessages = conv.messages.map(m =>
+              m.id === assistantId ? { ...m, source: meta.source, confidence: validateConfidence(meta.confidence) } : m
+            );
+            useConversationStore.setState(state => ({
+              currentConversation: state.currentConversation
+                ? { ...state.currentConversation, messages: updatedMessages }
+                : null,
+            }));
+          }
+        },
+        // onError
+        (error: string) => {
+          const conv = useConversationStore.getState().currentConversation;
+          if (conv) {
+            const updatedMessages = conv.messages.map(m =>
+              m.id === assistantId ? { ...m, content: 'Something went wrong. Please try again.' } : m
+            );
+            useConversationStore.setState(state => ({
+              currentConversation: state.currentConversation
+                ? { ...state.currentConversation, messages: updatedMessages }
+                : null,
+            }));
+          }
+        },
+        imageForThisMessage,
+        history,
+        currentDemoMode,
+        useSettingsStore.getState().units,
+        imageIsManual,
+      );
+
       // Optimistic usage increment
       if (!currentDemoMode) incrementQueryCount();
-
-      // NO TTS in Text Mode -- text in = text out
     } catch (error: any) {
-      const isNetwork = !error?.response && (
-        error?.code === 'ECONNABORTED' ||
-        error?.code === 'ERR_NETWORK' ||
-        error?.message?.includes('Network') ||
-        error?.message?.includes('timeout')
-      );
-      const isServerDown = error?.response?.status === 502 || error?.response?.status === 503;
-      let errorMsg = 'Something went wrong. Please try again.';
-      if (isNetwork || isServerDown) {
-        errorMsg = 'Server is starting up — this can take a moment on the first request. Please try again.';
-      } else if (error?.response?.status === 429) {
-        errorMsg = 'Daily query limit reached. Resets at midnight UTC.';
-      }
       addMessage({
         id: generateId(), role: 'assistant',
-        content: errorMsg,
+        content: 'Something went wrong. Please try again.',
         displayMode: 'text', timestamp: new Date(),
       });
     } finally {
