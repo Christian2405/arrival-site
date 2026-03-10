@@ -218,10 +218,12 @@ async def voice_session(
         payload = await decode_jwt_token(token)
         user_id = payload.get("sub")
         if not user_id:
+            await websocket.accept()
             await websocket.close(code=4001, reason="Invalid token")
             return
     except Exception as e:
         logger.warning(f"[voice-ws] Auth failed: {e}")
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication failed")
         return
 

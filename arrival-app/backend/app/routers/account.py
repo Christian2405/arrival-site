@@ -37,54 +37,23 @@ async def delete_account(request: Request):
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             # Delete in order: dependent data first
-            # 1. Query logs
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/queries",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"},
-            )
-
-            # 2. Saved answers / bookmarks
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/saved_answers",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"},
-            )
-
-            # 3. Team memberships
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/team_members",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"},
-            )
-
-            # 4. Subscriptions
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/subscriptions",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"},
-            )
-
-            # 4b. Feedback
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/feedback",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"},
-            )
-
-            # 4c. User preferences
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/user_preferences",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"},
-            )
-
-            # 5. User profile
-            await client.delete(
-                f"{config.SUPABASE_URL}/rest/v1/users",
-                headers=headers,
-                params={"id": f"eq.{user_id}"},
-            )
+            tables = [
+                ("queries", {"user_id": f"eq.{user_id}"}),
+                ("saved_answers", {"user_id": f"eq.{user_id}"}),
+                ("team_members", {"user_id": f"eq.{user_id}"}),
+                ("subscriptions", {"user_id": f"eq.{user_id}"}),
+                ("feedback", {"user_id": f"eq.{user_id}"}),
+                ("user_preferences", {"user_id": f"eq.{user_id}"}),
+                ("users", {"id": f"eq.{user_id}"}),
+            ]
+            for table_name, params in tables:
+                resp = await client.delete(
+                    f"{config.SUPABASE_URL}/rest/v1/{table_name}",
+                    headers=headers,
+                    params=params,
+                )
+                if resp.status_code >= 400:
+                    logger.warning(f"[Account] {table_name} delete returned {resp.status_code} for {user_id}")
 
             # 6. Delete auth user (Supabase Admin API)
             del_auth_resp = await client.delete(

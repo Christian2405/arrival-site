@@ -34,9 +34,14 @@ class TokenResponse(BaseModel):
 
 
 @router.get("/agent-log")
-async def agent_log():
+async def agent_log(request: Request):
     """Read the LiveKit agent stdout/stderr log."""
+    import os
     import subprocess
+    auth_header = request.headers.get("authorization", "")
+    expected_secret = os.getenv("ADMIN_SECRET", "")
+    if expected_secret and not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=403, detail="Forbidden")
     try:
         result = subprocess.run(["tail", "-50", "/tmp/agent_output.log"], capture_output=True, text=True, timeout=5)
         pgrep = subprocess.run(["pgrep", "-fa", "livekit_agent"], capture_output=True, text=True, timeout=5)
@@ -64,9 +69,14 @@ async def livekit_status():
 
 
 @router.get("/livekit-debug")
-async def livekit_debug():
+async def livekit_debug(request: Request):
     """Diagnostic: check LiveKit Cloud rooms and agent worker status."""
+    import os
     import subprocess
+    auth_header = request.headers.get("authorization", "")
+    expected_secret = os.getenv("ADMIN_SECRET", "")
+    if expected_secret and not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not config.LIVEKIT_URL or not config.LIVEKIT_API_KEY or not config.LIVEKIT_API_SECRET:
         return {"configured": False, "error": "LiveKit env vars not set"}
 
@@ -238,7 +248,10 @@ async def upload_frame(req: FrameUpload, request: Request):
 
 
 @router.get("/livekit-frame/{room_name}")
-async def get_frame_api(room_name: str):
+async def get_frame_api(room_name: str, request: Request):
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing auth token")
     """Get the latest camera frame for a room.
     Used by the LiveKit agent (separate process) to fetch frames via HTTP.
     This is more reliable than file-based sharing across process boundaries."""
@@ -256,11 +269,15 @@ class AnalyzeRequest(BaseModel):
 
 
 @router.post("/livekit-analyze")
-async def livekit_analyze_frame(req: AnalyzeRequest):
+async def livekit_analyze_frame(req: AnalyzeRequest, request: Request):
     """Analyze a camera frame using Claude Vision.
     Accepts an inline frame (from frontend) or reads from the frame store.
     Called by the LiveKit agent or the mobile frontend.
     NOTE: renamed from /analyze-frame to avoid conflict with analyze.py router."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing auth token")
+
     import anthropic as anthropic_sdk
 
     # Use inline frame if provided, otherwise read from store
@@ -308,7 +325,7 @@ async def livekit_analyze_frame(req: AnalyzeRequest):
         return {"analysis": result_text, "frame_size": len(frame)}
     except Exception as e:
         logger.error(f"[analyze-frame] Vision API failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Vision analysis failed: {e}")
+        raise HTTPException(status_code=500, detail="Vision analysis failed")
 
 
 @router.get("/livekit-frame-debug/{room_name}")

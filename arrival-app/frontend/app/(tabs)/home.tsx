@@ -1019,8 +1019,18 @@ export default function HomeScreen() {
                                 source: item.source,
                                 conversation_id: currentConversation?.id,
                               }).catch(err => console.warn('[feedback]', err));
-                              // Update message locally so rating persists on re-render
-                              item.feedbackRating = rating;
+                              // Update message in store so rating persists on re-render
+                              const conv = useConversationStore.getState().currentConversation;
+                              if (conv) {
+                                const updatedMessages = conv.messages.map(m =>
+                                  m.id === item.id ? { ...m, feedbackRating: rating } : m
+                                );
+                                useConversationStore.setState(state => ({
+                                  currentConversation: state.currentConversation
+                                    ? { ...state.currentConversation, messages: updatedMessages }
+                                    : null,
+                                }));
+                              }
                             } : undefined}
                           />
                         );

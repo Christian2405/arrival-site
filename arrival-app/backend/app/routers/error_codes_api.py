@@ -38,7 +38,7 @@ def _flatten_brand_codes(brand_data: dict) -> list[dict]:
                 "code": code_key,
                 "meaning": info.get("meaning", ""),
                 "causes": info.get("causes", []),
-                "fix": info.get("fix", ""),
+                "fix": info.get("action", ""),
                 "equipment_type": equip_type,
             })
     return flat
@@ -106,7 +106,7 @@ async def get_brand_codes(brand_id: str):
                 "code": code_key,
                 "meaning": info.get("meaning", ""),
                 "causes": info.get("causes", []),
-                "fix": info.get("fix", ""),
+                "fix": info.get("action", ""),
             })
 
     # Sort codes naturally

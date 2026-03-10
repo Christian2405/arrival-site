@@ -530,14 +530,20 @@ function RoomContent({
 
   // Agent connection timeout — if agent doesn't join within 20s, show error
   const agentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agentConnectedRef = useRef(agentConnected);
   const [agentTimedOut, setAgentTimedOut] = useState(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    agentConnectedRef.current = agentConnected;
+  }, [agentConnected]);
 
   useEffect(() => {
     if (connectionState === ConnectionState.Connected && !agentConnected) {
       // Start timeout — agent should join within 20s
       if (!agentTimeoutRef.current) {
         agentTimeoutRef.current = setTimeout(() => {
-          if (!agentConnected) {
+          if (!agentConnectedRef.current) {
             setAgentTimedOut(true);
             onStateChange('error');
           }
