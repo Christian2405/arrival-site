@@ -5643,9 +5643,19 @@ BRAND_ALIASES = {
     "lennox": "lennox",
     "lenox": "lennox",
     "lennocks": "lennox",
-    # Trane — STT may say "train"
+    # Trane — STT often transcribes as "train" or "traine"
     "trane": "trane",
-    # "train" removed — too common a word, causes false positives
+    "trane error": "trane",
+    "train error": "trane",
+    "train furnace": "trane",
+    "train code": "trane",
+    "train unit": "trane",
+    "train ac": "trane",
+    "train heat": "trane",
+    "train hvac": "trane",
+    "train blink": "trane",
+    "traine": "trane",
+    "trayne": "trane",
     "american standard": "trane",  # Same manufacturer
     # Rinnai — STT may say "rin eye", "rennai"
     "rinnai": "rinnai",
@@ -5995,6 +6005,15 @@ def _extract_brand(text: str) -> str | None:
     for alias, canonical in sorted(BRAND_ALIASES.items(), key=lambda x: -len(x[0])):
         if alias in text_lower:
             return canonical
+
+    # Fallback: STT transcribes "Trane" as "train" (standalone word).
+    # Only match if the query also contains error/code/furnace context words.
+    if re.search(r"\btrain\b", text_lower):
+        _trade_context = {"error", "code", "blink", "fault", "furnace", "ac", "unit",
+                          "heat", "cool", "hvac", "flash", "light", "blinking", "pump"}
+        if any(w in text_lower for w in _trade_context):
+            return "trane"
+
     return None
 
 

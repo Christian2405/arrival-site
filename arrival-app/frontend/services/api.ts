@@ -119,7 +119,7 @@ export const aiAPI = {
     return response.data;
   },
 
-  /** Streaming chat — returns text chunks via SSE for instant perceived response */
+  /** Streaming chat — returns text chunks via SSE using XHR (React Native compatible) */
   chatStream: async (
     message: string,
     onChunk: (text: string) => void,
@@ -135,48 +135,55 @@ export const aiAPI = {
     const token = data.session?.access_token || '';
     const url = `${API_URL}/chat/stream${demoMode ? '?demo=true' : ''}`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
+    return new Promise<void>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      let lastIndex = 0;
+
+      xhr.onprogress = () => {
+        const newText = xhr.responseText.substring(lastIndex);
+        lastIndex = xhr.responseText.length;
+        const lines = newText.split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'text') onChunk(event.content);
+            else if (event.type === 'done') onDone({ source: event.source, confidence: event.confidence });
+            else if (event.type === 'error') onError(event.content);
+          } catch { /* skip malformed SSE */ }
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 400) {
+          onError(xhr.responseText || `Server error ${xhr.status}`);
+        }
+        resolve();
+      };
+
+      xhr.onerror = () => {
+        onError('Network error — check your connection.');
+        resolve();
+      };
+
+      xhr.ontimeout = () => {
+        onError('Request timed out.');
+        resolve();
+      };
+
+      xhr.timeout = 60000;
+      xhr.send(JSON.stringify({
         message,
         image_base64: imageBase64,
         image_manual: imageManual,
         conversation_history: conversationHistory,
         units,
-      }),
+      }));
     });
-
-    if (!response.ok) {
-      const err = await response.text();
-      onError(err);
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) { onError('No response body'); return; }
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const event = JSON.parse(line.slice(6));
-          if (event.type === 'text') onChunk(event.content);
-          else if (event.type === 'done') onDone({ source: event.source, confidence: event.confidence });
-          else if (event.type === 'error') onError(event.content);
-        } catch { /* skip malformed SSE */ }
-      }
-    }
   },
 
   textToSpeech: async (text: string, demoMode: boolean = false) => {

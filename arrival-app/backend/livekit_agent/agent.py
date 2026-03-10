@@ -782,6 +782,12 @@ async def entrypoint(ctx: JobContext):
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
                 model="eleven_flash_v2_5",
                 api_key=config.ELEVENLABS_API_KEY,
+                encoding="pcm_24000",
+                voice_settings=elevenlabs.VoiceSettings(
+                    stability=0.5,
+                    similarity_boost=0.75,
+                    use_speaker_boost=True,
+                ),
             ),
         )
         if vad is not None:
