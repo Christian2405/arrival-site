@@ -274,6 +274,9 @@ class ArrivalAgent(Agent):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # User context — populated from participant metadata at session start
+        self._user_id: str = "unknown"
+        self._team_id: Optional[str] = None
         # Camera state — frames come from data channel OR HTTP frame store
         self._latest_frame: Optional[str] = None
         self._frame_received_at: float = 0
@@ -378,12 +381,13 @@ class ArrivalAgent(Agent):
         """Search the knowledge base for manuals, building codes, specs, troubleshooting guides.
         Use for building codes, equipment specs, manufacturer manuals, pipe/wire/duct sizing,
         refrigerant charging, or any technical question needing reference data."""
-        logger.info(f"[arrival-agent] Knowledge search: {query}")
+        logger.info(f"[arrival-agent] Knowledge search: {query} (user={self._user_id[:8] if self._user_id else '?'} team={self._team_id or 'none'})")
         try:
             results = await retrieve_context(
-                user_id="voice_agent",
+                user_id=self._user_id,
                 query=query,
                 top_k=3,
+                team_id=self._team_id,
             )
             if results:
                 context_parts = []
@@ -770,6 +774,7 @@ async def entrypoint(ctx: JobContext):
         room_name = ctx.room.name or ""
         mode = "job"
         user_id = "unknown"
+        team_id = None
 
         for participant in ctx.room.remote_participants.values():
             if participant.metadata:
@@ -777,11 +782,12 @@ async def entrypoint(ctx: JobContext):
                     meta = json.loads(participant.metadata)
                     user_id = meta.get("user_id", user_id)
                     mode = meta.get("mode", mode)
+                    team_id = meta.get("team_id")  # None if user has no team
                 except (json.JSONDecodeError, TypeError):
                     pass
                 break
 
-        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode}")
+        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode} team={team_id or 'none'}")
 
         # Select prompt based on mode — append VOICE_KNOWLEDGE for brand/diagnostic depth
         prompt = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
@@ -841,9 +847,11 @@ async def entrypoint(ctx: JobContext):
             max_endpointing_delay=1.0,
         )
 
-        # Set room name and room reference
+        # Set room name, room reference, and user context
         agent._room_name = room_name
         agent._room = ctx.room
+        agent._user_id = user_id
+        agent._team_id = team_id
 
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")

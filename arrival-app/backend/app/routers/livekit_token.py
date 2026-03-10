@@ -17,6 +17,7 @@ from livekit import api
 from app import config
 from app.middleware.auth import decode_jwt_token
 from app.services.frame_store import store_frame, get_frame, get_frame_age
+from app.services.supabase import get_user_team_id
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +191,13 @@ async def create_livekit_token(req: TokenRequest, request: Request):
 
     logger.info(f"[livekit-token] Config: key={config.LIVEKIT_API_KEY[:5]}*** url={config.LIVEKIT_URL}")
 
+    # --- Look up team_id for RAG search in the agent ---
+    team_id = None
+    try:
+        team_id = await get_user_team_id(user_id)
+    except Exception as e:
+        logger.warning(f"[livekit-token] Failed to look up team_id for user={user_id[:8]}: {e}")
+
     # --- Room name encodes mode + user for the agent to parse ---
     short_id = user_id[:8].replace("-", "")
     room_name = f"arrival_{req.mode}_{short_id}_{uuid.uuid4().hex[:6]}"
@@ -198,6 +206,7 @@ async def create_livekit_token(req: TokenRequest, request: Request):
     participant_metadata = json.dumps({
         "user_id": user_id,
         "mode": req.mode,
+        "team_id": team_id,  # None if user has no team
     })
 
     # --- Generate token ---
@@ -216,7 +225,7 @@ async def create_livekit_token(req: TokenRequest, request: Request):
         .to_jwt()
     )
 
-    logger.info(f"[livekit-token] Generated token for user={short_id} room={room_name} mode={req.mode}")
+    logger.info(f"[livekit-token] Generated token for user={short_id} room={room_name} mode={req.mode} team={team_id or 'none'}")
 
     # NOTE: Do NOT explicitly dispatch agents here — LiveKit auto-dispatch
     # handles it. Explicit dispatch + auto-dispatch = duplicate agents.
