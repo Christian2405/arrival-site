@@ -1552,9 +1552,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cameraBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
   },
