@@ -464,7 +464,13 @@ async def chat_stream(
                 if request.image_base64 and not request.image_manual:
                     _visual_keywords = {
                         "see", "look", "show", "camera", "picture", "photo", "image",
-                        "what's this", "what is this", "identify", "what brand",
+                        "what's this", "what is this", "what's that", "what is that",
+                        "this look", "that look", "what do you", "point", "pointing",
+                        "check this", "check that", "wrong here", "wrong with",
+                        "identify", "read this", "read that", "model number",
+                        "what brand", "what model", "diagnose", "what's the issue",
+                        "what is the issue", "what's wrong", "this unit", "this thing",
+                        "describe", "tell me about", "inspect", "analyze",
                     }
                     if not any(kw in request.message.lower() for kw in _visual_keywords):
                         request.image_base64 = None
