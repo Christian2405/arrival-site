@@ -131,7 +131,18 @@ export const aiAPI = {
     units?: string,
     imageManual: boolean = false,
   ) => {
-    const { data } = await supabase.auth.getSession();
+    let { data } = await supabase.auth.getSession();
+    // Refresh token if it expires within 60s (matches axios interceptor logic)
+    if (data.session?.expires_at) {
+      const expiresAt = data.session.expires_at * 1000;
+      if (Date.now() > expiresAt - 60000) {
+        if (!refreshPromise) {
+          refreshPromise = supabase.auth.refreshSession().finally(() => { refreshPromise = null; });
+        }
+        const { data: refreshed } = await refreshPromise;
+        if (refreshed?.session) data = refreshed;
+      }
+    }
     const token = data.session?.access_token || '';
     const url = `${API_URL}/chat/stream${demoMode ? '?demo=true' : ''}`;
 

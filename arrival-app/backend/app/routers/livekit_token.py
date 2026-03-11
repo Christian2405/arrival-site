@@ -246,10 +246,17 @@ class FrameUpload(BaseModel):
 async def upload_frame(req: FrameUpload, request: Request):
     """Upload a camera frame for the agent to analyze.
     Uses HTTP instead of WebRTC data channel for reliability."""
-    # Light auth check — just verify bearer token exists
+    # Validate JWT — not just presence check
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
+    jwt_token = auth_header.replace("Bearer ", "")
+    try:
+        payload = await decode_jwt_token(jwt_token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (ValueError, Exception):
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     store_frame(req.room_name, req.frame)
     logger.info(f"[livekit-frame] Stored frame for room={req.room_name} ({len(req.frame)} chars)")
@@ -261,6 +268,13 @@ async def get_frame_api(room_name: str, request: Request):
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
+    jwt_token = auth_header.replace("Bearer ", "")
+    try:
+        payload = await decode_jwt_token(jwt_token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (ValueError, Exception):
+        raise HTTPException(status_code=401, detail="Invalid token")
     """Get the latest camera frame for a room.
     Used by the LiveKit agent (separate process) to fetch frames via HTTP.
     This is more reliable than file-based sharing across process boundaries."""

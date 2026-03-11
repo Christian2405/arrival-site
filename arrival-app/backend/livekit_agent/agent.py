@@ -91,15 +91,23 @@ _FRAME_URLS = [
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Shared Anthropic client — reused across all vision calls
+# Shared clients — reused across all calls to avoid per-request overhead
 # ---------------------------------------------------------------------------
 _anthropic_client: Optional[anthropic_sdk.AsyncAnthropic] = None
+_httpx_client: Optional[httpx.AsyncClient] = None
 
 def _get_anthropic_client() -> anthropic_sdk.AsyncAnthropic:
     global _anthropic_client
     if _anthropic_client is None:
         _anthropic_client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
     return _anthropic_client
+
+def _get_httpx_client() -> httpx.AsyncClient:
+    """Shared httpx client for frame fetching — avoids creating a new client every 3-5s."""
+    global _httpx_client
+    if _httpx_client is None:
+        _httpx_client = httpx.AsyncClient(timeout=3.0)
+    return _httpx_client
 
 # Startup banner
 logger.info("[arrival-agent] ============================")
@@ -133,6 +141,17 @@ ENGAGEMENT_DECAY = 10       # User ignored observation
 ENGAGEMENT_MIN = 10
 ENGAGEMENT_MAX = 100
 ENGAGEMENT_RESPONSE_WINDOW = 30  # seconds to wait for user response
+
+# Engagement stopwords — common words to exclude when checking if user
+# responded to an observation (module-level for performance)
+ENGAGEMENT_STOPWORDS = frozenset({
+    "the", "a", "an", "is", "it", "that", "this", "what", "yeah",
+    "yes", "no", "ok", "okay", "i", "you", "we", "my", "its",
+    "was", "were", "are", "been", "be", "have", "has", "had",
+    "do", "does", "did", "will", "would", "could", "should", "can",
+    "just", "about", "so", "but", "and", "or", "if", "not",
+    "don't", "doesn't", "to", "in", "on", "of", "for", "at",
+})
 
 # ---------------------------------------------------------------------------
 # Voice prompts
@@ -331,19 +350,19 @@ class ArrivalAgent(Agent):
         return self._latest_frame
 
     async def _fetch_frame_async(self, room_name: str) -> Optional[str]:
-        """Fetch frame via async HTTP."""
+        """Fetch frame via async HTTP using shared client."""
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                for url_template in _FRAME_URLS:
-                    url = url_template.format(room=room_name)
-                    try:
-                        resp = await client.get(url)
-                        if resp.status_code == 200:
-                            frame = resp.json().get("frame")
-                            if frame:
-                                return frame
-                    except Exception:
-                        pass
+            client = _get_httpx_client()
+            for url_template in _FRAME_URLS:
+                url = url_template.format(room=room_name)
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        frame = resp.json().get("frame")
+                        if frame:
+                            return frame
+                except Exception:
+                    pass
         except Exception:
             pass
         return None
@@ -927,14 +946,6 @@ async def entrypoint(ctx: JobContext):
                 return
 
             # Engagement detection — did user respond to our observation?
-            _ENGAGEMENT_STOPWORDS = {
-                "the", "a", "an", "is", "it", "that", "this", "what", "yeah",
-                "yes", "no", "ok", "okay", "i", "you", "we", "my", "its",
-                "was", "were", "are", "been", "be", "have", "has", "had",
-                "do", "does", "did", "will", "would", "could", "should", "can",
-                "just", "about", "so", "but", "and", "or", "if", "not",
-                "don't", "doesn't", "to", "in", "on", "of", "for", "at",
-            }
             if agent._awaiting_engagement and agent._last_observation_text:
                 elapsed = time.time() - agent._engagement_timer_start
                 if elapsed < ENGAGEMENT_RESPONSE_WINDOW:
@@ -942,7 +953,7 @@ async def entrypoint(ctx: JobContext):
                     # or any question mark (user is asking about what was said)
                     obs_words = set(agent._last_observation_text.lower().split())
                     user_words = set(text_lower.split())
-                    overlap = (obs_words & user_words) - _ENGAGEMENT_STOPWORDS
+                    overlap = (obs_words & user_words) - ENGAGEMENT_STOPWORDS
                     if len(overlap) >= 2 or "?" in transcript:
                         # User engaged! Boost engagement score
                         agent._engagement_score = min(ENGAGEMENT_MAX, agent._engagement_score + ENGAGEMENT_BOOST)
@@ -993,6 +1004,22 @@ async def entrypoint(ctx: JobContext):
             instructions="Say exactly: 'Hey, I'm here. What are we working on?' Nothing else."
         )
         logger.info("[arrival-agent] ✓ Greeting sent")
+
+        # Wait for the session to end (room disconnect) then clean up tasks
+        disconnect_event = asyncio.Event()
+
+        @ctx.room.on("disconnected")
+        def on_disconnect():
+            logger.info("[arrival-agent] Room disconnected — cleaning up background tasks")
+            disconnect_event.set()
+
+        await disconnect_event.wait()
+
+        # Cancel background tasks explicitly
+        injector_task.cancel()
+        if monitor_task:
+            monitor_task.cancel()
+        logger.info("[arrival-agent] ✓ Background tasks cancelled")
 
     except Exception as e:
         logger.error(f"[arrival-agent] ✗ ENTRYPOINT CRASHED: {e}", exc_info=True)
