@@ -37,6 +37,12 @@ registerGlobals();
 
 export type AgentVoiceState = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
+export interface EquipmentContext {
+  equipment_type: string;
+  brand?: string;
+  model?: string;
+}
+
 interface LiveKitVoiceRoomProps {
   /** "job" or "default" mode */
   mode: 'default' | 'job';
@@ -54,6 +60,8 @@ interface LiveKitVoiceRoomProps {
   onUserTranscript?: (text: string, isFinal: boolean) => void;
   /** Error callback */
   onError?: (message: string) => void;
+  /** Equipment context to send to agent */
+  equipmentContext?: EquipmentContext | null;
 }
 
 const MAX_RETRIES = 3;
@@ -68,6 +76,7 @@ export default function LiveKitVoiceRoom({
   onAgentTranscript,
   onUserTranscript,
   onError,
+  equipmentContext,
 }: LiveKitVoiceRoomProps) {
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
@@ -233,6 +242,7 @@ export default function LiveKitVoiceRoom({
         unmountedRef={unmounted}
         captureFrame={captureFrame}
         roomName={session.roomName}
+        equipmentContext={equipmentContext}
       />
     </LiveKitRoom>
   );
@@ -254,6 +264,7 @@ function RoomContent({
   unmountedRef,
   captureFrame,
   roomName,
+  equipmentContext,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onVoiceConnected?: (connected: boolean) => void;
@@ -263,6 +274,7 @@ function RoomContent({
   unmountedRef: React.MutableRefObject<boolean>;
   captureFrame?: () => Promise<string | undefined>;
   roomName?: string;
+  equipmentContext?: EquipmentContext | null;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
@@ -275,6 +287,26 @@ function RoomContent({
   captureFrameRef.current = captureFrame;
   const roomNameRef = useRef(roomName);
   roomNameRef.current = roomName;
+
+  // Send equipment context to agent whenever it changes
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected || !room || !equipmentContext) return;
+    try {
+      const msg = JSON.stringify({
+        type: 'equipment_context',
+        equipment_type: equipmentContext.equipment_type,
+        brand: equipmentContext.brand || '',
+        model: equipmentContext.model || '',
+      });
+      room.localParticipant.publishData(
+        new TextEncoder().encode(msg),
+        { reliable: true },
+      );
+      console.log(`[LiveKitVoice] Equipment context sent: ${equipmentContext.equipment_type}`);
+    } catch (e: any) {
+      console.debug(`[LiveKitVoice] Equipment context send failed: ${e?.message}`);
+    }
+  }, [connectionState, room, equipmentContext]);
 
   // -----------------------------------------------------------------------
   // Vision request handler — agent asks us to capture + analyze via data channel

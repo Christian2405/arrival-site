@@ -112,6 +112,7 @@ export default function HomeScreen() {
   const [voiceConnected, setVoiceConnected] = useState(false);
   const [jobPaused, setJobPaused] = useState(false);
   const [jobStarted, setJobStarted] = useState(false);
+  const [equipmentContext, setEquipmentContext] = useState<{ equipment_type: string; brand?: string; model?: string } | null>(null);
   const jobControllerRef = useRef<JobModeController | null>(null);
   const streamingControllerRef = useRef<StreamingJobModeController | null>(null);
   const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string; ts: number } | null>(null);
@@ -1229,6 +1230,7 @@ export default function HomeScreen() {
                     // Don't add to conversation (it persists and clutters the chat).
                     console.warn('[LiveKit] Error:', msg);
                   }}
+                  equipmentContext={equipmentContext}
                 />
               )}
               <JobModeView
@@ -1236,6 +1238,7 @@ export default function HomeScreen() {
                 voiceConnected={voiceConnected}
                 isStarted={jobStarted}
                 onStart={() => setJobStarted(true)}
+                onEquipmentChange={setEquipmentContext}
                 onPause={() => {
                   // Handle pause for both streaming and REST controllers
                   if (streamingControllerRef.current) {

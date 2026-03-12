@@ -17,6 +17,12 @@ export interface JobAlert {
   ts?: number;
 }
 
+export interface EquipmentInfo {
+  equipment_type: string;
+  brand?: string;
+  model?: string;
+}
+
 interface JobModeViewProps {
   aiState: JobAIState;
   voiceConnected?: boolean;
@@ -30,6 +36,8 @@ interface JobModeViewProps {
   onStart?: () => void;
   /** Whether job mode session is actively running */
   isStarted?: boolean;
+  /** Called when equipment context changes (set or cleared) */
+  onEquipmentChange?: (equipment: EquipmentInfo | null) => void;
 }
 
 const EQUIPMENT_OPTIONS = [
@@ -60,7 +68,7 @@ const TEXT_DISPLAY_MS = 10000;
 
 export default function JobModeView({
   aiState, voiceConnected, onPause, isPaused, lastAlert,
-  onQuickAction, onInterrupt, onStart, isStarted,
+  onQuickAction, onInterrupt, onStart, isStarted, onEquipmentChange,
 }: JobModeViewProps) {
   // ── Robot start button animations ──
   const robotFloat = useRef(new Animated.Value(0)).current;
@@ -169,10 +177,16 @@ export default function JobModeView({
       });
       setJobContext(ctx);
       setShowEquipmentPicker(false);
+      // Notify parent so it can send via data channel
+      onEquipmentChange?.({
+        equipment_type: selectedEquipment,
+        brand: selectedBrand || undefined,
+        model: modelInput || undefined,
+      });
     } catch (e) {
       console.warn('[JobMode] Failed to set context:', e);
     }
-  }, [selectedEquipment, selectedBrand, modelInput]);
+  }, [selectedEquipment, selectedBrand, modelInput, onEquipmentChange]);
 
   const handleClearContext = useCallback(async () => {
     try {
@@ -181,10 +195,11 @@ export default function JobModeView({
       setSelectedEquipment(null);
       setSelectedBrand(null);
       setModelInput('');
+      onEquipmentChange?.(null);
     } catch (e) {
       console.warn('[JobMode] Failed to clear context:', e);
     }
-  }, []);
+  }, [onEquipmentChange]);
 
   // --- Eye pill: subtle glow when monitoring/analyzing ---
   useEffect(() => {
