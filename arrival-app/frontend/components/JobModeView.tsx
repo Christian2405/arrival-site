@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, Animated, StyleSheet, TouchableOpacity, ScrollView, TextInput, Pressable } from 'react-native';
+import { View, Text, Animated, StyleSheet, TouchableOpacity, ScrollView, TextInput, Pressable, Image, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
 import { jobContextAPI, JobContext } from '../services/api';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const robotMascot = require('../assets/robot-mascot.png');
 
 export type JobAIState = 'monitoring' | 'listening' | 'processing' | 'speaking';
 
@@ -23,6 +26,10 @@ interface JobModeViewProps {
   onQuickAction?: (action: QuickActionType, alertMessage: string) => void;
   /** Called when user taps to interrupt AI speaking */
   onInterrupt?: () => void;
+  /** Called when user taps the robot to start job mode */
+  onStart?: () => void;
+  /** Whether job mode session is actively running */
+  isStarted?: boolean;
 }
 
 const EQUIPMENT_OPTIONS = [
@@ -51,8 +58,20 @@ const QUICK_ACTIONS: { key: QuickActionType; icon: string; label: string }[] = [
 const CHIP_AUTO_DISMISS_MS = 8000;
 const TEXT_DISPLAY_MS = 10000;
 
-export default function JobModeView({ aiState, voiceConnected, onPause, isPaused, lastAlert, onQuickAction, onInterrupt }: JobModeViewProps) {
-  // --- Glass pill animations ---
+export default function JobModeView({
+  aiState, voiceConnected, onPause, isPaused, lastAlert,
+  onQuickAction, onInterrupt, onStart, isStarted,
+}: JobModeViewProps) {
+  // ── Robot start button animations ──
+  const robotFloat = useRef(new Animated.Value(0)).current;
+  const robotScale = useRef(new Animated.Value(1)).current;
+  const glowOpacity = useRef(new Animated.Value(0.3)).current;
+  const glowScale = useRef(new Animated.Value(1)).current;
+  const startScreenOpacity = useRef(new Animated.Value(1)).current;
+  const hintOpacity = useRef(new Animated.Value(0)).current;
+  const [startAnimating, setStartAnimating] = useState(false);
+
+  // ── Glass pill animations ──
   const eyeGlow = useRef(new Animated.Value(0.5)).current;
   const voicePulse = useRef(new Animated.Value(1)).current;
   const interruptOpacity = useRef(new Animated.Value(0)).current;
@@ -83,6 +102,63 @@ export default function JobModeView({ aiState, voiceConnected, onPause, isPaused
     }).catch(() => {});
   }, []);
 
+  // ── Robot idle animations (breathing float + glow pulse) ──
+  useEffect(() => {
+    if (isStarted) return;
+
+    // Gentle floating motion
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(robotFloat, { toValue: -8, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(robotFloat, { toValue: 8, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Glow ring pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOpacity, { toValue: 0.6, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0.2, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Fade in "Tap to start" hint after 1.5s
+    const hintTimer = setTimeout(() => {
+      Animated.timing(hintOpacity, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    }, 1500);
+
+    return () => {
+      robotFloat.stopAnimation();
+      glowOpacity.stopAnimation();
+      clearTimeout(hintTimer);
+    };
+  }, [isStarted, robotFloat, glowOpacity, hintOpacity]);
+
+  // ── Start tap animation ──
+  const handleStartTap = useCallback(() => {
+    if (startAnimating) return;
+    setStartAnimating(true);
+
+    // 1. Quick pop scale
+    Animated.sequence([
+      Animated.timing(robotScale, { toValue: 1.2, duration: 150, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+      Animated.timing(robotScale, { toValue: 1.1, duration: 100, useNativeDriver: true }),
+    ]).start();
+
+    // 2. Glow ring expands out
+    Animated.parallel([
+      Animated.timing(glowScale, { toValue: 2.5, duration: 500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      Animated.timing(glowOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start();
+
+    // 3. After pop, fade out the whole start screen
+    setTimeout(() => {
+      Animated.timing(startScreenOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+        onStart?.();
+      });
+    }, 350);
+  }, [startAnimating, robotScale, glowScale, glowOpacity, startScreenOpacity, onStart]);
+
   const handleSetContext = useCallback(async () => {
     if (!selectedEquipment) return;
     try {
@@ -112,6 +188,7 @@ export default function JobModeView({ aiState, voiceConnected, onPause, isPaused
 
   // --- Eye pill: subtle glow when monitoring/analyzing ---
   useEffect(() => {
+    if (!isStarted) return;
     eyeGlow.stopAnimation();
     Animated.loop(
       Animated.sequence([
@@ -120,10 +197,11 @@ export default function JobModeView({ aiState, voiceConnected, onPause, isPaused
       ])
     ).start();
     return () => { eyeGlow.stopAnimation(); };
-  }, [eyeGlow]);
+  }, [eyeGlow, isStarted]);
 
   // --- Voice pill: reacts to state ---
   useEffect(() => {
+    if (!isStarted) return;
     voicePulse.stopAnimation();
     if (aiState === 'listening') {
       Animated.loop(
@@ -143,16 +221,17 @@ export default function JobModeView({ aiState, voiceConnected, onPause, isPaused
       voicePulse.setValue(1);
     }
     return () => { voicePulse.stopAnimation(); };
-  }, [aiState, voicePulse]);
+  }, [aiState, voicePulse, isStarted]);
 
   // --- Interrupt hint: fade in when speaking ---
   useEffect(() => {
+    if (!isStarted) return;
     Animated.timing(interruptOpacity, {
       toValue: aiState === 'speaking' ? 1 : 0,
       duration: 200,
       useNativeDriver: true,
     }).start();
-  }, [aiState, interruptOpacity]);
+  }, [aiState, interruptOpacity, isStarted]);
 
   // --- Quick Action Chips ---
   useEffect(() => {
@@ -230,6 +309,45 @@ export default function JobModeView({ aiState, voiceConnected, onPause, isPaused
     ? `${jobContext.brand || ''} ${jobContext.equipment_type.replace('_', ' ')}${jobContext.model ? ` (${jobContext.model})` : ''}`.trim()
     : null;
 
+  // ════════════════════════════════════════════════════
+  // ██  PRE-START SCREEN — Robot mascot button  ██
+  // ════════════════════════════════════════════════════
+  if (!isStarted) {
+    return (
+      <Animated.View style={[s.container, { opacity: startScreenOpacity }]} pointerEvents="box-none">
+        <Pressable onPress={handleStartTap} style={s.startButton}>
+          {/* Glow ring behind robot */}
+          <Animated.View style={[
+            s.glowRing,
+            { opacity: glowOpacity, transform: [{ scale: glowScale }] },
+          ]} />
+
+          {/* Floating robot mascot */}
+          <Animated.View style={{
+            transform: [
+              { translateY: robotFloat },
+              { scale: robotScale },
+            ],
+          }}>
+            <Image
+              source={robotMascot}
+              style={s.robotImage}
+              resizeMode="contain"
+            />
+          </Animated.View>
+        </Pressable>
+
+        {/* "Tap to start" hint */}
+        <Animated.View style={[s.startHint, { opacity: hintOpacity }]}>
+          <Text style={s.startHintText}>Tap to start</Text>
+        </Animated.View>
+      </Animated.View>
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  // ██  ACTIVE JOB MODE — Glass pills + controls  ██
+  // ════════════════════════════════════════════════════
   return (
     <View style={s.container} pointerEvents="box-none">
 
@@ -373,6 +491,45 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 60,
+  },
+
+  // ── Robot start button ──
+  startButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 160,
+    height: 160,
+  },
+  robotImage: {
+    width: 120,
+    height: 120,
+  },
+  glowRing: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: Colors.accent,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  startHint: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  startHintText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0.5,
   },
 
   // --- Two glass pills ---

@@ -111,6 +111,7 @@ export default function HomeScreen() {
   const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
   const [voiceConnected, setVoiceConnected] = useState(false);
   const [jobPaused, setJobPaused] = useState(false);
+  const [jobStarted, setJobStarted] = useState(false);
   const jobControllerRef = useRef<JobModeController | null>(null);
   const streamingControllerRef = useRef<StreamingJobModeController | null>(null);
   const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string; ts: number } | null>(null);
@@ -625,6 +626,7 @@ export default function HomeScreen() {
 
     // Bug fix: Reset jobPaused so re-entering job mode doesn't have stale pause state
     setJobPaused(false);
+    setJobStarted(false);
     setVoiceConnected(false);
     setJobAIState('monitoring');
     setLastJobAlert(null);
@@ -636,8 +638,9 @@ export default function HomeScreen() {
 
   // --- JOB MODE EFFECT ---
   // Priority: LiveKit (full-duplex WebRTC) > Streaming (WebSocket) > REST
+  // Only activates after user taps the robot start button (jobStarted === true)
   useEffect(() => {
-    if (interactionMode !== 'job' || !permission?.granted) {
+    if (interactionMode !== 'job' || !permission?.granted || !jobStarted) {
       if (jobControllerRef.current) {
         jobControllerRef.current.stop();
         jobControllerRef.current = null;
@@ -872,7 +875,7 @@ export default function HomeScreen() {
         jobAlertHistoryRef.current = [];
       };
     }
-  }, [interactionMode, permission?.granted, useLiveKit, useStreamingVoice]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [interactionMode, permission?.granted, useLiveKit, useStreamingVoice, jobStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- TEXT MODE: Chat show/hide effects ---
   // Bug 20: Animate instead of snapping to 1
@@ -1231,6 +1234,8 @@ export default function HomeScreen() {
               <JobModeView
                 aiState={jobAIState}
                 voiceConnected={voiceConnected}
+                isStarted={jobStarted}
+                onStart={() => setJobStarted(true)}
                 onPause={() => {
                   // Handle pause for both streaming and REST controllers
                   if (streamingControllerRef.current) {
