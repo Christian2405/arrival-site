@@ -8,7 +8,7 @@
 # Clean URLs for Apple App Store requirements
 [[redirects]]
   from = "/privacy"
-  to = "/index.html"
+  to = "/privacy.html"
   status = 200
 
 [[redirects]]
