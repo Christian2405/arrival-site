@@ -114,21 +114,26 @@ export default function JobModeView({
   useEffect(() => {
     if (isStarted) return;
 
-    // Gentle floating motion
-    Animated.loop(
+    // Start at the top of the bob so every loop iteration is identical
+    robotFloat.setValue(-10);
+
+    // Smooth sinusoidal float — no pause at loop seam
+    const floatAnim = Animated.loop(
       Animated.sequence([
-        Animated.timing(robotFloat, { toValue: -8, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(robotFloat, { toValue: 8, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(robotFloat, { toValue: 10, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(robotFloat, { toValue: -10, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
-    ).start();
+    );
+    floatAnim.start();
 
     // Glow ring pulse
-    Animated.loop(
+    const glowAnim = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowOpacity, { toValue: 0.6, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(glowOpacity, { toValue: 0.2, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0.6, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0.2, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
-    ).start();
+    );
+    glowAnim.start();
 
     // Fade in "Tap to start" hint after 1.5s
     const hintTimer = setTimeout(() => {
@@ -136,8 +141,8 @@ export default function JobModeView({
     }, 1500);
 
     return () => {
-      robotFloat.stopAnimation();
-      glowOpacity.stopAnimation();
+      floatAnim.stop();
+      glowAnim.stop();
       clearTimeout(hintTimer);
     };
   }, [isStarted, robotFloat, glowOpacity, hintOpacity]);
@@ -331,12 +336,6 @@ export default function JobModeView({
     return (
       <Animated.View style={[s.container, { opacity: startScreenOpacity }]} pointerEvents="box-none">
         <Pressable onPress={handleStartTap} style={s.startButton}>
-          {/* Glow ring behind robot */}
-          <Animated.View style={[
-            s.glowRing,
-            { opacity: glowOpacity, transform: [{ scale: glowScale }] },
-          ]} />
-
           {/* Floating robot mascot */}
           <Animated.View style={{
             transform: [
@@ -456,6 +455,16 @@ export default function JobModeView({
             </TouchableOpacity>
           )}
 
+          {/* Guide me button — always visible */}
+          <TouchableOpacity
+            style={s.guideBtn}
+            onPress={() => onQuickAction?.('walkthrough', '')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="compass-outline" size={16} color="#FFF" />
+            <Text style={s.guideBtnText}>Guide me</Text>
+          </TouchableOpacity>
+
           {/* "Show in text" card */}
           {textCardMessage && (
             <Animated.View style={[s.textCard, { opacity: textCardOpacity }]}>
@@ -512,12 +521,12 @@ const s = StyleSheet.create({
   startButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 160,
-    height: 160,
+    width: 240,
+    height: 240,
   },
   robotImage: {
-    width: 120,
-    height: 120,
+    width: 180,
+    height: 180,
   },
   glowRing: {
     position: 'absolute',
@@ -600,6 +609,23 @@ const s = StyleSheet.create({
   setEquipText: {
     color: 'rgba(255,255,255,0.4)',
     fontSize: 13,
+  },
+  guideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  guideBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // --- Interrupt overlay ---

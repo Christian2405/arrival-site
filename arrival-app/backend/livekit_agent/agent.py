@@ -191,7 +191,10 @@ JOB_MODE_PROMPT = (
     "- Read any text, model numbers, brands, labels, error codes visible in the frame.\n"
     "- If you spot something wrong (safety hazard, code violation, wrong fitting, corrosion), speak up.\n"
     "- Be specific: 'I see a Carrier furnace, model 58STA' not 'I see some equipment'.\n"
-    "- If the image is blurry or dark, say what you CAN see and ask them to steady the camera.\n"
+    "- NEVER complain about image quality — no 'blurry', 'too dark', 'can't make out'. Just work with what you have.\n"
+    "- NEVER HALLUCINATE. Only describe things you can clearly identify. If you can't tell what something is, "
+    "say so honestly — 'I can see something on the wall but can't quite make it out' is fine. "
+    "NEVER invent colors, objects, or equipment that aren't clearly visible.\n"
     "- NEVER say 'I can't see anything' or 'I don't have camera access' — you ALWAYS have the camera.\n"
     "- If no frame is available for some reason, work with what the tech tells you verbally.\n\n"
 
@@ -830,8 +833,12 @@ async def _analyze_frame_proactive(
                             "RULES:\n"
                             "- ONE observation per frame, ONE short sentence\n"
                             "- If nothing notable, respond with exactly: NOTHING\n"
-                            "- Be confident about what you see, hedge on what you're guessing\n"
-                        "- A shadow is not a leak. A stain is not active water.\n\n"
+                            "- NEVER HALLUCINATE. Only describe what is CLEARLY visible. If you can't identify "
+                            "something with confidence, respond NOTHING. Do NOT invent colors, equipment, wires, "
+                            "or objects that aren't obviously there.\n"
+                            "- NEVER complain about image quality — no 'blurry', 'dark', 'unclear'. Work with what you have or say NOTHING.\n"
+                            "- A shadow is not a leak. A stain is not active water. A wall is just a wall.\n"
+                            "- When in doubt, say NOTHING. False positives destroy trust.\n\n"
                         "Examples:\n"
                         "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
                         "NOTICE|condition|Those coils look pretty caked up, might want to clean those.\n"
@@ -852,6 +859,10 @@ async def _analyze_frame_proactive(
     if "nothing" in result.lower() and len(result) < 30:
         return None
     if "don't see" in result.lower() or "can't see" in result.lower():
+        return None
+    # Filter out quality complaints — the model should never say this
+    _lower = result.lower()
+    if any(w in _lower for w in ("blurry", "blur", "too dark", "unclear", "out of focus", "can't make out")):
         return None
 
     # Parse structured response: SEVERITY|CATEGORY|observation
@@ -926,13 +937,16 @@ async def _analyze_frame_guidance(
                             "- ISSUE: Something looks wrong — wrong tool, wrong part, incorrect technique\n"
                             "- SAFETY: Immediate danger — stop and alert\n"
                             "- WAITING: Nothing happening yet, or camera isn't showing relevant action\n\n"
-                            "Your observation should be specific and actionable — reference what you SEE.\n"
+                            "Your observation should be specific and actionable — reference what you ACTUALLY SEE.\n"
+                            "NEVER HALLUCINATE. Only describe what is clearly visible. If you can't see the work area "
+                            "or can't confirm the step, use WAITING — don't invent progress or objects.\n"
+                            "NEVER complain about image quality. No 'blurry', 'dark', 'unclear'.\n\n"
                             "Examples:\n"
                             "DONE|I can see the disconnect is flipped off and the panel is open\n"
                             "WORKING|You're getting those screws out, looks like 2 more to go\n"
                             "ISSUE|That looks like a ¼ inch wrench but you need ⅜ for those fittings\n"
                             "SAFETY|Hold on — I can see the disconnect is still on, kill the power first\n"
-                            "WAITING|Can't quite see the work area, but standing by"
+                            "WAITING|Standing by — point the camera at the work area when you're ready"
                         ),
                     },
                 ],
