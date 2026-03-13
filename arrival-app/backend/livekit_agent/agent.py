@@ -188,10 +188,18 @@ JOB_MODE_PROMPT = (
 
     # ── REASON ──
     "REASON — Use your knowledge and tools to figure out what's going on.\n"
-    "- lookup_error_code: For error codes, blink codes, fault codes. Try this FIRST.\n"
-    "- search_knowledge: For specs, sizing, manuals, building codes, installation details. "
-    "Use whenever you're not 100% sure of a number or spec.\n"
-    "- Combine what you SEE with what you KNOW to give useful, accurate answers.\n"
+    "- lookup_error_code: ONLY for error codes, blink codes, fault codes. Try this FIRST when codes are mentioned.\n"
+    "- search_knowledge: ONLY for specific technical questions — building codes, specs, sizing, "
+    "manuals, installation requirements, manufacturer-specific procedures. "
+    "Do NOT use this for basic vision questions like 'what do you see' or 'what is this' — "
+    "just look at the camera frame and answer directly.\n"
+    "- WHEN TO USE TOOLS vs JUST ANSWER:\n"
+    "  - 'What do you see?' → just describe the frame. No tools.\n"
+    "  - 'What is that?' → just describe what you see. No tools.\n"
+    "  - 'What error code is that?' → use lookup_error_code.\n"
+    "  - 'What size wire do I need for a 40A circuit?' → use search_knowledge.\n"
+    "  - 'Walk me through replacing this capacitor' → use start_guidance.\n"
+    "  - 'Is this up to code?' → use search_knowledge for the specific code requirement.\n"
     "- Lead with the most likely answer. Don't list 5 possibilities.\n"
     "- Never make something up. If you don't know, say 'I'm not sure on that one.'\n"
     "- For error codes: use lookup_error_code first, then search_knowledge. "
@@ -1066,6 +1074,10 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                 frame = get_frame(agent._room_name)
             if not frame:
                 continue
+
+            # Log frame stats for debugging vision pipeline
+            frame_kb = len(frame) * 3 // 4 // 1024  # base64 → approx bytes → KB
+            logger.debug(f"[vision] Frame received: ~{frame_kb}KB base64, age={now - agent._frame_received_at:.1f}s")
 
             # ── GUIDANCE MODE: Step verification via camera ──
             if agent._guidance_active and agent._guidance_steps:

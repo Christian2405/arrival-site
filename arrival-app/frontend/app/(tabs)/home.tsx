@@ -11,6 +11,7 @@ import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
 import { useConversationStore, Message } from '../../store/conversationStore';
@@ -206,7 +207,8 @@ export default function HomeScreen() {
     }
   }, [prefill]);
 
-  // --- Camera capture (silent, no shutter) ---
+  // --- Camera capture (silent, no shutter) + resize for optimal AI vision ---
+  const MAX_FRAME_DIM = 1536; // Claude vision sweet spot — more pixels are wasted
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
     if (!cameraRef.current) {
       console.warn('[captureFrame] cameraRef.current is null');
@@ -214,17 +216,39 @@ export default function HomeScreen() {
     }
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.8,  // High quality — vision is core to the product, don't compromise
+        base64: false, // Don't base64 the full-res image — we'll resize first
+        quality: 1,    // Max quality capture, we compress after resize
         exif: false,
         shutterSound: false,
       });
-      if (photo?.base64) {
-        console.log(`[captureFrame] OK (${Math.round(photo.base64.length / 1024)}KB)`);
-      } else {
-        console.warn('[captureFrame] takePictureAsync returned no base64');
+      if (!photo?.uri) {
+        console.warn('[captureFrame] takePictureAsync returned no uri');
+        return undefined;
       }
-      return photo?.base64 || undefined;
+
+      // Resize to max 1536px on longest side, then JPEG compress at 0.8
+      const { width, height } = photo;
+      const longest = Math.max(width || 0, height || 0);
+      const actions: ImageManipulator.Action[] = [];
+      if (longest > MAX_FRAME_DIM) {
+        if ((width || 0) >= (height || 0)) {
+          actions.push({ resize: { width: MAX_FRAME_DIM } });
+        } else {
+          actions.push({ resize: { height: MAX_FRAME_DIM } });
+        }
+      }
+      const resized = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        actions,
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+
+      if (resized?.base64) {
+        console.log(`[captureFrame] OK ${resized.width}x${resized.height} (${Math.round(resized.base64.length / 1024)}KB)`);
+        return resized.base64;
+      }
+      console.warn('[captureFrame] manipulateAsync returned no base64');
+      return undefined;
     } catch (e: any) {
       console.error('[captureFrame] FAILED:', e?.message || e);
       return undefined;
