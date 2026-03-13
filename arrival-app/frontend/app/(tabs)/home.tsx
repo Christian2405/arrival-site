@@ -215,40 +215,43 @@ export default function HomeScreen() {
       return undefined;
     }
     try {
+      // Capture with base64 so we always have a fallback
       const photo = await cameraRef.current.takePictureAsync({
-        base64: false, // Don't base64 the full-res image — we'll resize first
-        quality: 1,    // Max quality capture, we compress after resize
+        base64: true,
+        quality: 0.8,
         exif: false,
         shutterSound: false,
       });
-      if (!photo?.uri) {
-        console.warn('[captureFrame] takePictureAsync returned no uri');
+      if (!photo?.base64) {
+        console.warn('[captureFrame] takePictureAsync returned no base64');
         return undefined;
       }
 
-      // Resize to max 1536px on longest side, then JPEG compress at 0.8
-      const { width, height } = photo;
-      const longest = Math.max(width || 0, height || 0);
-      const actions: ImageManipulator.Action[] = [];
-      if (longest > MAX_FRAME_DIM) {
-        if ((width || 0) >= (height || 0)) {
-          actions.push({ resize: { width: MAX_FRAME_DIM } });
-        } else {
-          actions.push({ resize: { height: MAX_FRAME_DIM } });
+      // Try to resize for faster transfer — fall back to raw if it fails
+      try {
+        const { width, height } = photo;
+        const longest = Math.max(width || 0, height || 0);
+        if (longest > MAX_FRAME_DIM && photo.uri) {
+          const resize = (width || 0) >= (height || 0)
+            ? { width: MAX_FRAME_DIM }
+            : { height: MAX_FRAME_DIM };
+          const resized = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ resize }],
+            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+          );
+          if (resized?.base64) {
+            console.log(`[captureFrame] Resized ${resized.width}x${resized.height} (${Math.round(resized.base64.length / 1024)}KB)`);
+            return resized.base64;
+          }
         }
+      } catch (resizeErr: any) {
+        console.warn('[captureFrame] Resize failed, using raw:', resizeErr?.message);
       }
-      const resized = await ImageManipulator.manipulateAsync(
-        photo.uri,
-        actions,
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-      );
 
-      if (resized?.base64) {
-        console.log(`[captureFrame] OK ${resized.width}x${resized.height} (${Math.round(resized.base64.length / 1024)}KB)`);
-        return resized.base64;
-      }
-      console.warn('[captureFrame] manipulateAsync returned no base64');
-      return undefined;
+      // Fallback: use the raw capture
+      console.log(`[captureFrame] OK raw (${Math.round(photo.base64.length / 1024)}KB)`);
+      return photo.base64;
     } catch (e: any) {
       console.error('[captureFrame] FAILED:', e?.message || e);
       return undefined;
