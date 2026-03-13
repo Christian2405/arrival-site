@@ -149,7 +149,7 @@ export default function HomeScreen() {
   } = useConversationStore();
   const messages = currentConversation?.messages || [];
 
-  const { demoMode, voiceOutput, interactionMode, setInteractionMode, useStreamingVoice, useLiveKit } = useSettingsStore();
+  const { voiceOutput, interactionMode, setInteractionMode, useStreamingVoice, useLiveKit } = useSettingsStore();
   const livekitFrameBatcherRef = useRef<FrameBatcher | null>(null);
   const [livekitActive, setLivekitActive] = useState(false);
   const { saveAnswer } = useSavedAnswersStore();
@@ -161,14 +161,12 @@ export default function HomeScreen() {
   // Usage store — fetch on mount + foreground
   const { fetchUsage, incrementQueryCount } = useUsageStore();
   useEffect(() => {
-    if (!demoMode) fetchUsage();
+    fetchUsage();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && !useSettingsStore.getState().demoMode) {
-        fetchUsage();
-      }
+      if (state === 'active') fetchUsage();
     });
     return () => sub.remove();
-  }, [fetchUsage, demoMode]);
+  }, [fetchUsage]);
 
   // Keyboard height listener
   useEffect(() => {
@@ -428,10 +426,10 @@ export default function HomeScreen() {
         const frameBase64 = pttFrameRef.current;
         pttFrameRef.current = undefined;
 
-        const currentDemoMode = useSettingsStore.getState().demoMode;
+
         const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
         const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
-        const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, currentDemoMode, 'default');
+        const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, false, 'default');
 
         if (SAVE_COMMANDS.test(result.transcript)) {
           handleVoiceSaveCommand();
@@ -451,7 +449,7 @@ export default function HomeScreen() {
         });
 
         // Optimistic usage increment
-        if (!currentDemoMode) incrementQueryCount();
+        incrementQueryCount();
 
         if (result.audio_base64) {
           setVoiceState('speaking');
@@ -479,7 +477,7 @@ export default function HomeScreen() {
 
     // Tap during idle → start recording
     // Check query limit before starting (skip in demo mode)
-    if (!useSettingsStore.getState().demoMode && isQueryLimitReached()) {
+    if (isQueryLimitReached()) {
       Alert.alert(
         'Daily Limit Reached',
         'You\'ve used all your queries for today. Upgrade your plan for more.',
@@ -513,7 +511,7 @@ export default function HomeScreen() {
     if (!text || isProcessing) return;
 
     // Check query limit before sending (skip in demo mode)
-    if (!useSettingsStore.getState().demoMode && isQueryLimitReached()) {
+    if (isQueryLimitReached()) {
       Alert.alert(
         'Daily Limit Reached',
         'You\'ve used all your queries for today. Upgrade your plan for more.',
@@ -554,13 +552,11 @@ export default function HomeScreen() {
     try {
       const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
       const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-      const currentDemoMode = useSettingsStore.getState().demoMode;
-
       const response = await aiAPI.chat(
         text,
         imageForThisMessage,
         history,
-        currentDemoMode,
+        false,
         useSettingsStore.getState().units,
         imageIsManual,
       );
@@ -574,7 +570,7 @@ export default function HomeScreen() {
       });
 
       // Optimistic usage increment
-      if (!currentDemoMode) incrementQueryCount();
+      incrementQueryCount();
     } catch (error: any) {
       addMessage({
         id: generateId(), role: 'assistant',
@@ -584,7 +580,7 @@ export default function HomeScreen() {
     } finally {
       setIsProcessing(false);
     }
-  }, [inputText, isProcessing, pendingImage, messages, demoMode, addMessage, setIsProcessing]);
+  }, [inputText, isProcessing, pendingImage, messages, addMessage, setIsProcessing]);
 
   // --- MODE SWITCHING ---
   // Bug 4: Tier gate checks FIRST, before any cleanup
@@ -723,8 +719,8 @@ export default function HomeScreen() {
             });
             // Frame alerts still use REST TTS (short one-off utterances)
             try {
-              const currentDemoMode = useSettingsStore.getState().demoMode;
-              const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
+      
+              const ttsResp = await aiAPI.textToSpeech(message, false);
               if (ttsResp.audio_base64) await playAudio(ttsResp.audio_base64);
             } catch (e) {
               console.log('Job Mode TTS error:', e);
@@ -813,8 +809,8 @@ export default function HomeScreen() {
               source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
             });
             try {
-              const currentDemoMode = useSettingsStore.getState().demoMode;
-              const ttsResp = await aiAPI.textToSpeech(message, currentDemoMode);
+      
+              const ttsResp = await aiAPI.textToSpeech(message, false);
               if (ttsResp.audio_base64) {
                 setJobAIState('speaking');
                 await playAudio(ttsResp.audio_base64);
@@ -829,8 +825,8 @@ export default function HomeScreen() {
               try { frame = await captureFrame(); } catch {}
               const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
               const history = currentMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
-              const currentDemoMode = useSettingsStore.getState().demoMode;
-              const result = await aiAPI.voiceChat(audioBase64, frame, history, currentDemoMode, 'job');
+      
+              const result = await aiAPI.voiceChat(audioBase64, frame, history, false, 'job');
 
               addMessage({ id: generateId(), role: 'user', content: result.transcript, displayMode: 'job', timestamp: new Date() });
               addMessage({ id: generateId(), role: 'assistant', content: result.response, source: result.source, confidence: validateConfidence(result.confidence), displayMode: 'job', timestamp: new Date() });
@@ -975,13 +971,6 @@ export default function HomeScreen() {
               <View style={styles.iconBtn} />
             )}
           </View>
-
-          {/* Demo mode badge */}
-          {demoMode && (
-            <View style={styles.demoBadge}>
-              <Text style={styles.demoBadgeText}>DEMO MODE</Text>
-            </View>
-          )}
 
           {/* ===== MODE-SPECIFIC CONTENT ===== */}
 
@@ -1290,13 +1279,13 @@ export default function HomeScreen() {
                     const frame = await captureFrame();
                     const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
                     const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-                    const currentDemoMode = useSettingsStore.getState().demoMode;
+            
 
                     setJobAIState('processing');
 
                     // Use text chat API (not voiceChat) since we're sending a text prompt, not audio.
                     // voiceChat expects audio_base64 as first arg — sending text would cause a backend error.
-                    const chatResult = await aiAPI.chat(followUpText, frame, history, currentDemoMode, useSettingsStore.getState().units);
+                    const chatResult = await aiAPI.chat(followUpText, frame, history, false, useSettingsStore.getState().units);
 
                     addMessage({
                       id: generateId(), role: 'assistant', content: chatResult.response,
@@ -1306,7 +1295,7 @@ export default function HomeScreen() {
 
                     // TTS the response so the tech hears it hands-free
                     try {
-                      const ttsResp = await aiAPI.textToSpeech(chatResult.response, currentDemoMode);
+                      const ttsResp = await aiAPI.textToSpeech(chatResult.response, false);
                       if (ttsResp.audio_base64) {
                         setJobAIState('speaking');
                         await playAudio(ttsResp.audio_base64);
@@ -1496,22 +1485,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: FontSize.sm,
     fontWeight: '600',
-  },
-
-  // --- Demo badge ---
-  demoBadge: {
-    alignSelf: 'center',
-    backgroundColor: Colors.accent,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.md,
-    marginTop: Spacing.xs,
-  },
-  demoBadgeText: {
-    color: '#FFF',
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    letterSpacing: 1.5,
   },
 
   // --- Mode container (wrapper for each mode) ---

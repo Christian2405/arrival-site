@@ -27,12 +27,10 @@ export default function SettingsScreen() {
   const router = useRouter();
   const {
     voiceOutput,
-    demoMode,
     voiceSpeed,
     units,
     textSize,
     setVoiceOutput,
-    setDemoMode,
     setVoiceSpeed,
     setUnits,
     setTextSize,
@@ -325,20 +323,6 @@ export default function SettingsScreen() {
         {/* App */}
         <Text style={st.section}>APP</Text>
         <View style={st.group}>
-          <Row
-            icon="flask-outline"
-            label="Demo Mode"
-            hint="Uses sample responses"
-            right={
-              <Switch
-                value={demoMode}
-                onValueChange={setDemoMode}
-                trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
-                thumbColor="#FFF"
-              />
-            }
-          />
-          <View style={st.sep} />
           <Row
             icon="notifications-outline"
             label="Notifications"

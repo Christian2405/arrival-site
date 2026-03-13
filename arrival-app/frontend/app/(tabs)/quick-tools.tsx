@@ -93,7 +93,7 @@ const PIPE_TABLE = [
   { size: '4"', minGPM: 160, maxGPM: 300 },
 ];
 
-type ToolId = 'wire-gauge' | 'voltage-drop' | 'ohms-law' | 'pipe-sizing' | 'pt-chart';
+type ToolId = 'wire-gauge' | 'voltage-drop' | 'ohms-law' | 'pipe-sizing' | 'pt-chart' | 'unit-convert';
 
 interface Tool {
   id: ToolId;
@@ -109,6 +109,7 @@ const TOOLS: Tool[] = [
   { id: 'ohms-law', name: "Ohm's Law", icon: 'pulse-outline', description: 'V = IR calculator', category: 'Electrical' },
   { id: 'pipe-sizing', name: 'Pipe Sizing', icon: 'resize-outline', description: 'GPM flow requirements', category: 'Plumbing' },
   { id: 'pt-chart', name: 'P/T Chart', icon: 'thermometer-outline', description: 'Refrigerant pressure lookup', category: 'HVAC' },
+  { id: 'unit-convert', name: 'Unit Converter', icon: 'swap-horizontal-outline', description: '°F↔°C, in↔mm, PSI↔kPa & more', category: 'General' },
 ];
 
 // ─── Shared input field component ────────────────────────────────────────────
@@ -474,6 +475,103 @@ function PTChartCalc() {
   );
 }
 
+// ─── Unit Converter ──────────────────────────────────────────────────────────
+
+const CONVERSIONS = [
+  { label: '°F ↔ °C',     group: 'Temp',     unitA: '°F',   unitB: '°C',   aToB: (v: number) => (v - 32) * 5 / 9,                   bToA: (v: number) => v * 9 / 5 + 32 },
+  { label: 'in ↔ mm',     group: 'Length',    unitA: 'in',   unitB: 'mm',   aToB: (v: number) => v * 25.4,                            bToA: (v: number) => v / 25.4 },
+  { label: 'ft ↔ m',      group: 'Length',    unitA: 'ft',   unitB: 'm',    aToB: (v: number) => v * 0.3048,                          bToA: (v: number) => v / 0.3048 },
+  { label: 'PSI ↔ kPa',   group: 'Pressure',  unitA: 'PSI',  unitB: 'kPa',  aToB: (v: number) => v * 6.89476,                         bToA: (v: number) => v / 6.89476 },
+  { label: 'gal ↔ L',     group: 'Volume',    unitA: 'gal',  unitB: 'L',    aToB: (v: number) => v * 3.78541,                         bToA: (v: number) => v / 3.78541 },
+  { label: 'CFM ↔ L/s',   group: 'Flow',      unitA: 'CFM',  unitB: 'L/s',  aToB: (v: number) => v * 0.471947,                        bToA: (v: number) => v / 0.471947 },
+  { label: 'BTU ↔ kW',    group: 'Power',     unitA: 'BTU/h', unitB: 'kW',  aToB: (v: number) => v * 0.000293071,                     bToA: (v: number) => v / 0.000293071 },
+  { label: 'lb ↔ kg',     group: 'Weight',    unitA: 'lb',   unitB: 'kg',   aToB: (v: number) => v * 0.453592,                        bToA: (v: number) => v / 0.453592 },
+];
+
+function UnitConvertCalc() {
+  const [selected, setSelected] = useState(0);
+  const [valueA, setValueA] = useState('');
+  const [valueB, setValueB] = useState('');
+  const [lastEdited, setLastEdited] = useState<'A' | 'B'>('A');
+
+  const conv = CONVERSIONS[selected];
+
+  const handleChangeA = (text: string) => {
+    setValueA(text);
+    setLastEdited('A');
+    const num = parseFloat(text);
+    if (!isNaN(num)) {
+      const result = conv.aToB(num);
+      setValueB(result < 0.01 && result > 0 ? result.toPrecision(4) : result.toFixed(2));
+    } else {
+      setValueB('');
+    }
+  };
+
+  const handleChangeB = (text: string) => {
+    setValueB(text);
+    setLastEdited('B');
+    const num = parseFloat(text);
+    if (!isNaN(num)) {
+      const result = conv.bToA(num);
+      setValueA(result < 0.01 && result > 0 ? result.toPrecision(4) : result.toFixed(2));
+    } else {
+      setValueA('');
+    }
+  };
+
+  const handleSelect = (idx: number) => {
+    setSelected(idx);
+    const c = CONVERSIONS[idx];
+    // Reconvert current value with new conversion
+    if (lastEdited === 'A' && valueA) {
+      const num = parseFloat(valueA);
+      if (!isNaN(num)) setValueB(c.aToB(num).toFixed(2));
+    } else if (lastEdited === 'B' && valueB) {
+      const num = parseFloat(valueB);
+      if (!isNaN(num)) setValueA(c.bToA(num).toFixed(2));
+    } else {
+      setValueA('');
+      setValueB('');
+    }
+  };
+
+  return (
+    <View style={s.calcBody}>
+      <Text style={s.calcDescription}>
+        Tap a conversion, type in either field. Instant bidirectional conversion.
+      </Text>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.gaugeScroll} contentContainerStyle={s.gaugeScrollContent}>
+        {CONVERSIONS.map((c, i) => (
+          <TouchableOpacity
+            key={c.label}
+            style={[s.gaugePill, selected === i && s.gaugePillActive]}
+            onPress={() => handleSelect(i)}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.gaugePillText, selected === i && s.gaugePillTextActive]}>{c.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <View style={{ marginTop: Spacing.base }}>
+        <InputField label={conv.unitA} value={valueA} onChangeText={handleChangeA} placeholder="0" unit={conv.unitA} />
+      </View>
+
+      <View style={{ alignItems: 'center', marginVertical: 4 }}>
+        <Ionicons name="swap-vertical-outline" size={20} color={Colors.textMuted} />
+      </View>
+
+      <InputField label={conv.unitB} value={valueB} onChangeText={handleChangeB} placeholder="0" unit={conv.unitB} />
+
+      {(valueA !== '' || valueB !== '') && (
+        <ResetButton onPress={() => { setValueA(''); setValueB(''); }} />
+      )}
+    </View>
+  );
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function QuickToolsScreen() {
@@ -581,6 +679,7 @@ export default function QuickToolsScreen() {
               {activeTool === 'ohms-law' && <OhmsLawCalc />}
               {activeTool === 'pipe-sizing' && <PipeSizingCalc />}
               {activeTool === 'pt-chart' && <PTChartCalc />}
+              {activeTool === 'unit-convert' && <UnitConvertCalc />}
             </ScrollView>
           </SafeAreaView>
         </KeyboardAvoidingView>

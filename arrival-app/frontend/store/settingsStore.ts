@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface SettingsState {
   voiceOutput: boolean;
-  demoMode: boolean;
   jobMode: boolean;
   interactionMode: 'default' | 'text' | 'job';
   voiceSpeed: 'slow' | 'normal' | 'fast';
@@ -13,7 +12,6 @@ interface SettingsState {
   useLiveKit: boolean; // LiveKit voice agent (full-duplex WebRTC) — needs native build
 
   setVoiceOutput: (value: boolean) => void;
-  setDemoMode: (value: boolean) => void;
   setJobMode: (value: boolean) => void;
   setInteractionMode: (value: 'default' | 'text' | 'job') => void;
   setVoiceSpeed: (value: 'slow' | 'normal' | 'fast') => void;
@@ -26,7 +24,6 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   voiceOutput: true,
-  demoMode: false,
   jobMode: false,
   interactionMode: 'default',
   voiceSpeed: 'normal',
@@ -38,10 +35,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setVoiceOutput: (value) => {
     set({ voiceOutput: value });
     AsyncStorage.setItem('voice_output', value.toString()).catch(console.error);
-  },
-  setDemoMode: (value) => {
-    set({ demoMode: value });
-    AsyncStorage.setItem('demo_mode', value.toString()).catch(console.error);
   },
   setJobMode: (value) => {
     set({ jobMode: value, interactionMode: value ? 'job' : 'default' });
@@ -75,13 +68,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   loadSettings: async () => {
     try {
-      // One-time migration: force demo mode OFF now that real API keys are set
-      const migrated = await AsyncStorage.getItem('settings_v2_migrated');
-      if (!migrated) {
-        await AsyncStorage.setItem('demo_mode', 'false');
-        await AsyncStorage.setItem('settings_v2_migrated', 'true');
-      }
-
       // Force LiveKit ON — EAS dev client now includes native WebRTC
       const lkMigrated3 = await AsyncStorage.getItem('settings_lk_v3_on');
       if (!lkMigrated3) {
@@ -97,7 +83,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       }
 
       const voiceOutput = await AsyncStorage.getItem('voice_output');
-      const demoMode = await AsyncStorage.getItem('demo_mode');
       const jobMode = await AsyncStorage.getItem('job_mode');
       const interactionMode = await AsyncStorage.getItem('interaction_mode');
       const voiceSpeed = await AsyncStorage.getItem('voice_speed');
@@ -107,7 +92,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
       set({
         voiceOutput: voiceOutput !== 'false',
-        demoMode: demoMode === 'true',
         jobMode: jobMode === 'true',
         interactionMode: (['default', 'text', 'job'].includes(interactionMode || '') ? interactionMode : 'default') as 'default' | 'text' | 'job',
         voiceSpeed: (voiceSpeed as any) || 'normal',
