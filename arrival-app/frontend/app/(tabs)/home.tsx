@@ -215,7 +215,7 @@ export default function HomeScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.5,  // Balanced — enough detail for AI vision without huge payloads
+        quality: 0.7,  // High quality — AI needs detail for tears, small text, labels
         exif: false,
         shutterSound: false,
       });
