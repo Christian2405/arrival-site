@@ -521,6 +521,15 @@ class ArrivalAgent(Agent):
         'help me step by step', 'what do I do first'."""
         logger.info(f"[guidance] ★ Starting guidance: {task_description}")
 
+        # If no task specified (e.g. user pressed "Guide me" button without context),
+        # ask what they need help with instead of generating garbage
+        if not task_description or len(task_description.strip()) < 3:
+            return (
+                "The tech wants guidance but hasn't said what they need help with. "
+                "Ask them naturally: 'What are you working on?' or 'What do you need a hand with?' "
+                "Once they tell you, call start_guidance with their task."
+            )
+
         # 1. Search knowledge base for relevant procedure
         rag_context = ""
         try:
@@ -547,24 +556,24 @@ class ArrivalAgent(Agent):
         eq_note = f"\nEquipment: {eq_str}\n" if eq_str else ""
 
         step_prompt = (
-            "You're a 50-year trade veteran coaching a tech through a job in real time. "
-            "They're on-site right now with their phone camera.\n\n"
+            "You are Arrival's guidance engine. A trade worker is on-site right now with "
+            "their phone camera. You need to build a guided procedure for them.\n\n"
             f"TASK: {task_description}\n{eq_note}\n"
         )
         if rag_context:
             step_prompt += f"REFERENCE MATERIAL:\n{rag_context}\n\n"
 
         step_prompt += (
-            "Break this into key milestones — not a mundane checklist, but the critical "
-            "waypoints a vet would naturally walk someone through. Think of it like you're "
-            "standing right there: what would you tell them to do first, then next?\n\n"
+            "Break this into key milestones — the critical waypoints to get this done "
+            "safely and correctly.\n\n"
             "Rules:\n"
             "- 4-8 milestones max. Each one is a meaningful action or check.\n"
-            "- ALWAYS start with safety (kill power, shut gas, verify zero-energy)\n"
+            "- ALWAYS start with safety (kill power, shut gas, verify zero-energy) if applicable\n"
             "- Use specific tool/part names: '⅜ inch wrench', '10mm socket', not 'appropriate tool'\n"
-            "- Write how you'd SAY it, not how you'd write a manual\n"
-            "- Include what they should SEE or FEEL to know it's done right\n"
-            "- End with a verification milestone (test, check for leaks, power up)\n\n"
+            "- Write how you'd SAY it out loud, not how a manual would write it\n"
+            "- Include what they should SEE or FEEL to confirm it's done right\n"
+            "- End with a verification step (test, check for leaks, verify operation)\n"
+            "- If the task is simple (1-2 steps), just give 1-2 milestones. Don't pad.\n\n"
             "Format: Return ONLY numbered milestones, one per line. No intro text.\n"
             "Example:\n"
             "1. Kill the power at the disconnect and verify with your meter — should read 0V\n"
@@ -616,19 +625,17 @@ class ArrivalAgent(Agent):
         # 5. Return first step context to the LLM
         total = len(steps)
         return (
-            f"## REAL-TIME GUIDANCE ACTIVE\n"
-            f"Task: {task_description}\n\n"
-            f"FIRST UP: {steps[0]}\n\n"
-            f"Your game plan ({total} milestones):\n" +
+            f"GUIDANCE ACTIVE — Task: {task_description}\n\n"
+            f"First thing: {steps[0]}\n\n"
+            f"Full plan ({total} milestones):\n" +
             "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)) +
-            "\n\nIMPORTANT — HOW TO GUIDE:\n"
-            "- Talk like a veteran buddy coaching them, NOT like a manual.\n"
-            "- DON'T say 'Step 1', 'Step 2' etc. Just tell them what to do naturally.\n"
-            "- Use the camera: 'See that silver cylinder? That's your capacitor.'\n"
+            "\n\nHOW TO GUIDE:\n"
+            "- Never say 'Step 1', 'Step 2', 'milestone', or 'next step'. Just talk naturally.\n"
+            "- Reference what you see on camera: 'See that silver cylinder? That's your capacitor.'\n"
             "- Be specific: tool sizes, part names, what they should see/hear/feel.\n"
-            "- When they finish, use advance_guidance to move to the next milestone.\n"
-            "- They can interrupt you anytime with questions — answer and continue guiding.\n"
-            "Start by telling them what to do first. Keep it conversational."
+            "- When they finish a milestone, use advance_guidance.\n"
+            "- They can interrupt with questions anytime — answer and keep guiding.\n"
+            "Start by telling them what to do first. Keep it conversational and concise."
         )
 
     @function_tool()
@@ -664,11 +671,10 @@ class ArrivalAgent(Agent):
             self._guidance_context = ""
             logger.info(f"[guidance] ✓ All {total} steps complete for: {task}")
             return (
-                f"## GUIDANCE COMPLETE\n"
-                f"Task: {task}\n"
-                "That's it — they're done. Give them a quick 'nice work' and remind them to do "
-                "a final check (test the system, check for leaks, verify operation). "
-                "Keep it brief and encouraging. Don't recap all the steps."
+                f"They just finished: {task}. "
+                "Tell them 'nice work' or 'you're all set' — something brief and encouraging. "
+                "Remind them to do a final check if relevant (test it, check for leaks, power up). "
+                "Don't recap steps. Just wrap it up naturally."
             )
 
         current_step = self._guidance_steps[step_num]
@@ -676,12 +682,11 @@ class ArrivalAgent(Agent):
         logger.info(f"[guidance] → Step {step_num + 1}/{total}: {current_step[:60]}")
 
         return (
-            f"## NEXT UP: {current_step}\n"
-            f"(Milestone {step_num + 1} of {total})\n\n"
-            "Guide them naturally — DON'T say 'step 2' or 'next step'. "
-            "Just tell them what to do next like a buddy would: 'Alright, now grab your...' "
-            "Use the camera to reference what you see. Be specific about tools and what "
-            "they should see/hear/feel when it's done right."
+            f"Next thing to do: {current_step}\n\n"
+            "Tell them what to do next naturally — 'Alright, now...' or 'OK so next...'. "
+            "Never say 'step 2' or 'next step' or 'milestone'. "
+            "Reference what you see on camera. Be specific about tools and "
+            "what they should see/hear/feel when it's done right."
         )
 
     @function_tool()
@@ -838,14 +843,15 @@ async def _analyze_frame_proactive(
                             "- INFO: Low priority — general observation, equipment brand visible, helpful tip\n\n"
                             "CATEGORY must be one of: safety, error_code, model_number, condition, part_id, tip\n\n"
                             "RULES:\n"
-                            "- ONE observation per frame, ONE short sentence\n"
-                            "- If nothing notable, respond with exactly: NOTHING\n"
-                            "- NEVER HALLUCINATE. Only describe what is CLEARLY visible. If you can't identify "
-                            "something with confidence, respond NOTHING. Do NOT invent colors, equipment, wires, "
-                            "or objects that aren't obviously there.\n"
-                            "- NEVER complain about image quality — no 'blurry', 'dark', 'unclear'. Work with what you have or say NOTHING.\n"
-                            "- A shadow is not a leak. A stain is not active water. A wall is just a wall.\n"
-                            "- When in doubt, say NOTHING. False positives destroy trust.\n\n"
+                            "- Your DEFAULT response is NOTHING. Most frames have nothing worth flagging.\n"
+                            "- Only speak when you see something genuinely notable and you're CONFIDENT.\n"
+                            "- ONE observation per frame, ONE short sentence.\n"
+                            "- NEVER HALLUCINATE. If you are not 90%+ confident in what you see, say NOTHING. "
+                            "Do NOT invent colors, equipment, wires, or objects. Do NOT guess.\n"
+                            "- NEVER complain about image quality. Say NOTHING instead.\n"
+                            "- A shadow is not a leak. A stain is not water. A wall is just a wall. "
+                            "Normal residential/commercial spaces are not observations.\n"
+                            "- False positives destroy trust. Silence is always better than a wrong call.\n\n"
                         "Examples:\n"
                         "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
                         "NOTICE|condition|Those coils look pretty caked up, might want to clean those.\n"
@@ -867,9 +873,20 @@ async def _analyze_frame_proactive(
         return None
     if "don't see" in result.lower() or "can't see" in result.lower():
         return None
-    # Filter out quality complaints — the model should never say this
+    # Filter out quality complaints and hedging — the model should never say this
     _lower = result.lower()
-    if any(w in _lower for w in ("blurry", "blur", "too dark", "unclear", "out of focus", "can't make out")):
+    if any(w in _lower for w in (
+        "blurry", "blur", "too dark", "unclear", "out of focus", "can't make out",
+        "appears to be", "might be", "could be", "looks like it might",
+        "i think i see", "possibly", "hard to tell",
+    )):
+        return None
+
+    # Filter out generic non-observations
+    if any(phrase in _lower for phrase in (
+        "residential", "normal looking", "nothing unusual", "standard",
+        "room appears", "wall appears", "i can see a wall", "i see a room",
+    )):
         return None
 
     # Parse structured response: SEVERITY|CATEGORY|observation
@@ -887,10 +904,14 @@ async def _analyze_frame_proactive(
         if category not in valid_categories:
             category = "condition"
 
+        # Final hallucination check — if observation is too vague, drop it
+        if len(observation) < 10:
+            return None
+
         return (severity, observation, category)
 
-    # Fallback: unstructured response — treat as NOTICE
-    return ("NOTICE", result, "condition")
+    # Fallback: unstructured response — drop it (don't trust unformatted output)
+    return None
 
 
 async def _analyze_frame_guidance(
@@ -977,43 +998,30 @@ async def _analyze_frame_guidance(
 
 
 def _get_speech_instruction(severity: str, observation: str, agent: "ArrivalAgent") -> str:
-    """Generate varied, natural speech instructions based on severity and context."""
+    """Generate natural speech instruction for the LLM to say aloud."""
     obs_count = len(agent._recent_observations)
     time_since_last = time.time() - agent._last_proactive_time if agent._last_proactive_time else 999
 
     if severity == "SAFETY":
-        templates = [
-            f"Alert the tech immediately — this is a safety issue: {observation}",
-            f"Stop what you're doing — {observation}",
-            f"Hold on, I see something: {observation}",
-            f"Hey, heads up: {observation}",
-        ]
-        return random.choice(templates)
+        return (
+            f"SAFETY ALERT — tell the tech immediately: {observation}. "
+            "Be direct and urgent but not panicky."
+        )
     elif obs_count == 0:
-        # First observation on this job
-        templates = [
-            f"You just got a look at what they're working on. Mention casually: {observation}",
-            f"Alright, I can see what you're working with. {observation}",
-            f"OK so looking at this — {observation}",
-        ]
-        return random.choice(templates)
+        return (
+            f"You noticed something on camera: {observation}. "
+            "Mention it casually — 'Hey, I can see...' Keep it brief."
+        )
     elif time_since_last < 60:
-        # Recent follow-up
-        templates = [
-            f"While they're still working on this, you also noticed: {observation}",
-            f"Also noticing: {observation}",
-            f"One more thing — {observation}",
-            f"And just so you know: {observation}",
-        ]
-        return random.choice(templates)
+        return (
+            f"Another thing you're seeing: {observation}. "
+            "Keep it short — 'Also...' or 'One more thing...'."
+        )
     else:
-        # After a gap (> 60s since last observation)
-        templates = [
-            f"Hey, one more thing you're seeing: {observation}",
-            f"Hey, something I'm seeing: {observation}",
-            f"Just spotted something: {observation}",
-        ]
-        return random.choice(templates)
+        return (
+            f"You spotted something: {observation}. "
+            "Mention it naturally — 'Hey, just noticed...'."
+        )
 
 
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
