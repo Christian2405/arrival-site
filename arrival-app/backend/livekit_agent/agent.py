@@ -393,7 +393,7 @@ class ArrivalAgent(Agent):
     async def get_current_frame(self) -> Optional[str]:
         """Get the best available frame — tries data channel, HTTP, file store."""
         # 1. Data channel frame (if recent) — fastest
-        if self._latest_frame and (time.time() - self._frame_received_at) < 8:
+        if self._latest_frame and (time.time() - self._frame_received_at) < 4:
             return self._latest_frame
 
         # 2. HTTP from FastAPI
@@ -458,7 +458,7 @@ class ArrivalAgent(Agent):
         This makes vision truly always-on — the LLM sees the camera on every turn."""
         from livekit.agents.llm import ImageContent
         frame = self._latest_frame if (
-            self._latest_frame and (time.time() - self._frame_received_at) < 8
+            self._latest_frame and (time.time() - self._frame_received_at) < 4
         ) else None
         if frame:
             data_url = f"data:image/jpeg;base64,{frame}"
@@ -1076,7 +1076,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             # Get frame
             frame = None
-            if agent._latest_frame and (now - agent._frame_received_at) < 8:
+            if agent._latest_frame and (now - agent._frame_received_at) < 4:
                 frame = agent._latest_frame
             if not frame:
                 frame = get_frame(agent._room_name)
@@ -1593,7 +1593,7 @@ async def entrypoint(ctx: JobContext):
             """Continuously update the agent's context with the latest camera frame."""
             while True:
                 try:
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(2)  # Fallback — data channel is primary at 1.5s
                     frame = await agent.get_current_frame()
                     if frame:
                         # Update the agent's instructions with frame context

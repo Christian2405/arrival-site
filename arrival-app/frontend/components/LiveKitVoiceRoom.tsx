@@ -440,8 +440,8 @@ function RoomContent({
   }, [connectionState, room]);
 
   // -----------------------------------------------------------------------
-  // Frame upload loop — sends camera frames to backend every 5s (for frame store)
-  // Also sends via data channel so the agent has a local cache for proactive vision
+  // Frame loops — fast data channel (1.5s) for real-time vision,
+  // slower HTTP upload (5s) as fallback for frame store
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
@@ -449,33 +449,33 @@ function RoomContent({
     }
 
     let active = true;
-    let frameCount = 0;
+    let httpFrameCount = 0;
 
-    const sendFrame = async () => {
+    // Fast path: send frame via data channel every 1.5s — near real-time
+    const sendDCFrame = async () => {
+      if (!active) return;
+      try {
+        const frame = await captureFrame();
+        if (!frame || !room?.localParticipant) return;
+        const dcMsg = JSON.stringify({ type: 'camera_frame', image: frame });
+        await room.localParticipant.publishData(
+          new TextEncoder().encode(dcMsg),
+          { reliable: false },
+        );
+      } catch (e: any) {
+        console.debug(`[LiveKitVoice] DC frame failed: ${e?.message || e}`);
+      }
+    };
+
+    // Slow path: HTTP upload every 5s — fallback for frame store
+    const sendHTTPFrame = async () => {
       if (!active) return;
       try {
         const frame = await captureFrame();
         if (!frame) return;
-
-        // 1. Send to agent via data channel (local cache for proactive vision)
-        try {
-          if (room?.localParticipant) {
-            const dcMsg = JSON.stringify({ type: 'camera_frame', image: frame });
-            await room.localParticipant.publishData(
-              new TextEncoder().encode(dcMsg),
-              { reliable: false },  // unreliable = lower latency, OK to drop
-            );
-          }
-        } catch (dcErr: any) {
-          // Data channel send is best-effort — don't block HTTP upload
-          console.debug(`[LiveKitVoice] DC frame send failed: ${dcErr?.message || dcErr}`);
-        }
-
-        // 2. Upload to backend frame store via HTTP (persistent, cross-process)
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return;
-
         const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
           method: 'POST',
           headers: {
@@ -484,23 +484,27 @@ function RoomContent({
           },
           body: JSON.stringify({ room_name: roomName, frame }),
         });
-        frameCount++;
+        httpFrameCount++;
         if (resp.ok) {
-          console.log(`[LiveKitVoice] Frame #${frameCount} uploaded (${Math.round(frame.length / 1024)}KB)`);
+          console.log(`[LiveKitVoice] HTTP frame #${httpFrameCount} (${Math.round(frame.length / 1024)}KB)`);
         }
       } catch (e: any) {
-        console.warn(`[LiveKitVoice] Frame upload error: ${e?.message || e}`);
+        console.warn(`[LiveKitVoice] HTTP frame error: ${e?.message || e}`);
       }
     };
 
-    // Send initial frame after 2s, then every 5 seconds
-    const initialTimeout = setTimeout(sendFrame, 2000);
-    const interval = setInterval(sendFrame, 5000);
+    // Start both loops
+    const dcInitial = setTimeout(sendDCFrame, 500);
+    const dcInterval = setInterval(sendDCFrame, 1500);
+    const httpInitial = setTimeout(sendHTTPFrame, 2000);
+    const httpInterval = setInterval(sendHTTPFrame, 5000);
 
     return () => {
       active = false;
-      clearTimeout(initialTimeout);
-      clearInterval(interval);
+      clearTimeout(dcInitial);
+      clearInterval(dcInterval);
+      clearTimeout(httpInitial);
+      clearInterval(httpInterval);
     };
   }, [connectionState, captureFrame, roomName, room]);
 
