@@ -393,7 +393,7 @@ class ArrivalAgent(Agent):
     async def get_current_frame(self) -> Optional[str]:
         """Get the best available frame — tries data channel, HTTP, file store."""
         # 1. Data channel frame (if recent) — fastest
-        if self._latest_frame and (time.time() - self._frame_received_at) < 30:
+        if self._latest_frame and (time.time() - self._frame_received_at) < 8:
             return self._latest_frame
 
         # 2. HTTP from FastAPI
@@ -406,8 +406,8 @@ class ArrivalAgent(Agent):
             if file_frame:
                 return file_frame
 
-        # 4. Stale frame as last resort
-        return self._latest_frame
+        # 4. No fresh frame available — return None rather than a stale frame
+        return None
 
     async def _fetch_frame_async(self, room_name: str) -> Optional[str]:
         """Fetch frame via async HTTP using shared client."""
@@ -458,7 +458,7 @@ class ArrivalAgent(Agent):
         This makes vision truly always-on — the LLM sees the camera on every turn."""
         from livekit.agents.llm import ImageContent
         frame = self._latest_frame if (
-            self._latest_frame and (time.time() - self._frame_received_at) < 30
+            self._latest_frame and (time.time() - self._frame_received_at) < 8
         ) else None
         if frame:
             data_url = f"data:image/jpeg;base64,{frame}"
@@ -1076,7 +1076,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             # Get frame
             frame = None
-            if agent._latest_frame and (now - agent._frame_received_at) < 30:
+            if agent._latest_frame and (now - agent._frame_received_at) < 8:
                 frame = agent._latest_frame
             if not frame:
                 frame = get_frame(agent._room_name)
@@ -1355,7 +1355,7 @@ async def entrypoint(ctx: JobContext):
                 api_key=config.DEEPGRAM_API_KEY,
             ),
             llm=anthropic.LLM(
-                model=config.ANTHROPIC_VOICE_MODEL,
+                model=config.ANTHROPIC_VISION_MODEL,  # Sonnet — Haiku's vision is too weak
                 api_key=config.ANTHROPIC_API_KEY,
             ),
             tts=elevenlabs.TTS(

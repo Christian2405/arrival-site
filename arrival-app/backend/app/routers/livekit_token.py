@@ -319,7 +319,7 @@ async def livekit_analyze_frame(req: AnalyzeRequest, request: Request):
     try:
         client = anthropic_sdk.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
         response = await client.messages.create(
-            model=config.ANTHROPIC_VOICE_MODEL,
+            model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
             max_tokens=300,
             messages=[{
                 "role": "user",

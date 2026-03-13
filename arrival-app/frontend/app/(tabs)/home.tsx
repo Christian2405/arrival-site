@@ -11,7 +11,7 @@ import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+
 import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
 import { useConversationStore, Message } from '../../store/conversationStore';
@@ -207,15 +207,14 @@ export default function HomeScreen() {
     }
   }, [prefill]);
 
-  // --- Camera capture (silent, no shutter) + resize for optimal AI vision ---
-  const MAX_FRAME_DIM = 1536; // Claude vision sweet spot — more pixels are wasted
+  // --- Camera capture (silent, no shutter) ---
+  // 0.8 quality JPEG is optimal for Claude vision. Claude resizes internally past ~1568px.
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
     if (!cameraRef.current) {
       console.warn('[captureFrame] cameraRef.current is null');
       return undefined;
     }
     try {
-      // Capture with base64 so we always have a fallback
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
         quality: 0.8,
@@ -226,31 +225,7 @@ export default function HomeScreen() {
         console.warn('[captureFrame] takePictureAsync returned no base64');
         return undefined;
       }
-
-      // Try to resize for faster transfer — fall back to raw if it fails
-      try {
-        const { width, height } = photo;
-        const longest = Math.max(width || 0, height || 0);
-        if (longest > MAX_FRAME_DIM && photo.uri) {
-          const resize = (width || 0) >= (height || 0)
-            ? { width: MAX_FRAME_DIM }
-            : { height: MAX_FRAME_DIM };
-          const resized = await ImageManipulator.manipulateAsync(
-            photo.uri,
-            [{ resize }],
-            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-          );
-          if (resized?.base64) {
-            console.log(`[captureFrame] Resized ${resized.width}x${resized.height} (${Math.round(resized.base64.length / 1024)}KB)`);
-            return resized.base64;
-          }
-        }
-      } catch (resizeErr: any) {
-        console.warn('[captureFrame] Resize failed, using raw:', resizeErr?.message);
-      }
-
-      // Fallback: use the raw capture
-      console.log(`[captureFrame] OK raw (${Math.round(photo.base64.length / 1024)}KB)`);
+      console.log(`[captureFrame] OK (${Math.round(photo.base64.length / 1024)}KB)`);
       return photo.base64;
     } catch (e: any) {
       console.error('[captureFrame] FAILED:', e?.message || e);
