@@ -62,6 +62,8 @@ interface LiveKitVoiceRoomProps {
   onError?: (message: string) => void;
   /** Equipment context to send to agent */
   equipmentContext?: EquipmentContext | null;
+  /** Exposes a function to send data channel messages to the agent */
+  onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
 }
 
 const MAX_RETRIES = 3;
@@ -77,6 +79,7 @@ export default function LiveKitVoiceRoom({
   onUserTranscript,
   onError,
   equipmentContext,
+  onSendMessageReady,
 }: LiveKitVoiceRoomProps) {
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
@@ -243,6 +246,7 @@ export default function LiveKitVoiceRoom({
         captureFrame={captureFrame}
         roomName={session.roomName}
         equipmentContext={equipmentContext}
+        onSendMessageReady={onSendMessageReady}
       />
     </LiveKitRoom>
   );
@@ -265,6 +269,7 @@ function RoomContent({
   captureFrame,
   roomName,
   equipmentContext,
+  onSendMessageReady,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onVoiceConnected?: (connected: boolean) => void;
@@ -275,6 +280,7 @@ function RoomContent({
   captureFrame?: () => Promise<string | undefined>;
   roomName?: string;
   equipmentContext?: EquipmentContext | null;
+  onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
@@ -563,6 +569,26 @@ function RoomContent({
   useEffect(() => {
     onVoiceConnected?.(agentConnected);
   }, [agentConnected, onVoiceConnected]);
+
+  // Expose send function to parent when connected — allows guidance start/stop via data channel
+  useEffect(() => {
+    if (connectionState === ConnectionState.Connected && room?.localParticipant) {
+      const sendFn = (msg: Record<string, any>) => {
+        try {
+          room.localParticipant.publishData(
+            new TextEncoder().encode(JSON.stringify(msg)),
+            { reliable: true },
+          );
+        } catch (e: any) {
+          console.warn('[LiveKitVoice] sendMessage failed:', e?.message);
+        }
+      };
+      onSendMessageReady?.(sendFn);
+    } else {
+      onSendMessageReady?.(null);
+    }
+    return () => onSendMessageReady?.(null);
+  }, [connectionState, room, onSendMessageReady]);
 
   // Agent connection timeout — if agent doesn't join within 20s, show error
   const agentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

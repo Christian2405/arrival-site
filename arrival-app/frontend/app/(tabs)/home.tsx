@@ -119,6 +119,8 @@ export default function HomeScreen() {
   const [lastJobAlert, setLastJobAlert] = useState<{ message: string; severity: string; ts: number } | null>(null);
   const jobAlertHistoryRef = useRef<string[]>([]);
   const [interimTranscript, setInterimTranscript] = useState<string>('');
+  const [guidanceActive, setGuidanceActive] = useState(false);
+  const livekitSendRef = useRef<((msg: Record<string, any>) => void) | null>(null);
 
   // Text Mode state
   const [inputText, setInputText] = useState('');
@@ -1222,6 +1224,9 @@ export default function HomeScreen() {
                     console.warn('[LiveKit] Error:', msg);
                   }}
                   equipmentContext={equipmentContext}
+                  onSendMessageReady={(fn: ((msg: Record<string, any>) => void) | null) => {
+                    livekitSendRef.current = fn;
+                  }}
                 />
               )}
               <JobModeView
@@ -1261,16 +1266,34 @@ export default function HomeScreen() {
                     jobControllerRef.current?.interrupt();
                   }
                 }}
+                guidanceActive={guidanceActive}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView
 
-                  // Build follow-up prompt based on action type
-                  const followUpText = action === 'explain'
-                    ? `You just told me: "${alertMsg}". Explain that in more detail.`
-                    : `You just told me: "${alertMsg}". Walk me through fixing this step by step.`;
+                  if (action === 'walkthrough') {
+                    // Send guidance request through LiveKit data channel — the agent
+                    // handles it natively via start_guidance tool. No separate REST/TTS.
+                    if (livekitSendRef.current) {
+                      livekitSendRef.current({ type: 'guidance_request' });
+                      setGuidanceActive(true);
+                      console.log('[Guide] Sent guidance_request via data channel');
+                    }
+                    return;
+                  }
 
+                  if (action === 'guidance_stop') {
+                    // Stop guidance via data channel
+                    if (livekitSendRef.current) {
+                      livekitSendRef.current({ type: 'guidance_stop' });
+                      setGuidanceActive(false);
+                      console.log('[Guide] Sent guidance_stop via data channel');
+                    }
+                    return;
+                  }
+
+                  // "Explain" action — still uses REST for quick follow-ups on alerts
+                  const followUpText = `You just told me: "${alertMsg}". Explain that in more detail.`;
                   try {
-                    // Add user follow-up to conversation
                     addMessage({
                       id: generateId(), role: 'user', content: followUpText,
                       displayMode: 'job', timestamp: new Date(),
@@ -1279,12 +1302,8 @@ export default function HomeScreen() {
                     const frame = await captureFrame();
                     const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
                     const history = currentMessages.slice(-20).map(m => ({ role: m.role, content: m.content }));
-            
 
                     setJobAIState('processing');
-
-                    // Use text chat API (not voiceChat) since we're sending a text prompt, not audio.
-                    // voiceChat expects audio_base64 as first arg — sending text would cause a backend error.
                     const chatResult = await aiAPI.chat(followUpText, frame, history, false, useSettingsStore.getState().units);
 
                     addMessage({
@@ -1292,17 +1311,6 @@ export default function HomeScreen() {
                       source: chatResult.source, confidence: validateConfidence(chatResult.confidence),
                       displayMode: 'job', timestamp: new Date(),
                     });
-
-                    // TTS the response so the tech hears it hands-free
-                    try {
-                      const ttsResp = await aiAPI.textToSpeech(chatResult.response, false);
-                      if (ttsResp.audio_base64) {
-                        setJobAIState('speaking');
-                        await playAudio(ttsResp.audio_base64);
-                      }
-                    } catch (ttsErr) {
-                      console.log('Job Mode quick action TTS error:', ttsErr);
-                    }
 
                     setJobAIState('monitoring');
                   } catch (e) {

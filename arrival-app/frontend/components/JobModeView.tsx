@@ -9,7 +9,7 @@ const robotMascot = require('../assets/robot-mascot.png');
 
 export type JobAIState = 'monitoring' | 'listening' | 'processing' | 'speaking';
 
-export type QuickActionType = 'text' | 'explain' | 'walkthrough';
+export type QuickActionType = 'text' | 'explain' | 'walkthrough' | 'guidance_stop';
 
 export interface JobAlert {
   message: string;
@@ -38,6 +38,8 @@ interface JobModeViewProps {
   isStarted?: boolean;
   /** Called when equipment context changes (set or cleared) */
   onEquipmentChange?: (equipment: EquipmentInfo | null) => void;
+  /** Whether guidance is currently active */
+  guidanceActive?: boolean;
 }
 
 const EQUIPMENT_OPTIONS = [
@@ -69,6 +71,7 @@ const TEXT_DISPLAY_MS = 10000;
 export default function JobModeView({
   aiState, voiceConnected, onPause, isPaused, lastAlert,
   onQuickAction, onInterrupt, onStart, isStarted, onEquipmentChange,
+  guidanceActive,
 }: JobModeViewProps) {
   // ── Robot start button animations ──
   const robotFloat = useRef(new Animated.Value(0)).current;
@@ -455,14 +458,20 @@ export default function JobModeView({
             </TouchableOpacity>
           )}
 
-          {/* Guide me button — always visible */}
+          {/* Guide me / Stop guidance button */}
           <TouchableOpacity
-            style={s.guideBtn}
-            onPress={() => onQuickAction?.('walkthrough', '')}
+            style={[s.guideBtn, guidanceActive && s.guideBtnStop]}
+            onPress={() => {
+              if (guidanceActive) {
+                onQuickAction?.('guidance_stop', '');
+              } else {
+                onQuickAction?.('walkthrough', '');
+              }
+            }}
             activeOpacity={0.7}
           >
-            <Ionicons name="compass-outline" size={16} color="#FFF" />
-            <Text style={s.guideBtnText}>Guide me</Text>
+            <Ionicons name={guidanceActive ? 'stop-circle-outline' : 'compass-outline'} size={16} color="#FFF" />
+            <Text style={s.guideBtnText}>{guidanceActive ? 'Stop guidance' : 'Guide me'}</Text>
           </TouchableOpacity>
 
           {/* "Show in text" card */}
@@ -621,6 +630,10 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
+  },
+  guideBtnStop: {
+    backgroundColor: 'rgba(255,80,80,0.20)',
+    borderColor: 'rgba(255,80,80,0.35)',
   },
   guideBtnText: {
     color: '#FFF',

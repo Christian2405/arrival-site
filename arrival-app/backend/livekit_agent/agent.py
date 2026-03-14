@@ -1438,6 +1438,43 @@ async def entrypoint(ctx: JobContext):
                     except Exception as e:
                         logger.debug(f"[guidance] State broadcast failed: {e}")
 
+                elif msg_type == "guidance_request":
+                    # User tapped "Guide me" button — interrupt current speech
+                    # and ask them what they need help with
+                    logger.info("[guidance] User tapped Guide me button")
+                    asyncio.ensure_future(session.generate_reply(
+                        instructions=(
+                            "The tech just tapped the 'Guide me' button — they want step-by-step guidance. "
+                            "Ask them naturally what they're working on or need help with. "
+                            "Keep it short and warm, like: 'Sure! What are you working on?' "
+                            "Once they tell you, call start_guidance with their task."
+                        )
+                    ))
+
+                elif msg_type == "guidance_stop":
+                    # User tapped "Stop guidance" button
+                    if agent._guidance_active:
+                        task = agent._guidance_task
+                        step_idx = agent._guidance_current_step
+                        total = len(agent._guidance_steps)
+                        agent._guidance_active = False
+                        agent._guidance_task = ""
+                        agent._guidance_steps = []
+                        agent._guidance_current_step = 0
+                        agent._guidance_context = ""
+                        # Reset prompt
+                        agent.instructions = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                        agent._has_injected_codes = False
+                        logger.info(f"[guidance] User stopped guidance at step {step_idx+1}/{total}")
+                        asyncio.ensure_future(session.generate_reply(
+                            instructions=(
+                                f"The tech just stopped guidance (was on step {step_idx+1} of {total} for: {task}). "
+                                "Acknowledge briefly — something like 'No problem, I'm here if you need me.' Keep it short."
+                            )
+                        ))
+                    else:
+                        logger.debug("[guidance] Stop received but no guidance active")
+
             except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
                 pass
 
