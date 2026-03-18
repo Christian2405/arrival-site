@@ -265,16 +265,20 @@ async def upload_frame(req: FrameUpload, request: Request):
 
 @router.get("/livekit-frame/{room_name}")
 async def get_frame_api(room_name: str, request: Request):
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing auth token")
-    jwt_token = auth_header.replace("Bearer ", "")
-    try:
-        payload = await decode_jwt_token(jwt_token)
-        if not payload:
+    # Allow internal requests from the agent (same host) without auth
+    client_host = request.client.host if request.client else ""
+    is_internal = client_host in ("127.0.0.1", "::1", "localhost")
+    if not is_internal:
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing auth token")
+        jwt_token = auth_header.replace("Bearer ", "")
+        try:
+            payload = await decode_jwt_token(jwt_token)
+            if not payload:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except (ValueError, Exception):
             raise HTTPException(status_code=401, detail="Invalid token")
-    except (ValueError, Exception):
-        raise HTTPException(status_code=401, detail="Invalid token")
     """Get the latest camera frame for a room.
     Used by the LiveKit agent (separate process) to fetch frames via HTTP.
     This is more reliable than file-based sharing across process boundaries."""

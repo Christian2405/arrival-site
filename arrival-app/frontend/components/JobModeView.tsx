@@ -340,8 +340,9 @@ export default function JobModeView({
           <Animated.View style={{
             transform: [
               { translateY: floatDriver.interpolate({
-                inputRange: [0, 0.25, 0.5, 0.75, 1],
-                outputRange: [-10, 0, 10, 0, -10],
+                inputRange:  [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
+                outputRange: [-10, -7.07, 0, 7.07, 10, 7.07, 0, -7.07, -10],
+                extrapolate: 'clamp',
               }) },
               { scale: robotScale },
             ],
