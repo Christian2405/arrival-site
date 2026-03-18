@@ -1527,7 +1527,7 @@ async def entrypoint(ctx: JobContext):
                         agent._guidance_current_step = 0
                         agent._guidance_context = ""
                         # Reset prompt
-                        agent.instructions = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                        agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE)
                         agent._has_injected_codes = False
                         logger.info(f"[guidance] User stopped guidance at step {step_idx+1}/{total}")
                         asyncio.ensure_future(session.generate_reply(
@@ -1608,7 +1608,7 @@ async def entrypoint(ctx: JobContext):
                 agent._guidance_current_step = 0
                 agent._guidance_context = ""
                 # Reset prompt to clean state
-                agent.instructions = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE)
                 agent._has_injected_codes = False
                 logger.info(f"[guidance] User exited guidance at step {step_idx+1}/{total}: '{text_lower}'")
                 # Acknowledge — don't just go silent
@@ -1646,11 +1646,11 @@ async def entrypoint(ctx: JobContext):
                         "- They can interrupt anytime — that's fine, answer and continue."
                     )
                     # Merge: guidance + error code (if user asked about a code mid-guidance)
-                    agent.instructions = base + guidance_inject + error_inject
+                    agent.update_instructions(base + guidance_inject + error_inject)
             else:
                 # No guidance active — just base + error codes (if any)
                 base = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
-                agent.instructions = base + error_inject
+                agent.update_instructions(base + error_inject)
 
             # Detect mute commands — entire utterance must exactly match a mute phrase
             # to avoid false positives like "stop valve testing" or "that's quiet today"
