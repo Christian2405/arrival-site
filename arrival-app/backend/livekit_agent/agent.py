@@ -413,6 +413,8 @@ class ArrivalAgent(Agent):
         """Store the latest camera frame from the mobile app."""
         self._latest_frame = frame_b64
         self._frame_received_at = time.time()
+        frame_kb = len(frame_b64) * 3 // 4 // 1024
+        logger.info(f"[frame] Received via data channel: {frame_kb}KB, {len(frame_b64)} chars")
 
     async def get_current_frame(self) -> Optional[str]:
         """Get the best available frame — tries data channel, HTTP, file store."""
