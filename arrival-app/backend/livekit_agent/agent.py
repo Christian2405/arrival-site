@@ -476,26 +476,20 @@ class ArrivalAgent(Agent):
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Inject the latest camera frame into the LLM context before every response.
-        This makes vision truly always-on — the LLM sees the camera on every turn."""
+        Strip old frames from history so the model only sees the CURRENT camera view."""
         from livekit.agents.llm import ImageContent
+
+        # Strip old images from ALL previous messages — prevents model fixating on old frames
+        for msg in turn_ctx.items:
+            if msg is not new_message and hasattr(msg, 'content') and isinstance(msg.content, list):
+                msg.content = [c for c in msg.content if not isinstance(c, ImageContent)]
+
         frame = self._latest_frame if (
             self._latest_frame and (time.time() - self._frame_received_at) < 4
         ) else None
         if frame:
-            # DEBUG: save frame to disk so we can verify what the model sees
-            try:
-                import base64 as b64mod
-                frame_bytes = b64mod.b64decode(frame)
-                frame_path = f"/tmp/arrival_debug_frame_{int(time.time())}.jpg"
-                with open(frame_path, "wb") as f:
-                    f.write(frame_bytes)
-                logger.info(f"[vision-debug] Saved frame to {frame_path} ({len(frame_bytes)} bytes, age={time.time() - self._frame_received_at:.1f}s)")
-            except Exception as e:
-                logger.debug(f"[vision-debug] Frame save failed: {e}")
-
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
-            # Prepend the frame + equipment context to the user's message
             eq_str = self._equipment_context_str()
             camera_label = "[LIVE CAMERA — this is what the tech's phone camera shows RIGHT NOW]"
             if eq_str:
@@ -505,7 +499,7 @@ class ArrivalAgent(Agent):
                 camera_label,
             ] + list(new_message.content)
         else:
-            logger.warning(f"[vision-debug] NO FRAME available for user turn (latest_age={time.time() - self._frame_received_at:.1f}s, has_frame={self._latest_frame is not None})")
+            logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
 
     @function_tool()
     async def lookup_error_code(self, query: str) -> str:
