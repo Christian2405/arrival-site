@@ -74,7 +74,7 @@ export default function JobModeView({
   guidanceActive,
 }: JobModeViewProps) {
   // ── Robot start button animations ──
-  const robotFloat = useRef(new Animated.Value(0)).current;
+
   const robotScale = useRef(new Animated.Value(1)).current;
   const glowOpacity = useRef(new Animated.Value(0.3)).current;
   const glowScale = useRef(new Animated.Value(1)).current;
@@ -114,27 +114,24 @@ export default function JobModeView({
   }, []);
 
   // ── Robot idle animations (breathing float + glow pulse) ──
+  // Use a single linear 0→1 animation mapped via interpolation to avoid loop seam jank
+  const floatDriver = useRef(new Animated.Value(0)).current;
+  const glowDriver = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (isStarted) return;
 
-    // Start at the top of the bob so every loop iteration is identical
-    robotFloat.setValue(-10);
+    floatDriver.setValue(0);
+    glowDriver.setValue(0);
 
-    // Smooth sinusoidal float — no pause at loop seam
+    // Single continuous animation — no sequence, no seam
     const floatAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(robotFloat, { toValue: 10, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(robotFloat, { toValue: -10, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
+      Animated.timing(floatDriver, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true })
     );
     floatAnim.start();
 
-    // Glow ring pulse
     const glowAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowOpacity, { toValue: 0.6, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(glowOpacity, { toValue: 0.2, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
+      Animated.timing(glowDriver, { toValue: 1, duration: 3600, easing: Easing.linear, useNativeDriver: true })
     );
     glowAnim.start();
 
@@ -148,7 +145,7 @@ export default function JobModeView({
       glowAnim.stop();
       clearTimeout(hintTimer);
     };
-  }, [isStarted, robotFloat, glowOpacity, hintOpacity]);
+  }, [isStarted, floatDriver, glowDriver, hintOpacity]);
 
   // ── Start tap animation ──
   const handleStartTap = useCallback(() => {
@@ -342,7 +339,10 @@ export default function JobModeView({
           {/* Floating robot mascot */}
           <Animated.View style={{
             transform: [
-              { translateY: robotFloat },
+              { translateY: floatDriver.interpolate({
+                inputRange: [0, 0.25, 0.5, 0.75, 1],
+                outputRange: [-10, 0, 10, 0, -10],
+              }) },
               { scale: robotScale },
             ],
           }}>
