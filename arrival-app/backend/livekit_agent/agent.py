@@ -791,6 +791,50 @@ class ArrivalAgent(Agent):
 # Proactive Vision — background analysis loop
 # ---------------------------------------------------------------------------
 
+async def _gate_frame_is_trade_work(frame_b64: str) -> bool:
+    """
+    Stage 1 gate: Is this frame showing active trade/construction/repair work?
+    Returns True only if the model is confident it sees trade-relevant content.
+    This prevents hallucination by never asking for observations on non-trade scenes.
+    """
+    client = _get_anthropic_client()
+    try:
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model=config.ANTHROPIC_VISION_MODEL,
+                max_tokens=5,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "Does this image show trade work in progress? "
+                                "Trade work means: exposed wiring, open electrical panels, plumbing pipes, "
+                                "HVAC equipment, construction, tools being used, active repair work.\n\n"
+                                "A normal room, desk, office, kitchen, bathroom, furniture, or space with "
+                                "nothing being worked on = NO.\n\n"
+                                "Answer ONLY 'YES' or 'NO'."
+                            ),
+                        },
+                    ],
+                }],
+            ),
+            timeout=8.0,
+        )
+        answer = response.content[0].text.strip().upper()
+        is_trade = answer.startswith("YES")
+        logger.debug(f"[proactive] Gate: {'TRADE WORK' if is_trade else 'NOT trade'} (raw: {answer})")
+        return is_trade
+    except Exception as e:
+        logger.debug(f"[proactive] Gate failed: {e}")
+        return False  # If gate fails, don't analyze — silence is safe
+
+
 async def _analyze_frame_proactive(
     frame_b64: str,
     recent_observations: list[str],
@@ -798,11 +842,17 @@ async def _analyze_frame_proactive(
     equipment_context: str = "",
 ) -> Optional[tuple[str, str, str]]:
     """
-    Analyze a frame for proactive monitoring.
-    Returns: (severity, observation, category) or None if nothing notable.
-    severity: "SAFETY", "NOTICE", or "INFO"
-    category: "safety", "error_code", "model_number", "condition", "part_id", "tip"
+    Two-stage proactive vision:
+    Stage 1: Gate — is this trade work? If NO, return None immediately (no hallucination possible).
+    Stage 2: Analyze — only runs on confirmed trade scenes.
+    Returns: (severity, observation, category) or None.
     """
+    # ── Stage 1: Gate ──
+    is_trade = await _gate_frame_is_trade_work(frame_b64)
+    if not is_trade:
+        return None
+
+    # ── Stage 2: Analyze (only reaches here if gate confirmed trade work) ──
     client = _get_anthropic_client()
 
     obs_context = ""
@@ -831,41 +881,31 @@ async def _analyze_frame_proactive(
                     {
                         "type": "text",
                         "text": (
-                            "You are Arrival's vision system — watching a trade job through a phone camera. "
-                            "Your job: See what's there, reason about it, flag anything useful.\n\n"
+                            "You are Arrival — watching a trade job through a phone camera. "
+                            "The gate already confirmed this is active trade work. "
+                            "Your job: flag anything useful the tech should know.\n\n"
                             + (f"Equipment: {equipment_context}\n" if equipment_context else "")
                             + f"{conv_context}{obs_context}\n\n"
                             "RESPOND IN THIS EXACT FORMAT (one line):\n"
                             "SEVERITY|CATEGORY|observation\n\n"
-                            "SEVERITY must be one of:\n"
-                            "- SAFETY: Immediate danger — exposed wiring, gas indicators, active leak, no disconnect, fire hazard\n"
-                            "- NOTICE: Worth mentioning — wrong part, corrosion, code violation, readable model/serial number, dirty coils\n"
-                            "- INFO: Low priority — general observation, equipment brand visible, helpful tip\n\n"
-                            "CATEGORY must be one of: safety, error_code, model_number, condition, part_id, tip\n\n"
+                            "SEVERITY: SAFETY (danger), NOTICE (worth mentioning), INFO (helpful)\n"
+                            "CATEGORY: safety, error_code, model_number, condition, part_id, tip\n\n"
                             "RULES:\n"
-                            "- Your DEFAULT response is NOTHING. Say NOTHING unless you see active trade work.\n"
-                            "- You are ONLY watching for trade-relevant observations on an ACTIVE JOB.\n"
-                            "- If you don't see trade equipment, tools, wiring, plumbing, HVAC, or construction — say NOTHING.\n"
-                            "- Desks, chairs, walls, floors, toilets, kitchens, rooms, furniture — NOTHING. These are not observations.\n"
-                            "- ONE observation per frame, ONE short sentence.\n"
-                            "- NEVER HALLUCINATE. If you are not 95%+ confident in what you see, say NOTHING. "
-                            "Do NOT invent colors, equipment, wires, or objects. Do NOT guess what something 'looks like'.\n"
-                            "- NEVER complain about image quality. Say NOTHING instead.\n"
-                            "- A shadow is not a leak. A stain is not water. A wall is just a wall.\n"
-                            "- If it's just a normal room/space with nothing trade-related happening — NOTHING.\n"
-                            "- False positives destroy trust. Silence is ALWAYS better than a wrong call.\n"
-                            "- When in doubt: NOTHING.\n\n"
-                        "Examples:\n"
-                        "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
-                        "NOTICE|condition|Those coils look pretty caked up, might want to clean those.\n"
-                        "NOTICE|model_number|I can see that's a Carrier 24ACC636 on the data plate.\n"
-                        "INFO|tip|That's a Goodman — check the capacitor, they run small from the factory."
-                    ),
-                },
-            ],
-        }],
+                            "- If nothing useful to flag, say NOTHING.\n"
+                            "- ONE observation, ONE short sentence.\n"
+                            "- Only flag what you can clearly see. Never guess or invent.\n"
+                            "- False positives destroy trust. Silence > wrong call.\n\n"
+                            "Examples:\n"
+                            "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
+                            "NOTICE|condition|Those coils look pretty caked up, might want to clean those.\n"
+                            "NOTICE|model_number|I can see that's a Carrier 24ACC636 on the data plate.\n"
+                            "INFO|tip|That's a Goodman — check the capacitor, they run small from the factory."
+                        ),
+                    },
+                ],
+            }],
         ),
-        timeout=15.0,  # Don't let proactive analysis hang the monitor
+        timeout=15.0,
     )
     result = response.content[0].text.strip()
 
@@ -873,29 +913,6 @@ async def _analyze_frame_proactive(
     if result.upper() == "NOTHING" or len(result) < 5:
         return None
     if "nothing" in result.lower() and len(result) < 30:
-        return None
-    if "don't see" in result.lower() or "can't see" in result.lower():
-        return None
-    # Filter out quality complaints and hedging — the model should never say this
-    _lower = result.lower()
-    if any(w in _lower for w in (
-        "blurry", "blur", "too dark", "unclear", "out of focus", "can't make out",
-        "appears to be", "might be", "could be", "looks like it might",
-        "looks like you", "looks like a", "looks like an",
-        "i think i see", "possibly", "hard to tell", "seems to be",
-        "it appears", "what appears", "i can see what",
-    )):
-        return None
-
-    # Filter out generic non-observations — everyday objects, not trade work
-    if any(phrase in _lower for phrase in (
-        "residential", "normal looking", "nothing unusual", "standard",
-        "room appears", "wall appears", "i can see a wall", "i see a room",
-        "desk", "chair", "table", "laptop", "computer", "monitor", "keyboard",
-        "toilet", "sink", "cabinet", "shelf", "door", "window", "floor",
-        "ceiling", "furniture", "couch", "sofa", "bed", "carpet",
-        "looking at", "pointed at", "you're in", "this is a",
-    )):
         return None
 
     # Parse structured response: SEVERITY|CATEGORY|observation
@@ -905,21 +922,17 @@ async def _analyze_frame_proactive(
         category = parts[1].strip().lower()
         observation = parts[2].strip()
 
-        # Validate severity
         if severity not in ("SAFETY", "NOTICE", "INFO"):
             severity = "NOTICE"
-        # Validate category
         valid_categories = {"safety", "error_code", "model_number", "condition", "part_id", "tip"}
         if category not in valid_categories:
             category = "condition"
-
-        # Final hallucination check — if observation is too vague, drop it
         if len(observation) < 10:
             return None
 
         return (severity, observation, category)
 
-    # Fallback: unstructured response — drop it (don't trust unformatted output)
+    # Unstructured = drop
     return None
 
 
