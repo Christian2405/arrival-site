@@ -476,13 +476,17 @@ class ArrivalAgent(Agent):
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Inject the latest camera frame into the LLM context before every response.
-        Strip old frames from history so the model only sees the CURRENT camera view."""
+        Replace old frame labels with [OUTDATED] so model knows they're stale."""
         from livekit.agents.llm import ImageContent
 
-        # Strip old images from ALL previous messages — prevents model fixating on old frames
+        # Mark old camera labels as outdated (keeps context but prevents fixation)
         for msg in turn_ctx.items:
             if msg is not new_message and hasattr(msg, 'content') and isinstance(msg.content, list):
-                msg.content = [c for c in msg.content if not isinstance(c, ImageContent)]
+                msg.content = [
+                    "[OUTDATED CAMERA — the camera has moved since this. Ignore this image.]"
+                    if isinstance(c, ImageContent) else c
+                    for c in msg.content
+                ]
 
         frame = self._latest_frame if (
             self._latest_frame and (time.time() - self._frame_received_at) < 4
@@ -491,7 +495,7 @@ class ArrivalAgent(Agent):
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
             eq_str = self._equipment_context_str()
-            camera_label = "[LIVE CAMERA — this is what the tech's phone camera shows RIGHT NOW]"
+            camera_label = "[CURRENT CAMERA — this is what the tech sees RIGHT NOW. Describe THIS, not previous images.]"
             if eq_str:
                 camera_label += f"\n[Equipment: {eq_str}]"
             new_message.content = [
@@ -1410,7 +1414,6 @@ async def entrypoint(ctx: JobContext):
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
-                max_tokens=150,  # Force short responses — this is voice, not an essay
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
