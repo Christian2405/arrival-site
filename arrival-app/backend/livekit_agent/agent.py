@@ -843,15 +843,18 @@ async def _analyze_frame_proactive(
                             "- INFO: Low priority — general observation, equipment brand visible, helpful tip\n\n"
                             "CATEGORY must be one of: safety, error_code, model_number, condition, part_id, tip\n\n"
                             "RULES:\n"
-                            "- Your DEFAULT response is NOTHING. Most frames have nothing worth flagging.\n"
-                            "- Only speak when you see something genuinely notable and you're CONFIDENT.\n"
+                            "- Your DEFAULT response is NOTHING. Say NOTHING unless you see active trade work.\n"
+                            "- You are ONLY watching for trade-relevant observations on an ACTIVE JOB.\n"
+                            "- If you don't see trade equipment, tools, wiring, plumbing, HVAC, or construction — say NOTHING.\n"
+                            "- Desks, chairs, walls, floors, toilets, kitchens, rooms, furniture — NOTHING. These are not observations.\n"
                             "- ONE observation per frame, ONE short sentence.\n"
-                            "- NEVER HALLUCINATE. If you are not 90%+ confident in what you see, say NOTHING. "
-                            "Do NOT invent colors, equipment, wires, or objects. Do NOT guess.\n"
+                            "- NEVER HALLUCINATE. If you are not 95%+ confident in what you see, say NOTHING. "
+                            "Do NOT invent colors, equipment, wires, or objects. Do NOT guess what something 'looks like'.\n"
                             "- NEVER complain about image quality. Say NOTHING instead.\n"
-                            "- A shadow is not a leak. A stain is not water. A wall is just a wall. "
-                            "Normal residential/commercial spaces are not observations.\n"
-                            "- False positives destroy trust. Silence is always better than a wrong call.\n\n"
+                            "- A shadow is not a leak. A stain is not water. A wall is just a wall.\n"
+                            "- If it's just a normal room/space with nothing trade-related happening — NOTHING.\n"
+                            "- False positives destroy trust. Silence is ALWAYS better than a wrong call.\n"
+                            "- When in doubt: NOTHING.\n\n"
                         "Examples:\n"
                         "SAFETY|safety|That wire's exposed and live — kill the breaker before you touch anything.\n"
                         "NOTICE|condition|Those coils look pretty caked up, might want to clean those.\n"
@@ -878,14 +881,20 @@ async def _analyze_frame_proactive(
     if any(w in _lower for w in (
         "blurry", "blur", "too dark", "unclear", "out of focus", "can't make out",
         "appears to be", "might be", "could be", "looks like it might",
-        "i think i see", "possibly", "hard to tell",
+        "looks like you", "looks like a", "looks like an",
+        "i think i see", "possibly", "hard to tell", "seems to be",
+        "it appears", "what appears", "i can see what",
     )):
         return None
 
-    # Filter out generic non-observations
+    # Filter out generic non-observations — everyday objects, not trade work
     if any(phrase in _lower for phrase in (
         "residential", "normal looking", "nothing unusual", "standard",
         "room appears", "wall appears", "i can see a wall", "i see a room",
+        "desk", "chair", "table", "laptop", "computer", "monitor", "keyboard",
+        "toilet", "sink", "cabinet", "shelf", "door", "window", "floor",
+        "ceiling", "furniture", "couch", "sofa", "bed", "carpet",
+        "looking at", "pointed at", "you're in", "this is a",
     )):
         return None
 
