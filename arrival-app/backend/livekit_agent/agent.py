@@ -485,6 +485,17 @@ class ArrivalAgent(Agent):
             self._latest_frame and (time.time() - self._frame_received_at) < 4
         ) else None
         if frame:
+            # DEBUG: save frame to disk so we can verify what the model sees
+            try:
+                import base64 as b64mod
+                frame_bytes = b64mod.b64decode(frame)
+                frame_path = f"/tmp/arrival_debug_frame_{int(time.time())}.jpg"
+                with open(frame_path, "wb") as f:
+                    f.write(frame_bytes)
+                logger.info(f"[vision-debug] Saved frame to {frame_path} ({len(frame_bytes)} bytes, age={time.time() - self._frame_received_at:.1f}s)")
+            except Exception as e:
+                logger.debug(f"[vision-debug] Frame save failed: {e}")
+
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
             # Prepend the frame + equipment context to the user's message
@@ -496,6 +507,8 @@ class ArrivalAgent(Agent):
                 image_content,
                 camera_label,
             ] + list(new_message.content)
+        else:
+            logger.warning(f"[vision-debug] NO FRAME available for user turn (latest_age={time.time() - self._frame_received_at:.1f}s, has_frame={self._latest_frame is not None})")
 
     @function_tool()
     async def lookup_error_code(self, query: str) -> str:
