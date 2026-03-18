@@ -289,6 +289,17 @@ async def get_frame_api(room_name: str, request: Request):
     return {"frame": frame, "age": round(age, 1) if age is not None else None}
 
 
+@router.get("/debug-frame")
+async def debug_frame():
+    """Serve the latest debug frame as a JPEG image so we can see what the model sees."""
+    import glob
+    frames = sorted(glob.glob("/tmp/arrival_debug_frame_*.jpg"), key=os.path.getmtime, reverse=True)
+    if not frames:
+        raise HTTPException(status_code=404, detail="No debug frame available")
+    from fastapi.responses import FileResponse
+    return FileResponse(frames[0], media_type="image/jpeg")
+
+
 class AnalyzeRequest(BaseModel):
     room_name: str
     question: str = "What do you see?"
