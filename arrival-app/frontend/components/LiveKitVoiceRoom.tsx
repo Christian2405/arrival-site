@@ -466,7 +466,7 @@ function RoomContent({
         const dcMsg = JSON.stringify({ type: 'camera_frame', image: frame });
         await room.localParticipant.publishData(
           new TextEncoder().encode(dcMsg),
-          { reliable: false },
+          { reliable: true },  // Must be reliable — dropped frames cause stale vision
         );
       } catch (e: any) {
         console.debug(`[LiveKitVoice] DC frame failed: ${e?.message || e}`);
