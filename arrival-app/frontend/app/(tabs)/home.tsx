@@ -664,42 +664,12 @@ export default function HomeScreen() {
 
     if (livekit && LiveKitVoiceRoom) {
       // --- LIVEKIT PIPELINE (WebRTC full-duplex) ---
-      // Voice is handled by LiveKitVoiceRoom component (rendered in JSX).
-      // Here we only set up frame analysis (same REST-based camera pipeline).
+      // Voice + vision handled entirely by LiveKit agent (proactive monitor).
+      // NO separate FrameBatcher — one AI brain, not two.
       setLivekitActive(true);
       setJobAIState('monitoring');
 
-      const frameBatcher = new FrameBatcher({
-        minInterval: 3000,
-        maxInterval: 10000,
-        changeThreshold: 0.10,
-        captureInterval: 3000,
-        onAnalyze: async (frame: string) => {
-          try {
-            const recentAlerts = jobAlertHistoryRef.current.slice(-5);
-            const result = await aiAPI.analyzeFrame(frame, recentAlerts);
-            if (result.alert && result.message) {
-              jobAlertHistoryRef.current.push(result.message);
-              if (jobAlertHistoryRef.current.length > 20) jobAlertHistoryRef.current = jobAlertHistoryRef.current.slice(-20);
-              setLastJobAlert({ message: result.message, severity: result.severity || 'warning', ts: Date.now() });
-              addMessage({
-                id: generateId(), role: 'assistant', content: result.message,
-                alertType: result.severity === 'critical' ? 'critical' : 'warning',
-                source: 'Job Mode Analysis', displayMode: 'job', timestamp: new Date(),
-              });
-            }
-          } catch (e) {
-            console.log('Job Mode frame error:', e);
-          }
-        },
-      });
-
-      frameBatcher.start(captureFrame);
-      livekitFrameBatcherRef.current = frameBatcher;
-
       return () => {
-        frameBatcher.stop();
-        livekitFrameBatcherRef.current = null;
         setLivekitActive(false);
         setLastJobAlert(null);
         jobAlertHistoryRef.current = [];

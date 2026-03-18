@@ -197,26 +197,23 @@ JOB_MODE_PROMPT = (
     "carpentry, you name it. If it comes up on a job, you help with it. Never dismiss anything.\n\n"
 
     # ── SEE ──
-    "SEE — You have access to the worker's phone camera. A frame is attached to each message.\n"
-    "- ONLY describe what you see when they ASK about it ('what do you see', 'what am I looking at').\n"
-    "- If they say 'hello' or ask a general question, just answer normally. Do NOT describe the camera.\n"
-    "- The camera frame is there for YOUR reference — use it to understand context, "
-    "but don't narrate what you see unless asked.\n"
-    "- When you DO describe what you see: be honest, be specific, read any text/labels/codes.\n"
-    "- NEVER HALLUCINATE. If you can't clearly make something out, say so. "
-    "Never invent objects, colors, wires, or equipment that aren't clearly visible.\n"
+    "SEE — The worker's phone camera is always on. You can see through it using look_at_camera.\n"
+    "- When they ask 'what do you see', 'what am I looking at', 'what is this' → ALWAYS use look_at_camera.\n"
+    "- Do NOT try to describe visual things from the thumbnail frame in your context. It's low quality.\n"
+    "- For ANY vision question, call look_at_camera to get a proper Sonnet-quality analysis.\n"
+    "- If they say 'hello' or ask a general question, just answer normally. No need to look.\n"
+    "- NEVER HALLUCINATE. If look_at_camera can't identify something clearly, say so.\n"
     "- Never complain about image quality. Work with what you have.\n\n"
 
     # ── REASON ──
     "REASON — Use your knowledge and tools to figure out what's going on.\n"
+    "- look_at_camera: For ANY question about what they're looking at or pointing at. ALWAYS use this.\n"
     "- lookup_error_code: ONLY for error codes, blink codes, fault codes. Try this FIRST when codes are mentioned.\n"
     "- search_knowledge: ONLY for specific technical questions — building codes, specs, sizing, "
-    "manuals, installation requirements, manufacturer-specific procedures. "
-    "Do NOT use this for basic vision questions like 'what do you see' or 'what is this' — "
-    "just look at the camera frame and answer directly.\n"
+    "manuals, installation requirements, manufacturer-specific procedures.\n"
     "- WHEN TO USE TOOLS vs JUST ANSWER:\n"
-    "  - 'What do you see?' → just describe the frame. No tools.\n"
-    "  - 'What is that?' → just describe what you see. No tools.\n"
+    "  - 'What do you see?' → use look_at_camera. ALWAYS.\n"
+    "  - 'What is that?' → use look_at_camera. ALWAYS.\n"
     "  - 'What error code is that?' → use lookup_error_code.\n"
     "  - 'What size wire do I need for a 40A circuit?' → use search_knowledge.\n"
     "  - 'Walk me through replacing this capacitor' → use start_guidance.\n"
@@ -1419,7 +1416,7 @@ async def entrypoint(ctx: JobContext):
                 api_key=config.DEEPGRAM_API_KEY,
             ),
             llm=anthropic.LLM(
-                model=config.ANTHROPIC_VISION_MODEL,  # Sonnet — Haiku's vision is too weak
+                model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
             ),
             tts=elevenlabs.TTS(
