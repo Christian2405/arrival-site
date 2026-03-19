@@ -29,8 +29,10 @@ import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
 // LiveKit requires native WebRTC — lazy-load so Expo Go doesn't crash
 let LiveKitVoiceRoom: React.ComponentType<any> | null = null;
+let LKVideoTrack: React.ComponentType<any> | null = null;
 try {
   LiveKitVoiceRoom = require('../../components/LiveKitVoiceRoom').default;
+  LKVideoTrack = require('@livekit/react-native').VideoTrack;
 } catch (e) {
   console.warn('[Home] LiveKit native module not available (Expo Go?) — falling back to REST voice');
 }
@@ -155,6 +157,8 @@ export default function HomeScreen() {
   const { voiceOutput, interactionMode, setInteractionMode, useStreamingVoice, useLiveKit } = useSettingsStore();
   const livekitFrameBatcherRef = useRef<FrameBatcher | null>(null);
   const [livekitActive, setLivekitActive] = useState(false);
+  const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
+  const flipCameraRef = useRef<(() => void) | null>(null);
   const { saveAnswer } = useSavedAnswersStore();
   const { profile, subscription } = useAuthStore();
 
@@ -914,11 +918,14 @@ export default function HomeScreen() {
   // --- RENDER ---
   return (
     <View style={styles.container}>
-      {/* Camera background — expo-camera for Voice/Text mode only.
-          In Job mode, LiveKitVoiceRoom renders the camera via WebRTC VideoTrack. */}
-      {/* Camera preview — CameraView for all modes. LiveKit video track handles
-          frame delivery to the model separately via WebRTC. */}
-      {permission?.granted && (
+      {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
+      {permission?.granted && interactionMode !== 'job' && (
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+      )}
+      {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
+        <LKVideoTrack trackRef={localVideoTrackRef} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
+      )}
+      {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       )}
 
@@ -943,7 +950,14 @@ export default function HomeScreen() {
               variant="dark"
             />
 
-            {messages.length > 0 ? (
+            {interactionMode === 'job' ? (
+              <TouchableOpacity
+                onPress={() => flipCameraRef.current?.()}
+                style={styles.iconBtn}
+              >
+                <Ionicons name="camera-reverse-outline" size={IconSize.lg} color="#FFF" />
+              </TouchableOpacity>
+            ) : messages.length > 0 ? (
               <TouchableOpacity onPress={() => createNewConversation()} style={styles.newSessionBtn}>
                 <Ionicons name="refresh" size={FontSize.sm} color="#FFF" />
                 <Text style={styles.newSessionText}>New</Text>
@@ -1206,6 +1220,8 @@ export default function HomeScreen() {
                   onSendMessageReady={(fn: ((msg: Record<string, any>) => void) | null) => {
                     livekitSendRef.current = fn;
                   }}
+                  onLocalVideoTrack={setLocalVideoTrackRef}
+                  onFlipCameraReady={(fn: (() => void) | null) => { flipCameraRef.current = fn; }}
                 />
               )}
               <JobModeView

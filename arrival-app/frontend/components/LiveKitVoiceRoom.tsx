@@ -67,6 +67,8 @@ interface LiveKitVoiceRoomProps {
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
   /** Exposes the local camera track ref for rendering at the root level */
   onLocalVideoTrack?: (trackRef: any | null) => void;
+  /** Exposes a function to flip between front/back camera */
+  onFlipCameraReady?: (flipFn: (() => void) | null) => void;
 }
 
 const MAX_RETRIES = 3;
@@ -84,6 +86,7 @@ export default function LiveKitVoiceRoom({
   equipmentContext,
   onSendMessageReady,
   onLocalVideoTrack,
+  onFlipCameraReady,
 }: LiveKitVoiceRoomProps) {
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
@@ -252,6 +255,7 @@ export default function LiveKitVoiceRoom({
         equipmentContext={equipmentContext}
         onSendMessageReady={onSendMessageReady}
         onLocalVideoTrack={onLocalVideoTrack}
+        onFlipCameraReady={onFlipCameraReady}
       />
     </LiveKitRoom>
   );
@@ -276,6 +280,7 @@ function RoomContent({
   equipmentContext,
   onSendMessageReady,
   onLocalVideoTrack,
+  onFlipCameraReady,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onVoiceConnected?: (connected: boolean) => void;
@@ -288,11 +293,13 @@ function RoomContent({
   equipmentContext?: EquipmentContext | null;
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
   onLocalVideoTrack?: (trackRef: any | null) => void;
+  onFlipCameraReady?: (flipFn: (() => void) | null) => void;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
   const room = useRoomContext();
   const tracks = useTracks([Track.Source.Camera]);
+  const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -304,6 +311,19 @@ function RoomContent({
 
   // Find local camera track for preview rendering
   const localCameraTrack = tracks.find(t => t.participant.isLocal) ?? null;
+
+  // Pass local camera track up to parent for rendering at root level (before any early returns!)
+  useEffect(() => {
+    onLocalVideoTrack?.(localCameraTrack);
+    return () => onLocalVideoTrack?.(null);
+  }, [localCameraTrack, onLocalVideoTrack]);
+
+  // Expose camera flip function to parent
+  useEffect(() => {
+    const flipFn = () => setCameraFacing(prev => prev === 'environment' ? 'user' : 'environment');
+    onFlipCameraReady?.(flipFn);
+    return () => onFlipCameraReady?.(null);
+  }, [onFlipCameraReady]);
 
   // Send equipment context to agent whenever it changes
   useEffect(() => {
@@ -456,56 +476,34 @@ function RoomContent({
     };
   }, [connectionState, room]);
 
-  // HTTP frame upload — captures from expo-camera and uploads every 3s.
-  // This is the PRIMARY frame delivery path. The backend stores frames
-  // and the agent reads the latest one on each user turn.
+  // Publish camera as LiveKit video track — the backend subscribes to this
+  // and grabs frames directly via WebRTC. This bypasses expo-camera's
+  // takePictureAsync which freezes when LiveKit's audio session activates.
   useEffect(() => {
-    if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
+    if (connectionState !== ConnectionState.Connected || !room?.localParticipant) {
       return;
     }
 
-    let active = true;
-    let uploadCount = 0;
-
-    const uploadFrame = async () => {
-      if (!active) return;
+    const enableCamera = async () => {
       try {
-        const frame = await captureFrameRef.current?.();
-        if (!frame) {
-          if (uploadCount < 5) console.warn('[LiveKitVoice] captureFrame returned empty');
-          return;
-        }
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) return;
-
-        const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ room_name: roomName, frame }),
+        // Disable first to force restart with new facing mode
+        await room.localParticipant.setCameraEnabled(false);
+        await room.localParticipant.setCameraEnabled(true, {
+          facingMode: cameraFacing,
+          resolution: { width: 1280, height: 720, frameRate: 15 },
         });
-        uploadCount++;
-        if (uploadCount <= 3 || uploadCount % 10 === 0) {
-          console.log(`[LiveKitVoice] Frame #${uploadCount} uploaded (${Math.round(frame.length / 1024)}KB) status=${resp.status}`);
-        }
+        console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing})`);
       } catch (e: any) {
-        if (uploadCount < 3) console.warn('[LiveKitVoice] Frame upload failed:', e?.message);
+        console.warn(`[LiveKitVoice] Camera publish failed: ${e?.message || e}`);
       }
     };
 
-    // First capture immediately
-    uploadFrame();
-    // Then every 3 seconds
-    const interval = setInterval(uploadFrame, 3000);
+    enableCamera();
 
     return () => {
-      active = false;
-      clearInterval(interval);
+      room?.localParticipant?.setCameraEnabled(false).catch(() => {});
     };
-  }, [connectionState, roomName]);
+  }, [connectionState, room, cameraFacing]);
 
   // -----------------------------------------------------------------------
   // Connection state tracking
@@ -670,8 +668,6 @@ function RoomContent({
   }
 
   // Connected and agent is present — voice is live
-  // Camera preview is handled by CameraView in home.tsx
-  // Frames for the model are delivered via LiveKit video track (WebRTC)
   return null;
 }
 
