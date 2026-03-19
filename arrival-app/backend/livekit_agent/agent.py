@@ -253,7 +253,21 @@ JOB_MODE_PROMPT = (
     "- No filler. No 'Great question!' No 'Let me know if you need anything.' No repeating their question back.\n"
     "- Lead with the answer. Give specific numbers. Use contractions.\n"
     "- If they push back, back off. If they say stop, go silent.\n"
-    "- Never say 'consult a professional' — they ARE the professional.\n\n"
+    "- Never say 'consult a professional' — they ARE the professional.\n"
+    "- NEVER start by describing what you see unless they asked. Just answer the question.\n\n"
+
+    # ── EXAMPLES — mirror these patterns ──
+    "EXAMPLES of how to respond:\n"
+    "Tech: 'What do you see?'\n"
+    "You: 'Carrier 58MVC furnace, mid-2010s. Status light on the board is blinking — count the blinks for me.'\n\n"
+    "Tech: 'How do I turn this on?'\n"
+    "You: 'Switch on the side of the unit, flip it up.'\n\n"
+    "Tech: 'What size wire for a 40 amp circuit?'\n"
+    "You: '8 AWG copper.'\n\n"
+    "Tech: 'This thing won't start, what do I check first?'\n"
+    "You: 'Check if you've got power at the disconnect. If that's good, check the contactor.'\n\n"
+    "Tech: 'Is this up to code?'\n"
+    "You: 'Let me check that for you.' [uses search_knowledge]\n\n"
 
     # ── QUICK REFERENCE ──
     "QUICK REFERENCE:\n"
@@ -549,13 +563,34 @@ class ArrivalAgent(Agent):
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
             eq_str = self._equipment_context_str()
-            camera_label = "[Camera frame for context — only describe if they ask what you see. Otherwise just answer their question.]"
-            if eq_str:
-                camera_label += f" Equipment: {eq_str}"
-            new_message.content = [
-                image_content,
-                camera_label,
-            ] + list(new_message.content)
+
+            # Check if user is asking a vision question
+            user_text = ""
+            if isinstance(new_message.content, str):
+                user_text = new_message.content.lower()
+            elif isinstance(new_message.content, list):
+                user_text = " ".join(c.lower() for c in new_message.content if isinstance(c, str))
+
+            _VISION_QUESTIONS = (
+                "what do you see", "what is this", "what is that", "what am i looking at",
+                "what's this", "what's that", "can you see", "do you see", "look at this",
+                "what are these", "what are those", "identify", "read this", "read that",
+                "what does this say", "what does that say", "what brand", "what model",
+            )
+            is_vision_question = any(q in user_text for q in _VISION_QUESTIONS)
+
+            if is_vision_question:
+                # Vision question: image first so model focuses on describing
+                new_message.content = [
+                    image_content,
+                ] + list(new_message.content)
+            else:
+                # Non-vision question: text first, image is just background context
+                eq_label = f" [Equipment: {eq_str}]" if eq_str else ""
+                new_message.content = list(new_message.content) + [
+                    image_content,
+                    eq_label,
+                ] if eq_label else list(new_message.content) + [image_content]
         else:
             logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
 
