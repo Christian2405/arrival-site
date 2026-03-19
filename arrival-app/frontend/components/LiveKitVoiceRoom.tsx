@@ -24,9 +24,11 @@ import {
   useConnectionState,
   useParticipants,
   useRoomContext,
+  useTracks,
+  VideoTrack,
   registerGlobals,
 } from '@livekit/react-native';
-import { ConnectionState, RoomEvent } from 'livekit-client';
+import { ConnectionState, RoomEvent, Track } from 'livekit-client';
 import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
 import { supabase } from '../services/supabase';
 
@@ -236,7 +238,7 @@ export default function LiveKitVoiceRoom({
         },
         videoCaptureDefaults: {
           facingMode: 'environment',
-          resolution: { width: 640, height: 480, frameRate: 10 },
+          resolution: { width: 1280, height: 720, frameRate: 24 },
         },
       }}
     >
@@ -652,11 +654,34 @@ function RoomContent({
     );
   }
 
-  // Connected and agent is present — voice is live, no UI needed
-  return null;
+  // Connected and agent is present — render local camera preview
+  // This replaces expo-camera's CameraView which freezes when LiveKit audio activates
+  const tracks = useTracks([Track.Source.Camera]);
+  const localCameraTrack = tracks.find(t => t.participant.isLocal);
+
+  if (!localCameraTrack) {
+    return null; // No video track yet — audio-only for now
+  }
+
+  return (
+    <VideoTrack
+      trackRef={localCameraTrack}
+      style={styles.localVideo}
+      objectFit="cover"
+      mirror={false}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
+  localVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',

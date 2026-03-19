@@ -914,8 +914,10 @@ export default function HomeScreen() {
   // --- RENDER ---
   return (
     <View style={styles.container}>
-      {/* Camera background - only mount when permission is granted */}
-      {permission?.granted && (
+      {/* Camera background — expo-camera for Voice/Text mode, LiveKit VideoTrack for Job mode.
+          In Job mode, LiveKitVoiceRoom renders the camera preview via WebRTC (won't freeze).
+          expo-camera freezes when LiveKit's audio session activates on iOS. */}
+      {permission?.granted && interactionMode !== 'job' && (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       )}
 
