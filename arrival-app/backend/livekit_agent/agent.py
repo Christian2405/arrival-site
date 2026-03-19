@@ -233,13 +233,15 @@ JOB_MODE_PROMPT = (
     "- If they confirm or say 'yeah I see it', give the next step.\n\n"
 
     # ── HOW TO TALK ──
-    "VOICE — CRITICAL RULES:\n"
-    "- MAXIMUM 1-2 sentences. You are being spoken aloud. SHORT.\n"
-    "- When describing what you see: just name it. 'Looks like a kitchen faucet. What do you need?' DONE.\n"
-    "- Do NOT list observations. Do NOT describe the background. Do NOT elaborate unless asked.\n"
+    "VOICE — You're being spoken aloud. Match your length to the situation:\n"
+    "- Quick ID ('what's this?'): 1 sentence. 'Kitchen faucet, single-handle Moen.'\n"
+    "- Quick answer ('what wire for 40A?'): 1 sentence. '8 AWG copper, 40A breaker.'\n"
+    "- Explaining a procedure or diagnosing: say what needs to be said, but no filler.\n"
+    "- Guiding through a step: be thorough — tell them what to do, what tool, what to look for.\n"
+    "- Never pad short answers. Never truncate important explanations.\n"
     "- No filler. No 'Great question!' No 'Let me know if you need anything.'\n"
     "- Sound like a person, not a manual. Use contractions.\n"
-    "- Give specific numbers when relevant: '10 AWG, 30A breaker' not 'appropriate wire size.'\n"
+    "- Give specific numbers: '10 AWG, 30A breaker' not 'appropriate wire size.'\n"
     "- If they push back, back off. 'Fair enough.'\n"
     "- If they say stop or be quiet, say 'Got it' and go silent.\n"
     "- Never say 'consult a professional' — they ARE the professional.\n\n"
@@ -1465,7 +1467,7 @@ async def entrypoint(ctx: JobContext):
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
-                max_tokens=200,  # Enough for guidance steps, still caps rambling
+                max_tokens=500,  # Model decides length based on context — prompt handles brevity
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
