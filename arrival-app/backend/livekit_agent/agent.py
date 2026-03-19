@@ -507,9 +507,10 @@ class ArrivalAgent(Agent):
         """
         from livekit.agents.llm import ImageContent
 
-        # 1. Truncate — prevents unbounded context growth and old-vision anchoring
-        #    truncate() preserves the system/developer instruction message automatically
-        turn_ctx.truncate(max_items=4)
+        # 1. Truncate — prevents unbounded context growth
+        #    Keep 8 items (4 user-assistant pairs) for better context/intelligence
+        #    Old images are stripped below so they don't anchor the model
+        turn_ctx.truncate(max_items=8)
 
         # 2. Strip old images + vision descriptions from remaining history
         _VISION_PHRASES = (
@@ -572,7 +573,7 @@ class ArrivalAgent(Agent):
         #    the agent's internal context lean for future calls)
         try:
             persistent_ctx = self.chat_ctx.copy()
-            persistent_ctx.truncate(max_items=6)
+            persistent_ctx.truncate(max_items=10)
             await self.update_chat_ctx(persistent_ctx)
         except Exception:
             pass  # Non-critical — the per-call truncation above is what matters
@@ -1485,7 +1486,7 @@ async def entrypoint(ctx: JobContext):
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
-                max_tokens=500,  # Model decides length based on context — prompt handles brevity
+                max_tokens=200,  # Hard cap — keeps responses concise. Guidance uses separate API calls with higher limits.
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
