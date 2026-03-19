@@ -1747,17 +1747,23 @@ async def entrypoint(ctx: JobContext):
                     agent._conversation_context.pop(0)
 
         # Background task: keep injecting latest frame into agent context
+        _frame_injector_count = [0]  # mutable counter in closure
+
         async def frame_injector():
-            """Continuously update the agent's context with the latest camera frame."""
+            """Poll HTTP frame store every 2s — keeps _latest_frame fresh for on_user_turn_completed."""
             while True:
                 try:
-                    await asyncio.sleep(2)  # Fallback — data channel is primary at 1.5s
+                    await asyncio.sleep(2)
                     frame = await agent.get_current_frame()
+                    _frame_injector_count[0] += 1
                     if frame:
-                        # Update the agent's instructions with frame context
-                        # This makes the frame available to the LLM on every turn
                         agent._latest_frame = frame
                         agent._frame_received_at = time.time()
+                        if _frame_injector_count[0] <= 5 or _frame_injector_count[0] % 15 == 0:
+                            logger.info(f"[frame-injector] ✓ Got frame ({len(frame)//1024}KB) poll #{_frame_injector_count[0]}")
+                    else:
+                        if _frame_injector_count[0] <= 10:
+                            logger.info(f"[frame-injector] No frame available (poll #{_frame_injector_count[0]}, room={agent._room_name})")
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
