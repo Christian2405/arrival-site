@@ -230,17 +230,13 @@ export default function LiveKitVoiceRoom({
       token={session.token}
       connect={true}
       audio={true}
-      video={true}
+      video={false}
       options={{
         adaptiveStream: false,
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        },
-        videoCaptureDefaults: {
-          facingMode: 'environment',
-          resolution: { width: 1280, height: 720, frameRate: 24 },
         },
       }}
     >
@@ -460,30 +456,30 @@ function RoomContent({
     };
   }, [connectionState, room]);
 
-  // Camera is published via video={true} + videoCaptureDefaults on LiveKitRoom.
-  // No need for setCameraEnabled — LiveKit handles back camera via WebRTC natively,
-  // bypassing expo-camera which iOS kills when LiveKit's audio session activates.
-
-  // HTTP frame upload fallback — uses captureFrame from expo-camera if available
-  // This only works BEFORE LiveKit connects (first frame). After that, the video
-  // track above handles frame delivery.
+  // HTTP frame upload — captures from expo-camera and uploads every 3s.
+  // This is the PRIMARY frame delivery path. The backend stores frames
+  // and the agent reads the latest one on each user turn.
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
       return;
     }
 
     let active = true;
+    let uploadCount = 0;
 
-    // Single initial capture before LiveKit kills the camera
-    const initialCapture = async () => {
+    const uploadFrame = async () => {
       if (!active) return;
       try {
-        const frame = await captureFrame();
-        if (!frame) return;
+        const frame = await captureFrameRef.current?.();
+        if (!frame) {
+          if (uploadCount < 5) console.warn('[LiveKitVoice] captureFrame returned empty');
+          return;
+        }
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return;
-        await fetch(`${BACKEND_URL}/api/livekit-frame`, {
+
+        const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -491,15 +487,25 @@ function RoomContent({
           },
           body: JSON.stringify({ room_name: roomName, frame }),
         });
-        console.log('[LiveKitVoice] Initial HTTP frame uploaded');
-      } catch {}
+        uploadCount++;
+        if (uploadCount <= 3 || uploadCount % 10 === 0) {
+          console.log(`[LiveKitVoice] Frame #${uploadCount} uploaded (${Math.round(frame.length / 1024)}KB) status=${resp.status}`);
+        }
+      } catch (e: any) {
+        if (uploadCount < 3) console.warn('[LiveKitVoice] Frame upload failed:', e?.message);
+      }
     };
 
-    // Capture once immediately, before LiveKit's audio session kills the camera
-    initialCapture();
+    // First capture immediately
+    uploadFrame();
+    // Then every 3 seconds
+    const interval = setInterval(uploadFrame, 3000);
 
-    return () => { active = false; };
-  }, [connectionState, captureFrame, roomName]);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [connectionState, roomName]);
 
   // -----------------------------------------------------------------------
   // Connection state tracking
