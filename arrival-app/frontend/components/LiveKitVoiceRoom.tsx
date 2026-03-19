@@ -561,17 +561,29 @@ function RoomContent({
     onVoiceConnected?.(agentConnected);
   }, [agentConnected, onVoiceConnected]);
 
-  // Expose send function to parent when connected — allows guidance start/stop via data channel
+  // Expose send function to parent when connected — uses text streams (not publishData)
+  // publishData/data_received is broken between livekit-client v2.17+ and livekit-agents v1.4
+  // Text streams (sendText/register_text_stream_handler) work reliably across versions.
   useEffect(() => {
     if (connectionState === ConnectionState.Connected && room?.localParticipant) {
-      const sendFn = (msg: Record<string, any>) => {
+      const sendFn = async (msg: Record<string, any>) => {
         try {
-          room.localParticipant.publishData(
-            new TextEncoder().encode(JSON.stringify(msg)),
-            { reliable: true },
-          );
+          await room.localParticipant.sendText(JSON.stringify(msg), {
+            topic: 'arrival-commands',
+          });
+          console.log('[LiveKitVoice] ✓ Sent via text stream:', msg.type);
         } catch (e: any) {
-          console.warn('[LiveKitVoice] sendMessage failed:', e?.message);
+          console.warn('[LiveKitVoice] sendText failed, trying publishData:', e?.message);
+          // Fallback to publishData in case text streams aren't supported
+          try {
+            room.localParticipant.publishData(
+              new TextEncoder().encode(JSON.stringify(msg)),
+              { reliable: true },
+            );
+            console.log('[LiveKitVoice] ✓ Sent via publishData fallback:', msg.type);
+          } catch (e2: any) {
+            console.warn('[LiveKitVoice] Both send methods failed:', e2?.message);
+          }
         }
       };
       onSendMessageReady?.(sendFn);

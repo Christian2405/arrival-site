@@ -513,7 +513,7 @@ class ArrivalAgent(Agent):
             r"(?i)^(okay,?\s*so,?\s*|alright,?\s*so,?\s*|sure!?\s*|"
             r"great question!?\s*|that's a great question\.?\s*|"
             r"good question\.?\s*|absolutely!?\s*|of course!?\s*|"
-            r"well,?\s*)"
+            r"well,?\s*|so,?\s*|now,?\s*|right,?\s*so,?\s*)"
         )
         # Robotic phrases anywhere
         _ROBOTIC = re.compile(
@@ -525,10 +525,22 @@ class ArrivalAgent(Agent):
             r"feel free to|don'?t hesitate to|"
             r"if you have any (?:other )?questions.*?[.!]|"
             r"happy to help.*?[.!]|"
-            r"first,? |second,? |third,? |finally,? |"
-            r"in summary,? |to summarize,? |"
-            r"(?:here'?s |here is )(?:what|the thing|a quick)"
+            r"in summary,? |to summarize,? |in conclusion,? |"
+            r"(?:here'?s |here is )(?:what|the thing|a quick)|"
+            r"that being said,? |with that in mind,? |"
+            r"it'?s also worth mentioning that |"
+            r"(?:please )?keep in mind that |"
+            r"as (?:always|a reminder),? |"
+            r"just to (?:be clear|clarify),? "
             r")"
+        )
+        # Numbered/step patterns — "Step 1:", "1.", "1)", "First,", "Second,"
+        # These get converted to natural speech: remove the number, keep the content
+        _NUMBERED = re.compile(
+            r"(?i)(?:step\s+\d+[:.]\s*|\d+[.)]\s*|first(?:ly)?,?\s+|second(?:ly)?,?\s+|"
+            r"third(?:ly)?,?\s+|fourth(?:ly)?,?\s+|fifth(?:ly)?,?\s+|"
+            r"next,?\s+|finally,?\s+|lastly,?\s+|additionally,?\s+|"
+            r"furthermore,?\s+|moreover,?\s+)"
         )
 
         buffer = ""
@@ -547,6 +559,7 @@ class ArrivalAgent(Agent):
                     is_start = False
 
             buffer = _ROBOTIC.sub("", buffer)
+            buffer = _NUMBERED.sub("", buffer)
             buffer = re.sub(r"  +", " ", buffer)
 
             if buffer.strip():
@@ -555,6 +568,7 @@ class ArrivalAgent(Agent):
 
         if buffer.strip():
             buffer = _ROBOTIC.sub("", buffer)
+            buffer = _NUMBERED.sub("", buffer)
             buffer = re.sub(r"  +", " ", buffer).strip()
             if buffer:
                 yield buffer
@@ -1700,6 +1714,67 @@ async def entrypoint(ctx: JobContext):
         logger.info("[arrival-agent] ✓ Data channel listener registered")
 
         # ---------------------------------------------------------------
+        # Text stream handler — fallback for data channel (which is broken
+        # in production with LiveKit client v2.17+ / agents v1.4)
+        # The frontend can send JSON commands via text streams as well.
+        # ---------------------------------------------------------------
+        def _handle_text_stream(reader, participant_identity: str):
+            async def _process():
+                try:
+                    full_text = ""
+                    async for chunk in reader:
+                        full_text += chunk
+                    logger.info(f"[text-stream] Received from {participant_identity}: {full_text[:100]}")
+                    payload = json.loads(full_text)
+                    msg_type = payload.get("type", "")
+
+                    if msg_type == "guidance_request":
+                        logger.info("[text-stream] Guidance request received")
+                        await session.generate_reply(
+                            instructions=(
+                                "The tech just tapped the 'Guide me' button — they want step-by-step guidance. "
+                                "Ask them naturally what they're working on or need help with. "
+                                "Keep it short: 'Sure! What are you working on?' "
+                                "Once they tell you, call start_guidance with their task."
+                            )
+                        )
+                    elif msg_type == "guidance_stop":
+                        if agent._guidance_active:
+                            task = agent._guidance_task
+                            step_idx = agent._guidance_current_step
+                            total = len(agent._guidance_steps)
+                            agent._guidance_active = False
+                            agent._guidance_task = ""
+                            agent._guidance_steps = []
+                            agent._guidance_current_step = 0
+                            agent._guidance_context = ""
+                            asyncio.ensure_future(agent.update_instructions(
+                                (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                            ))
+                            agent._has_injected_codes = False
+                            logger.info(f"[text-stream] User stopped guidance at step {step_idx+1}/{total}")
+                            await session.generate_reply(
+                                instructions=f"Tech stopped guidance at step {step_idx+1}/{total}. Say 'No problem, I'm here if you need me.'"
+                            )
+                    elif msg_type == "equipment_context":
+                        agent._equipment_type = payload.get("equipment_type", "")
+                        agent._equipment_brand = payload.get("brand", "")
+                        agent._equipment_model = payload.get("model", "")
+                        logger.info(f"[text-stream] Equipment context: {agent._equipment_context_str()}")
+                    elif msg_type == "camera_frame" and payload.get("image"):
+                        agent.update_camera_frame(payload["image"])
+                except Exception as e:
+                    logger.warning(f"[text-stream] Error: {e}")
+
+            asyncio.ensure_future(_process())
+
+        try:
+            ctx.room.register_text_stream_handler("arrival-commands", _handle_text_stream)
+            logger.info("[arrival-agent] ✓ Text stream handler registered (topic: arrival-commands)")
+        except Exception as e:
+            logger.warning(f"[arrival-agent] Text stream handler registration failed: {e}")
+
+        # ---------------------------------------------------------------
         # Video track subscriber — grab frames from LiveKit video track
         # This bypasses expo-camera entirely. The frontend publishes its
         # camera as a LiveKit video track, and we grab frames here.
@@ -1756,6 +1831,11 @@ async def entrypoint(ctx: JobContext):
         _GUIDANCE_ADVANCE_PHRASES = {
             "done", "next", "next step", "what's next", "whats next", "ok done",
             "okay done", "got it", "finished", "move on", "ok next", "okay next",
+        }
+        # Guidance start phrases — when user wants step-by-step guidance via voice
+        _GUIDANCE_START_PHRASES = {
+            "guide me", "walk me through", "help me step by step",
+            "can you guide me", "can you walk me through",
         }
 
         @session.on("user_input_transcribed")
