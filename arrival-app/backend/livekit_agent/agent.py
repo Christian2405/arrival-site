@@ -216,9 +216,8 @@ JOB_MODE_PROMPT = (
 
     # ── SEE ──
     "SEE — A camera frame is attached to every message as context.\n"
-    "- ONLY describe what you see when they ask ('what do you see', 'what is this', 'what am I looking at').\n"
-    "- For all other questions, just answer the question. The frame is background context, not a prompt to describe.\n"
-    "- Be specific: read model numbers, labels, error codes. If you can't make something out, say so.\n"
+    "- When they ask 'what do you see' or 'what is this': name the thing in 1-5 words. Read any labels. That's it.\n"
+    "- For all other questions: just answer. Don't describe the camera.\n"
     "- Never hallucinate objects, wires, or equipment that aren't clearly visible.\n\n"
 
     # ── REASON ──
@@ -259,7 +258,7 @@ JOB_MODE_PROMPT = (
     # ── EXAMPLES — mirror these patterns ──
     "EXAMPLES of how to respond:\n"
     "Tech: 'What do you see?'\n"
-    "You: 'Carrier 58MVC furnace, mid-2010s. Status light on the board is blinking — count the blinks for me.'\n\n"
+    "You: 'Carrier 58MVC furnace. Light's blinking on the board.'\n\n"
     "Tech: 'How do I turn this on?'\n"
     "You: 'Switch on the side of the unit, flip it up.'\n\n"
     "Tech: 'What size wire for a 40 amp circuit?'\n"
@@ -967,7 +966,7 @@ class ArrivalAgent(Agent):
             client = _get_anthropic_client()
             response = await client.messages.create(
                 model=config.ANTHROPIC_VISION_MODEL,
-                max_tokens=100,
+                max_tokens=30,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -979,8 +978,7 @@ class ArrivalAgent(Agent):
                             "type": "text",
                             "text": (
                                 f"{question}. "
-                                "Name what you see in 1 sentence. Read any labels/model numbers. "
-                                "If something's wrong, say what."
+                                "Answer in 1-5 words. Name the thing, read labels. Nothing else."
                             ),
                         },
                     ],
@@ -1052,17 +1050,13 @@ async def _analyze_frame_safety_only(frame_b64: str) -> Optional[str]:
                         {
                             "type": "text",
                             "text": (
-                                "Step 1: In one sentence, describe literally what you see in this image.\n"
-                                "Step 2: Is there IMMEDIATE DANGER visible? Only these count:\n"
-                                "- Exposed live electrical wiring someone could touch\n"
-                                "- Active gas or water leak\n"
+                                "Is there IMMEDIATE DANGER visible? Only:\n"
+                                "- Exposed live wiring\n"
+                                "- Gas or water leak\n"
                                 "- Fire or smoke\n"
                                 "- Structural collapse risk\n\n"
-                                "If no danger: say NOTHING.\n"
-                                "If danger: describe it in one sentence.\n\n"
-                                "Format:\n"
-                                "DESCRIPTION: [what you see]\n"
-                                "DANGER: [the danger] or NOTHING"
+                                "If no danger: NOTHING\n"
+                                "If danger: say what in under 10 words, like a coworker would yell it."
                             ),
                         },
                     ],
@@ -1072,19 +1066,17 @@ async def _analyze_frame_safety_only(frame_b64: str) -> Optional[str]:
         )
         result = response.content[0].text.strip()
 
-        # Parse the two-step response
-        if "NOTHING" in result.upper() and "DANGER" not in result.upper().split("NOTHING")[0]:
+        # Simple: NOTHING means no danger, anything else is the danger
+        if not result or "NOTHING" in result.upper():
             return None
-        # Look for DANGER: line
-        for line in result.split("\n"):
-            line = line.strip()
-            if line.upper().startswith("DANGER:"):
-                danger = line[7:].strip()
-                if danger.upper() == "NOTHING" or len(danger) < 10:
-                    return None
-                logger.info(f"[proactive/dormant] Safety detected: {danger}")
-                return danger
-        return None
+        # Strip any formatting prefix
+        danger = result
+        if danger.upper().startswith("DANGER:"):
+            danger = danger[7:].strip()
+        if len(danger) < 5:
+            return None
+        logger.info(f"[proactive/dormant] Safety detected: {danger}")
+        return danger
     except Exception as e:
         logger.debug(f"[proactive/dormant] Safety scan failed: {e}")
         return None
@@ -1122,7 +1114,7 @@ async def _analyze_frame_contextual(
     response = await asyncio.wait_for(
         client.messages.create(
             model=config.ANTHROPIC_VISION_MODEL,
-            max_tokens=150,
+            max_tokens=50,
             messages=[{
                 "role": "user",
                 "content": [
@@ -1133,21 +1125,15 @@ async def _analyze_frame_contextual(
                     {
                         "type": "text",
                         "text": (
-                            f"The worker is: {task_line}\n"
+                            f"Worker is: {task_line}\n"
                             f"{conv_context}{obs_context}\n"
-                            "Step 1: In one sentence, describe literally what you see in this image.\n"
-                            "Step 2: Based ONLY on your description above — is there anything the worker "
-                            "should know RIGHT NOW about what you described, given their task?\n\n"
-                            "Only speak up if you see:\n"
-                            "- A safety issue (exposed wiring, leak, fire, missing PPE)\n"
-                            "- Something directly relevant to their task (wrong tool, worn part, visible problem)\n"
-                            "- A readable model number, error code, or label they'd want to know\n\n"
-                            "If your description has nothing to do with their task: NOTHING.\n"
-                            "If nothing useful to flag: NOTHING.\n"
-                            "Say it like a coworker — one sentence max.\n\n"
-                            "Format:\n"
-                            "DESCRIPTION: [what you literally see]\n"
-                            "OBSERVATION: [your one-sentence tip] or NOTHING"
+                            "Anything they need to know RIGHT NOW? Only speak if you see:\n"
+                            "- Safety issue\n"
+                            "- Wrong tool/part for their task\n"
+                            "- Readable error code or label\n"
+                            "- Something that looks worn/damaged/wrong\n\n"
+                            "If nothing: NOTHING\n"
+                            "If something: say it in under 10 words like a coworker. No description of the scene."
                         ),
                     },
                 ],
@@ -1157,21 +1143,20 @@ async def _analyze_frame_contextual(
     )
     result = response.content[0].text.strip()
 
-    # Parse the two-step response
-    observation = None
-    for line in result.split("\n"):
-        line = line.strip()
-        if line.upper().startswith("OBSERVATION:"):
-            obs = line[12:].strip()
-            if obs.upper() == "NOTHING" or len(obs) < 10:
-                return None
-            observation = obs
-            break
+    # Simple parsing — model either says NOTHING or gives a short observation
+    if not result or "NOTHING" in result.upper():
+        return None
 
-    if not observation:
-        # No structured observation found — check if the whole response is just NOTHING
-        if "NOTHING" in result.upper():
-            return None
+    # Strip any leftover formatting the model might add
+    observation = result
+    # Remove OBSERVATION: prefix if model still uses it
+    if observation.upper().startswith("OBSERVATION:"):
+        observation = observation[12:].strip()
+    # Remove DESCRIPTION: lines if model still includes them
+    lines = [l.strip() for l in observation.split("\n") if l.strip() and not l.strip().upper().startswith("DESCRIPTION:")]
+    observation = " ".join(lines) if lines else ""
+
+    if not observation or len(observation) < 5:
         return None
 
     # Determine severity from content
