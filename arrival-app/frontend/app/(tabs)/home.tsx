@@ -916,7 +916,9 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Camera background — expo-camera for Voice/Text mode only.
           In Job mode, LiveKitVoiceRoom renders the camera via WebRTC VideoTrack. */}
-      {permission?.granted && interactionMode !== 'job' && (
+      {/* Camera preview — CameraView for all modes. LiveKit video track handles
+          frame delivery to the model separately via WebRTC. */}
+      {permission?.granted && (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       )}
 

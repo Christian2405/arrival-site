@@ -17,7 +17,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import {
   LiveKitRoom,
   AudioSession,
@@ -25,7 +25,6 @@ import {
   useParticipants,
   useRoomContext,
   useTracks,
-  VideoTrack,
   registerGlobals,
 } from '@livekit/react-native';
 import { ConnectionState, RoomEvent, Track } from 'livekit-client';
@@ -664,22 +663,10 @@ function RoomContent({
     );
   }
 
-  // Render local camera preview as full-screen background
-  // This is inside LiveKitRoom context so the VideoTrack has access to the WebRTC stream
-  if (!localCameraTrack) {
-    return null;
-  }
-
-  const { width, height } = Dimensions.get('window');
-  return (
-    <VideoTrack
-      trackRef={localCameraTrack}
-      style={{ position: 'absolute', width, height, top: 0, left: 0 }}
-      objectFit="cover"
-      mirror={false}
-      zOrder={0}
-    />
-  );
+  // Connected and agent is present — voice is live
+  // Camera preview is handled by CameraView in home.tsx
+  // Frames for the model are delivered via LiveKit video track (WebRTC)
+  return null;
 }
 
 const styles = StyleSheet.create({
