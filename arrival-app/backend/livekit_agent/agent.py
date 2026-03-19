@@ -475,18 +475,32 @@ class ArrivalAgent(Agent):
         return ", ".join(parts) if parts else ""
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
-        """Inject the latest camera frame into the LLM context before every response.
-        Replace old frame labels with [OUTDATED] so model knows they're stale."""
+        """Inject the latest camera frame. Strip ALL old images and camera labels
+        from history so the model can only see the current frame."""
         from livekit.agents.llm import ImageContent
 
-        # Mark old camera labels as outdated (keeps context but prevents fixation)
+        # Strip old images AND camera labels from ALL previous messages
         for msg in turn_ctx.items:
-            if msg is not new_message and hasattr(msg, 'content') and isinstance(msg.content, list):
-                msg.content = [
-                    "[OUTDATED CAMERA — the camera has moved since this. Ignore this image.]"
-                    if isinstance(c, ImageContent) else c
-                    for c in msg.content
-                ]
+            if msg is not new_message and hasattr(msg, 'content'):
+                if isinstance(msg.content, list):
+                    msg.content = [
+                        c for c in msg.content
+                        if not isinstance(c, ImageContent)
+                        and not (isinstance(c, str) and "CAMERA" in c)
+                    ]
+                # Also strip assistant responses that describe old camera views
+                # This prevents the model from repeating "I see a shower head" when camera moved
+                if hasattr(msg, 'role') and msg.role == 'assistant' and isinstance(msg.content, (list, str)):
+                    text = msg.content if isinstance(msg.content, str) else " ".join(
+                        c for c in msg.content if isinstance(c, str)
+                    )
+                    if any(phrase in text.lower() for phrase in (
+                        "i can see", "i see", "looks like you're looking at",
+                        "you're looking at", "i'm looking at", "in the frame",
+                        "in the image", "the camera shows",
+                    )):
+                        # Replace vision description with a short note
+                        msg.content = "[Previous camera description — camera has moved since then]"
 
         frame = self._latest_frame if (
             self._latest_frame and (time.time() - self._frame_received_at) < 4
@@ -495,7 +509,7 @@ class ArrivalAgent(Agent):
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
             eq_str = self._equipment_context_str()
-            camera_label = "[CURRENT CAMERA — this is what the tech sees RIGHT NOW. Describe THIS, not previous images.]"
+            camera_label = "[CURRENT CAMERA]"
             if eq_str:
                 camera_label += f"\n[Equipment: {eq_str}]"
             new_message.content = [
