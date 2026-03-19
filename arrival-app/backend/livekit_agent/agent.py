@@ -1619,31 +1619,36 @@ async def entrypoint(ctx: JobContext):
         # ---------------------------------------------------------------
         @ctx.room.on("track_subscribed")
         def on_track_subscribed(track, publication, participant):
+            logger.info(f"[video] Track subscribed: kind={track.kind}, from={participant.identity}")
             if track.kind != rtc.TrackKind.KIND_VIDEO:
+                logger.info(f"[video] Skipping non-video track (kind={track.kind})")
                 return
-            logger.info(f"[video] ★ Video track subscribed from {participant.identity}")
+            logger.info(f"[video] ★★★ VIDEO TRACK SUBSCRIBED from {participant.identity} ★★★")
 
             async def process_video_frames():
                 video_stream = rtc.VideoStream(track)
                 frame_count = 0
+                last_hash = ""
                 async for frame_event in video_stream:
                     frame_count += 1
-                    # Only process every 5th frame (~6fps if source is 30fps)
-                    if frame_count % 5 != 0:
+                    # Process every 10th frame (~1fps if source is 10fps)
+                    if frame_count % 10 != 0:
                         continue
                     try:
-                        # Convert frame to JPEG base64
                         argb_frame = frame_event.frame.convert(rtc.VideoBufferType.RGBA)
                         jpg_bytes = _frame_to_jpeg(argb_frame)
                         if jpg_bytes:
                             import base64
                             b64 = base64.b64encode(jpg_bytes).decode('ascii')
+                            new_hash = b64[-20:]
+                            changed = new_hash != last_hash
+                            last_hash = new_hash
                             agent._latest_frame = b64
                             agent._frame_received_at = time.time()
-                            if frame_count <= 15 or frame_count % 150 == 0:
-                                logger.info(f"[video] Frame #{frame_count} ({len(b64)//1024}KB)")
+                            if frame_count <= 30 or frame_count % 100 == 0 or changed:
+                                logger.info(f"[video] Frame #{frame_count} ({len(b64)//1024}KB) hash=...{new_hash[-8:]} changed={changed}")
                     except Exception as e:
-                        if frame_count <= 5:
+                        if frame_count <= 10:
                             logger.warning(f"[video] Frame conversion failed: {e}")
 
             asyncio.ensure_future(process_video_frames())

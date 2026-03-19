@@ -226,13 +226,17 @@ export default function LiveKitVoiceRoom({
       token={session.token}
       connect={true}
       audio={true}
-      video={false}
+      video={true}
       options={{
         adaptiveStream: false,
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+        },
+        videoCaptureDefaults: {
+          facingMode: 'environment',
+          resolution: { width: 640, height: 480, frameRate: 10 },
         },
       }}
     >
@@ -445,38 +449,9 @@ function RoomContent({
     };
   }, [connectionState, room]);
 
-  // -----------------------------------------------------------------------
-  // Camera via LiveKit video track — bypasses expo-camera entirely
-  // iOS kills expo-camera when LiveKit's audio session activates. Instead,
-  // publish the camera as a LiveKit video track. The agent subscribes to it
-  // and gets frames directly via WebRTC — no HTTP upload, no file store.
-  // -----------------------------------------------------------------------
-  useEffect(() => {
-    if (connectionState !== ConnectionState.Connected || !room?.localParticipant) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const enableCamera = async () => {
-      try {
-        // Enable camera through LiveKit — this uses WebRTC's native camera access
-        // which coexists with the audio session (unlike expo-camera)
-        await room.localParticipant.setCameraEnabled(true);
-        console.log('[LiveKitVoice] ✓ Camera published as video track');
-      } catch (e: any) {
-        console.warn(`[LiveKitVoice] Camera publish failed: ${e?.message || e}`);
-      }
-    };
-
-    enableCamera();
-
-    return () => {
-      cancelled = true;
-      // Disable camera on cleanup
-      room?.localParticipant?.setCameraEnabled(false).catch(() => {});
-    };
-  }, [connectionState, room]);
+  // Camera is published via video={true} + videoCaptureDefaults on LiveKitRoom.
+  // No need for setCameraEnabled — LiveKit handles back camera via WebRTC natively,
+  // bypassing expo-camera which iOS kills when LiveKit's audio session activates.
 
   // HTTP frame upload fallback — uses captureFrame from expo-camera if available
   // This only works BEFORE LiveKit connects (first frame). After that, the video
