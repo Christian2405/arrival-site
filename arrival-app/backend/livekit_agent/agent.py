@@ -1757,10 +1757,12 @@ async def entrypoint(ctx: JobContext):
                     frame = await agent.get_current_frame()
                     _frame_injector_count[0] += 1
                     if frame:
+                        # Log hash to detect if frame content actually changes
+                        frame_hash = frame[-20:]  # last 20 chars of base64 = unique fingerprint
                         agent._latest_frame = frame
                         agent._frame_received_at = time.time()
                         if _frame_injector_count[0] <= 5 or _frame_injector_count[0] % 15 == 0:
-                            logger.info(f"[frame-injector] ✓ Got frame ({len(frame)//1024}KB) poll #{_frame_injector_count[0]}")
+                            logger.info(f"[frame-injector] ✓ Got frame ({len(frame)//1024}KB) hash=...{frame_hash[-8:]} poll #{_frame_injector_count[0]}")
                     else:
                         if _frame_injector_count[0] <= 10:
                             logger.info(f"[frame-injector] No frame available (poll #{_frame_injector_count[0]}, room={agent._room_name})")
