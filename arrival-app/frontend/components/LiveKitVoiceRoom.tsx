@@ -25,7 +25,6 @@ import {
   useParticipants,
   useRoomContext,
   useTracks,
-  VideoTrack,
   registerGlobals,
 } from '@livekit/react-native';
 import { ConnectionState, RoomEvent, Track } from 'livekit-client';
@@ -66,6 +65,8 @@ interface LiveKitVoiceRoomProps {
   equipmentContext?: EquipmentContext | null;
   /** Exposes a function to send data channel messages to the agent */
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
+  /** Exposes the local camera track ref for rendering at the root level */
+  onLocalVideoTrack?: (trackRef: any | null) => void;
 }
 
 const MAX_RETRIES = 3;
@@ -82,6 +83,7 @@ export default function LiveKitVoiceRoom({
   onError,
   equipmentContext,
   onSendMessageReady,
+  onLocalVideoTrack,
 }: LiveKitVoiceRoomProps) {
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
@@ -253,6 +255,7 @@ export default function LiveKitVoiceRoom({
         roomName={session.roomName}
         equipmentContext={equipmentContext}
         onSendMessageReady={onSendMessageReady}
+        onLocalVideoTrack={onLocalVideoTrack}
       />
     </LiveKitRoom>
   );
@@ -276,6 +279,7 @@ function RoomContent({
   roomName,
   equipmentContext,
   onSendMessageReady,
+  onLocalVideoTrack,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onVoiceConnected?: (connected: boolean) => void;
@@ -287,6 +291,7 @@ function RoomContent({
   roomName?: string;
   equipmentContext?: EquipmentContext | null;
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
+  onLocalVideoTrack?: (trackRef: any | null) => void;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
@@ -655,33 +660,18 @@ function RoomContent({
     );
   }
 
-  // Connected and agent is present — render local camera preview
-  // This replaces expo-camera's CameraView which freezes when LiveKit audio activates
-  const localCameraTrack = tracks.find(t => t.participant.isLocal);
+  // Pass local camera track up to parent for rendering at root level
+  const localCameraTrack = tracks.find(t => t.participant.isLocal) ?? null;
+  useEffect(() => {
+    onLocalVideoTrack?.(localCameraTrack);
+    return () => onLocalVideoTrack?.(null);
+  }, [localCameraTrack, onLocalVideoTrack]);
 
-  if (!localCameraTrack) {
-    return null; // No video track yet — audio-only for now
-  }
-
-  return (
-    <VideoTrack
-      trackRef={localCameraTrack}
-      style={styles.localVideo}
-      objectFit="cover"
-      mirror={false}
-    />
-  );
+  // Connected and agent is present — voice is live, no UI needed
+  return null;
 }
 
 const styles = StyleSheet.create({
-  localVideo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: -1,
-  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
