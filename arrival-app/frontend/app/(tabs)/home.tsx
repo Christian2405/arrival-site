@@ -207,29 +207,35 @@ export default function HomeScreen() {
     }
   }, [prefill]);
 
-  // --- Camera capture (silent, no shutter) ---
-  // 0.8 quality JPEG is optimal for Claude vision. Claude resizes internally past ~1568px.
+  // --- Camera capture (serial, no shutter) ---
+  // CRITICAL: iOS returns cached/stale frames if takePictureAsync is called
+  // while another capture is in progress. The capture lock prevents this.
+  // Two loops call captureFrame concurrently (DC every 1.5s, HTTP every 5s).
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
     if (!cameraRef.current) {
-      console.warn('[captureFrame] cameraRef.current is null');
       return undefined;
     }
+    // Prevent concurrent captures — iOS returns stale frames otherwise
+    if (isCapturingRef.current) {
+      return undefined;
+    }
+    isCapturingRef.current = true;
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.8,
+        quality: 0.5,   // Lower quality = faster capture = less chance of stale frame
         exif: false,
         shutterSound: false,
       });
       if (!photo?.base64) {
-        console.warn('[captureFrame] takePictureAsync returned no base64');
         return undefined;
       }
-      console.log(`[captureFrame] OK (${Math.round(photo.base64.length / 1024)}KB)`);
       return photo.base64;
     } catch (e: any) {
       console.error('[captureFrame] FAILED:', e?.message || e);
       return undefined;
+    } finally {
+      isCapturingRef.current = false;
     }
   }, []);
 
