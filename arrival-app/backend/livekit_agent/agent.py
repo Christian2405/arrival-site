@@ -524,9 +524,15 @@ class ArrivalAgent(Agent):
                     msg.content = ""  # Gone — no residue, no anchoring
 
         # 3. Inject current frame onto the new message
+        #    Try data channel first, then HTTP fallback (data channel is broken in production)
         frame = self._latest_frame if (
             self._latest_frame and (time.time() - self._frame_received_at) < 4
         ) else None
+        if not frame:
+            # HTTP fallback — same path that look_at_camera uses successfully
+            frame = await self.get_current_frame()
+            if frame:
+                logger.info(f"[vision-debug] Got frame via HTTP fallback ({len(frame)//1024}KB)")
         if frame:
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
@@ -840,7 +846,7 @@ class ArrivalAgent(Agent):
             client = _get_anthropic_client()
             response = await client.messages.create(
                 model=config.ANTHROPIC_VISION_MODEL,
-                max_tokens=300,
+                max_tokens=100,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -851,10 +857,9 @@ class ArrivalAgent(Agent):
                         {
                             "type": "text",
                             "text": (
-                                "You're a 50-year trade veteran looking at this through a tech's phone camera. "
-                                f"{question}. Be specific and practical, 1-3 sentences. "
-                                "Read any model numbers, brands, labels, or error codes you can see. "
-                                "If something looks wrong, say what and why."
+                                f"{question}. "
+                                "Name what you see in 1 sentence. Read any labels/model numbers. "
+                                "If something's wrong, say what."
                             ),
                         },
                     ],
@@ -1460,7 +1465,7 @@ async def entrypoint(ctx: JobContext):
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
-                max_tokens=200,  # Force brevity — voice responses must be short
+                max_tokens=100,  # Hard cap — voice must be 1-2 sentences
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
@@ -1754,7 +1759,7 @@ async def entrypoint(ctx: JobContext):
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    logger.debug(f"[frame-injector] Error: {e}")
+                    logger.info(f"[frame-injector] Error: {e}")
 
         # Start background tasks
         injector_task = asyncio.create_task(frame_injector())
