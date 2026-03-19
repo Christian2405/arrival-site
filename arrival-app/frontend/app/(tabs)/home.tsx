@@ -29,10 +29,8 @@ import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
 // LiveKit requires native WebRTC — lazy-load so Expo Go doesn't crash
 let LiveKitVoiceRoom: React.ComponentType<any> | null = null;
-let LKVideoTrack: React.ComponentType<any> | null = null;
 try {
   LiveKitVoiceRoom = require('../../components/LiveKitVoiceRoom').default;
-  LKVideoTrack = require('@livekit/react-native').VideoTrack;
 } catch (e) {
   console.warn('[Home] LiveKit native module not available (Expo Go?) — falling back to REST voice');
 }
@@ -114,7 +112,6 @@ export default function HomeScreen() {
   // Job Mode state
   const [jobAIState, setJobAIState] = useState<JobAIState>('monitoring');
   const [voiceConnected, setVoiceConnected] = useState(false);
-  const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
   const [jobPaused, setJobPaused] = useState(false);
   const [jobStarted, setJobStarted] = useState(false);
   const [equipmentContext, setEquipmentContext] = useState<{ equipment_type: string; brand?: string; model?: string } | null>(null);
@@ -917,18 +914,10 @@ export default function HomeScreen() {
   // --- RENDER ---
   return (
     <View style={styles.container}>
-      {/* Camera background — expo-camera for Voice/Text mode, LiveKit VideoTrack for Job mode */}
+      {/* Camera background — expo-camera for Voice/Text mode only.
+          In Job mode, LiveKitVoiceRoom renders the camera via WebRTC VideoTrack. */}
       {permission?.granted && interactionMode !== 'job' && (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-      )}
-      {/* LiveKit camera preview — rendered at root level so it's behind the dark overlay */}
-      {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
-        <LKVideoTrack
-          trackRef={localVideoTrackRef}
-          style={StyleSheet.absoluteFill}
-          objectFit="cover"
-          mirror={false}
-        />
       )}
 
       {/* Dark overlay on camera feed */}
@@ -1215,7 +1204,6 @@ export default function HomeScreen() {
                   onSendMessageReady={(fn: ((msg: Record<string, any>) => void) | null) => {
                     livekitSendRef.current = fn;
                   }}
-                  onLocalVideoTrack={setLocalVideoTrackRef}
                 />
               )}
               <JobModeView

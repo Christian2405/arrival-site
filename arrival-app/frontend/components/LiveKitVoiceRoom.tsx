@@ -17,7 +17,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import {
   LiveKitRoom,
   AudioSession,
@@ -25,6 +25,7 @@ import {
   useParticipants,
   useRoomContext,
   useTracks,
+  VideoTrack,
   registerGlobals,
 } from '@livekit/react-native';
 import { ConnectionState, RoomEvent, Track } from 'livekit-client';
@@ -305,6 +306,9 @@ function RoomContent({
   captureFrameRef.current = captureFrame;
   const roomNameRef = useRef(roomName);
   roomNameRef.current = roomName;
+
+  // Find local camera track for preview rendering
+  const localCameraTrack = tracks.find(t => t.participant.isLocal) ?? null;
 
   // Send equipment context to agent whenever it changes
   useEffect(() => {
@@ -660,15 +664,22 @@ function RoomContent({
     );
   }
 
-  // Pass local camera track up to parent for rendering at root level
-  const localCameraTrack = tracks.find(t => t.participant.isLocal) ?? null;
-  useEffect(() => {
-    onLocalVideoTrack?.(localCameraTrack);
-    return () => onLocalVideoTrack?.(null);
-  }, [localCameraTrack, onLocalVideoTrack]);
+  // Render local camera preview as full-screen background
+  // This is inside LiveKitRoom context so the VideoTrack has access to the WebRTC stream
+  if (!localCameraTrack) {
+    return null;
+  }
 
-  // Connected and agent is present — voice is live, no UI needed
-  return null;
+  const { width, height } = Dimensions.get('window');
+  return (
+    <VideoTrack
+      trackRef={localCameraTrack}
+      style={{ position: 'absolute', width, height, top: 0, left: 0 }}
+      objectFit="cover"
+      mirror={false}
+      zOrder={0}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
