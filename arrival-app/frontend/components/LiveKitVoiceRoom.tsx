@@ -291,6 +291,7 @@ function RoomContent({
   const connectionState = useConnectionState();
   const participants = useParticipants();
   const room = useRoomContext();
+  const tracks = useTracks([Track.Source.Camera]);
   const hasStartedConnecting = useRef(false);
   const wasConnected = useRef(false);
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -656,7 +657,6 @@ function RoomContent({
 
   // Connected and agent is present — render local camera preview
   // This replaces expo-camera's CameraView which freezes when LiveKit audio activates
-  const tracks = useTracks([Track.Source.Camera]);
   const localCameraTrack = tracks.find(t => t.participant.isLocal);
 
   if (!localCameraTrack) {
