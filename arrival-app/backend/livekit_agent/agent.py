@@ -1465,7 +1465,7 @@ async def entrypoint(ctx: JobContext):
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
-                max_tokens=100,  # Hard cap — voice must be 1-2 sentences
+                max_tokens=200,  # Enough for guidance steps, still caps rambling
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
