@@ -475,33 +475,55 @@ class ArrivalAgent(Agent):
         return ", ".join(parts) if parts else ""
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
-        """Inject the latest camera frame. Strip ALL old images and camera labels
-        from history so the model can only see the current frame."""
+        """Inject the latest camera frame with aggressive context management.
+
+        Key insight: for a job-site voice assistant, old conversation turns are
+        noise. The model must see the CURRENT frame and respond to it fresh —
+        not anchor on what it said 3 turns ago. We:
+        1. Truncate to last 4 items (2 user-assistant pairs + system prompt)
+        2. Strip ALL images from remaining history
+        3. DELETE (not replace) old vision descriptions — replacing with a note
+           like 'camera moved' still primes the model to anchor on old content
+        """
         from livekit.agents.llm import ImageContent
 
-        # Strip old images AND camera labels from ALL previous messages
-        for msg in turn_ctx.items:
-            if msg is not new_message and hasattr(msg, 'content'):
-                if isinstance(msg.content, list):
-                    msg.content = [
-                        c for c in msg.content
-                        if not isinstance(c, ImageContent)
-                        and not (isinstance(c, str) and "CAMERA" in c)
-                    ]
-                # Also strip assistant responses that describe old camera views
-                # This prevents the model from repeating "I see a shower head" when camera moved
-                if hasattr(msg, 'role') and msg.role == 'assistant' and isinstance(msg.content, (list, str)):
-                    text = msg.content if isinstance(msg.content, str) else " ".join(
-                        c for c in msg.content if isinstance(c, str)
-                    )
-                    if any(phrase in text.lower() for phrase in (
-                        "i can see", "i see", "looks like you're looking at",
-                        "you're looking at", "i'm looking at", "in the frame",
-                        "in the image", "the camera shows",
-                    )):
-                        # Replace vision description with a short note
-                        msg.content = "[Previous camera description — camera has moved since then]"
+        # 1. Truncate — prevents unbounded context growth and old-vision anchoring
+        #    truncate() preserves the system/developer instruction message automatically
+        turn_ctx.truncate(max_items=4)
 
+        # 2. Strip old images + vision descriptions from remaining history
+        _VISION_PHRASES = (
+            "i can see", "i see", "looks like", "you're looking at",
+            "i'm looking at", "in the frame", "in the image",
+            "the camera shows", "showing you", "appears to be",
+            "that's a", "that looks like", "what i see",
+            "camera description", "camera has moved",
+        )
+        for msg in turn_ctx.items:
+            if msg is new_message:
+                continue
+            if not hasattr(msg, 'content'):
+                continue
+
+            # Remove images and camera labels from all old messages
+            if isinstance(msg.content, list):
+                msg.content = [
+                    c for c in msg.content
+                    if not isinstance(c, ImageContent)
+                    and not (isinstance(c, str) and "CAMERA" in c)
+                ]
+
+            # For assistant messages: delete vision descriptions entirely
+            if hasattr(msg, 'role') and msg.role == 'assistant':
+                text = ""
+                if isinstance(msg.content, str):
+                    text = msg.content
+                elif isinstance(msg.content, list):
+                    text = " ".join(c for c in msg.content if isinstance(c, str))
+                if any(phrase in text.lower() for phrase in _VISION_PHRASES):
+                    msg.content = ""  # Gone — no residue, no anchoring
+
+        # 3. Inject current frame onto the new message
         frame = self._latest_frame if (
             self._latest_frame and (time.time() - self._frame_received_at) < 4
         ) else None
@@ -509,15 +531,25 @@ class ArrivalAgent(Agent):
             data_url = f"data:image/jpeg;base64,{frame}"
             image_content = ImageContent(image=data_url)
             eq_str = self._equipment_context_str()
-            camera_label = "[CURRENT CAMERA]"
+            camera_label = "[CURRENT CAMERA FEED]"
             if eq_str:
-                camera_label += f"\n[Equipment: {eq_str}]"
+                camera_label += f" Equipment: {eq_str}"
             new_message.content = [
                 image_content,
                 camera_label,
             ] + list(new_message.content)
         else:
             logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
+
+        # 4. Also truncate the persistent context to prevent unbounded growth
+        #    (the copy we modified above is used for this LLM call; this keeps
+        #    the agent's internal context lean for future calls)
+        try:
+            persistent_ctx = self.chat_ctx.copy()
+            persistent_ctx.truncate(max_items=6)
+            await self.update_chat_ctx(persistent_ctx)
+        except Exception:
+            pass  # Non-critical — the per-call truncation above is what matters
 
     @function_tool()
     async def lookup_error_code(self, query: str) -> str:
@@ -1428,6 +1460,7 @@ async def entrypoint(ctx: JobContext):
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
+                max_tokens=200,  # Force brevity — voice responses must be short
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),
@@ -1470,8 +1503,11 @@ async def entrypoint(ctx: JobContext):
         @ctx.room.on("data_received")
         def on_data(data_packet):
             try:
-                payload = json.loads(data_packet.data.decode("utf-8"))
+                raw = data_packet.data
+                logger.info(f"[data-channel] Received {len(raw)} bytes, type={type(raw).__name__}")
+                payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
                 msg_type = payload.get("type", "")
+                logger.info(f"[data-channel] Message type: {msg_type}")
 
                 if msg_type == "camera_frame" and payload.get("image"):
                     agent.update_camera_frame(payload["image"])
@@ -1534,7 +1570,7 @@ async def entrypoint(ctx: JobContext):
                         agent._guidance_current_step = 0
                         agent._guidance_context = ""
                         # Reset prompt
-                        agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE)
+                        asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
                         agent._has_injected_codes = False
                         logger.info(f"[guidance] User stopped guidance at step {step_idx+1}/{total}")
                         asyncio.ensure_future(session.generate_reply(
@@ -1546,8 +1582,8 @@ async def entrypoint(ctx: JobContext):
                     else:
                         logger.debug("[guidance] Stop received but no guidance active")
 
-            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
-                pass
+            except Exception as e:
+                logger.warning(f"[data-channel] Error handling data: {type(e).__name__}: {e}")
 
         logger.info("[arrival-agent] ✓ Data channel listener registered")
 
@@ -1615,7 +1651,7 @@ async def entrypoint(ctx: JobContext):
                 agent._guidance_current_step = 0
                 agent._guidance_context = ""
                 # Reset prompt to clean state
-                agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE)
+                asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
                 agent._has_injected_codes = False
                 logger.info(f"[guidance] User exited guidance at step {step_idx+1}/{total}: '{text_lower}'")
                 # Acknowledge — don't just go silent
@@ -1653,11 +1689,11 @@ async def entrypoint(ctx: JobContext):
                         "- They can interrupt anytime — that's fine, answer and continue."
                     )
                     # Merge: guidance + error code (if user asked about a code mid-guidance)
-                    agent.update_instructions(base + guidance_inject + error_inject)
+                    asyncio.ensure_future(agent.update_instructions(base + guidance_inject + error_inject))
             else:
                 # No guidance active — just base + error codes (if any)
                 base = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
-                agent.update_instructions(base + error_inject)
+                asyncio.ensure_future(agent.update_instructions(base + error_inject))
 
             # Detect mute commands — entire utterance must exactly match a mute phrase
             # to avoid false positives like "stop valve testing" or "that's quiet today"
