@@ -56,6 +56,7 @@ from livekit.agents import (
     cli,
     function_tool,
 )
+from livekit import rtc
 from livekit.plugins import deepgram, anthropic, elevenlabs
 
 # Optional ML plugins — may fail to import if deps are missing
@@ -109,6 +110,23 @@ def _get_httpx_client() -> httpx.AsyncClient:
     if _httpx_client is None:
         _httpx_client = httpx.AsyncClient(timeout=3.0)
     return _httpx_client
+
+def _frame_to_jpeg(frame: rtc.VideoFrame, quality: int = 50) -> bytes | None:
+    """Convert a LiveKit VideoFrame (RGBA) to JPEG bytes."""
+    try:
+        from PIL import Image
+        import io
+        img = Image.frombytes("RGBA", (frame.width, frame.height), frame.data)
+        img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        return buf.getvalue()
+    except ImportError:
+        logger.warning("[video] Pillow not installed — cannot convert video frames")
+        return None
+    except Exception as e:
+        logger.debug(f"[video] JPEG conversion failed: {e}")
+        return None
 
 # Startup banner
 logger.info("[arrival-agent] ============================")
@@ -1593,6 +1611,42 @@ async def entrypoint(ctx: JobContext):
                 logger.warning(f"[data-channel] Error handling data: {type(e).__name__}: {e}")
 
         logger.info("[arrival-agent] ✓ Data channel listener registered")
+
+        # ---------------------------------------------------------------
+        # Video track subscriber — grab frames from LiveKit video track
+        # This bypasses expo-camera entirely. The frontend publishes its
+        # camera as a LiveKit video track, and we grab frames here.
+        # ---------------------------------------------------------------
+        @ctx.room.on("track_subscribed")
+        def on_track_subscribed(track, publication, participant):
+            if track.kind != rtc.TrackKind.KIND_VIDEO:
+                return
+            logger.info(f"[video] ★ Video track subscribed from {participant.identity}")
+
+            async def process_video_frames():
+                video_stream = rtc.VideoStream(track)
+                frame_count = 0
+                async for frame_event in video_stream:
+                    frame_count += 1
+                    # Only process every 5th frame (~6fps if source is 30fps)
+                    if frame_count % 5 != 0:
+                        continue
+                    try:
+                        # Convert frame to JPEG base64
+                        argb_frame = frame_event.frame.convert(rtc.VideoBufferType.RGBA)
+                        jpg_bytes = _frame_to_jpeg(argb_frame)
+                        if jpg_bytes:
+                            import base64
+                            b64 = base64.b64encode(jpg_bytes).decode('ascii')
+                            agent._latest_frame = b64
+                            agent._frame_received_at = time.time()
+                            if frame_count <= 15 or frame_count % 150 == 0:
+                                logger.info(f"[video] Frame #{frame_count} ({len(b64)//1024}KB)")
+                    except Exception as e:
+                        if frame_count <= 5:
+                            logger.warning(f"[video] Frame conversion failed: {e}")
+
+            asyncio.ensure_future(process_video_frames())
 
         # Track user speech for proactive monitor + engagement + mute detection
         # Only match mute/pushback when the ENTIRE utterance matches exactly

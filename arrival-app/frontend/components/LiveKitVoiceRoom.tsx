@@ -446,35 +446,50 @@ function RoomContent({
   }, [connectionState, room]);
 
   // -----------------------------------------------------------------------
-  // Frame loops — fast data channel (1.5s) for real-time vision,
-  // slower HTTP upload (5s) as fallback for frame store
+  // Camera via LiveKit video track — bypasses expo-camera entirely
+  // iOS kills expo-camera when LiveKit's audio session activates. Instead,
+  // publish the camera as a LiveKit video track. The agent subscribes to it
+  // and gets frames directly via WebRTC — no HTTP upload, no file store.
   // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected || !room?.localParticipant) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const enableCamera = async () => {
+      try {
+        // Enable camera through LiveKit — this uses WebRTC's native camera access
+        // which coexists with the audio session (unlike expo-camera)
+        await room.localParticipant.setCameraEnabled(true);
+        console.log('[LiveKitVoice] ✓ Camera published as video track');
+      } catch (e: any) {
+        console.warn(`[LiveKitVoice] Camera publish failed: ${e?.message || e}`);
+      }
+    };
+
+    enableCamera();
+
+    return () => {
+      cancelled = true;
+      // Disable camera on cleanup
+      room?.localParticipant?.setCameraEnabled(false).catch(() => {});
+    };
+  }, [connectionState, room]);
+
+  // HTTP frame upload fallback — uses captureFrame from expo-camera if available
+  // This only works BEFORE LiveKit connects (first frame). After that, the video
+  // track above handles frame delivery.
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || !captureFrame || !roomName) {
       return;
     }
 
     let active = true;
-    let httpFrameCount = 0;
 
-    // Fast path: send frame via data channel every 1.5s — near real-time
-    const sendDCFrame = async () => {
-      if (!active) return;
-      try {
-        const frame = await captureFrame();
-        if (!frame || !room?.localParticipant) return;
-        const dcMsg = JSON.stringify({ type: 'camera_frame', image: frame });
-        await room.localParticipant.publishData(
-          new TextEncoder().encode(dcMsg),
-          { reliable: true },  // Must be reliable — dropped frames cause stale vision
-        );
-      } catch (e: any) {
-        console.debug(`[LiveKitVoice] DC frame failed: ${e?.message || e}`);
-      }
-    };
-
-    // Slow path: HTTP upload every 5s — fallback for frame store
-    const sendHTTPFrame = async () => {
+    // Single initial capture before LiveKit kills the camera
+    const initialCapture = async () => {
       if (!active) return;
       try {
         const frame = await captureFrame();
@@ -482,7 +497,7 @@ function RoomContent({
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return;
-        const resp = await fetch(`${BACKEND_URL}/api/livekit-frame`, {
+        await fetch(`${BACKEND_URL}/api/livekit-frame`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -490,29 +505,15 @@ function RoomContent({
           },
           body: JSON.stringify({ room_name: roomName, frame }),
         });
-        httpFrameCount++;
-        if (resp.ok) {
-          console.log(`[LiveKitVoice] HTTP frame #${httpFrameCount} (${Math.round(frame.length / 1024)}KB)`);
-        }
-      } catch (e: any) {
-        console.warn(`[LiveKitVoice] HTTP frame error: ${e?.message || e}`);
-      }
+        console.log('[LiveKitVoice] Initial HTTP frame uploaded');
+      } catch {}
     };
 
-    // Start both loops
-    const dcInitial = setTimeout(sendDCFrame, 500);
-    const dcInterval = setInterval(sendDCFrame, 1500);
-    const httpInitial = setTimeout(sendHTTPFrame, 2000);
-    const httpInterval = setInterval(sendHTTPFrame, 5000);
+    // Capture once immediately, before LiveKit's audio session kills the camera
+    initialCapture();
 
-    return () => {
-      active = false;
-      clearTimeout(dcInitial);
-      clearInterval(dcInterval);
-      clearTimeout(httpInitial);
-      clearInterval(httpInterval);
-    };
-  }, [connectionState, captureFrame, roomName, room]);
+    return () => { active = false; };
+  }, [connectionState, captureFrame, roomName]);
 
   // -----------------------------------------------------------------------
   // Connection state tracking

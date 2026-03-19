@@ -98,7 +98,7 @@ export default function HomeScreen() {
   const cameraRef = useRef<CameraView>(null);
   const isCapturingRef = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [cameraKey, setCameraKey] = useState(0); // Increment to force remount
+  // cameraKey removed — remounting CameraView while LiveKit audio is active crashes iOS
 
   // Recording
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -209,17 +209,15 @@ export default function HomeScreen() {
   }, [prefill]);
 
   // --- Camera capture ---
-  // iOS pauses the camera preview when LiveKit's audio session activates.
-  // takePictureAsync then returns the last frame before the pause — frozen.
-  // Detection: if two consecutive captures have identical base64 tails, the
-  // camera is frozen. Fix: increment cameraKey to force React to remount
-  // the CameraView, which restarts the AVCaptureSession.
-  const lastFrameTailRef = useRef<string>('');
-  const staleCaptureCountRef = useRef(0);
+  // iOS kills the camera when LiveKit's audio session takes over.
+  // takePictureAsync either returns stale frames or throws "Image could not be captured".
+  // We cache the last successful frame and return it on failure — stale > nothing.
+  // The FIRST capture before LiveKit connects usually works and gives a real frame.
+  const lastGoodFrameRef = useRef<string | undefined>(undefined);
 
   const captureFrame = useCallback(async (): Promise<string | undefined> => {
     if (!cameraRef.current || isCapturingRef.current) {
-      return undefined;
+      return lastGoodFrameRef.current;
     }
     isCapturingRef.current = true;
     try {
@@ -229,30 +227,13 @@ export default function HomeScreen() {
         exif: false,
         shutterSound: false,
       });
-      if (!photo?.base64) {
-        return undefined;
+      if (photo?.base64) {
+        lastGoodFrameRef.current = photo.base64;
+        return photo.base64;
       }
-
-      // Stale frame detection: compare last 20 chars of base64
-      const tail = photo.base64.slice(-20);
-      if (tail === lastFrameTailRef.current) {
-        staleCaptureCountRef.current += 1;
-        // After 3 identical frames in a row, force camera remount
-        if (staleCaptureCountRef.current >= 3) {
-          console.warn(`[captureFrame] Camera frozen (${staleCaptureCountRef.current} identical frames) — remounting`);
-          setCameraKey(k => k + 1);
-          staleCaptureCountRef.current = 0;
-          // Return the stale frame anyway — better than nothing
-        }
-      } else {
-        staleCaptureCountRef.current = 0;
-      }
-      lastFrameTailRef.current = tail;
-
-      return photo.base64;
-    } catch (e: any) {
-      console.error('[captureFrame] FAILED:', e?.message || e);
-      return undefined;
+      return lastGoodFrameRef.current;
+    } catch {
+      return lastGoodFrameRef.current;
     } finally {
       isCapturingRef.current = false;
     }
@@ -935,7 +916,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Camera background - only mount when permission is granted */}
       {permission?.granted && (
-        <CameraView key={`cam-${cameraKey}`} ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       )}
 
       {/* Dark overlay on camera feed */}
