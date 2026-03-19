@@ -499,6 +499,66 @@ class ArrivalAgent(Agent):
             parts.append(f"model {self._equipment_model}")
         return ", ".join(parts) if parts else ""
 
+    def tts_node(self, text, model_settings):
+        """Strip robotic filler from LLM output before TTS speaks it."""
+        filtered = self._filter_robotic_text(text)
+        return Agent.default.tts_node(self, filtered, model_settings)
+
+    async def _filter_robotic_text(self, text):
+        """Async generator that strips AI filler from the text stream."""
+        import re
+
+        # Filler at the START of a response
+        _FILLER_START = re.compile(
+            r"(?i)^(okay,?\s*so,?\s*|alright,?\s*so,?\s*|sure!?\s*|"
+            r"great question!?\s*|that's a great question\.?\s*|"
+            r"good question\.?\s*|absolutely!?\s*|of course!?\s*|"
+            r"well,?\s*)"
+        )
+        # Robotic phrases anywhere
+        _ROBOTIC = re.compile(
+            r"(?i)("
+            r"it'?s important to note that|it'?s worth noting that|"
+            r"i'?d recommend|i would recommend|i'?d suggest|"
+            r"let me know if you (?:need|have|want) anything.*?[.!]|"
+            r"hope that helps.*?[.!]|does that make sense\??|"
+            r"feel free to|don'?t hesitate to|"
+            r"if you have any (?:other )?questions.*?[.!]|"
+            r"happy to help.*?[.!]|"
+            r"first,? |second,? |third,? |finally,? |"
+            r"in summary,? |to summarize,? |"
+            r"(?:here'?s |here is )(?:what|the thing|a quick)"
+            r")"
+        )
+
+        buffer = ""
+        is_start = True
+
+        async for chunk in text:
+            buffer += chunk
+
+            # Wait for enough text to process
+            if len(buffer) < 20 and not any(c in chunk for c in ".!?\n"):
+                continue
+
+            if is_start:
+                buffer = _FILLER_START.sub("", buffer)
+                if buffer.strip():
+                    is_start = False
+
+            buffer = _ROBOTIC.sub("", buffer)
+            buffer = re.sub(r"  +", " ", buffer)
+
+            if buffer.strip():
+                yield buffer
+                buffer = ""
+
+        if buffer.strip():
+            buffer = _ROBOTIC.sub("", buffer)
+            buffer = re.sub(r"  +", " ", buffer).strip()
+            if buffer:
+                yield buffer
+
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Inject the latest camera frame with aggressive context management.
 
