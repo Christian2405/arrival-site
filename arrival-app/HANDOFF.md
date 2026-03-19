@@ -1,14 +1,123 @@
 # Arrival AI — Handoff Document
 ## "50-Year Veteran in Your Pocket" Upgrade
 
-**Last Updated:** March 8, 2026
-**Latest Commits:** `36fe75f` (restore silero/turn-detector) | `8972ba3` (agent debug) | `a93a695` (voice agent RAG)
+**Last Updated:** March 19, 2026
+**Latest Commits:** `d6efb29` (tts_node filler strip) | `68e67fd` (few-shot + frame reorder) | `c0e5210` (camera flip + verbosity)
 
 ---
 
 ## What Was the Problem
 
 The AI gave generic, shallow responses. System prompt was 12 lines with zero trade knowledge. Knowledge base was empty. No feedback loop. Job Mode was basic. The goal was to make it feel like talking to a veteran tradesman — direct, specific, authoritative.
+
+---
+
+## Current State (March 19, 2026)
+
+### What's Working
+- **Vision identifies new objects** — frames flow via LiveKit WebRTC video track (not expo-camera). Model correctly identifies different objects when camera moves.
+- **Camera preview in Job Mode** — uses LiveKit VideoTrack component rendered at root level in home.tsx. Replaces expo-camera CameraView which freezes when LiveKit audio session activates on iOS.
+- **Camera flip button** — top-right in Job Mode, switches front/back camera via `setCameraEnabled(false)` then `setCameraEnabled(true, { facingMode })`.
+- **Few-shot examples** — 5 example exchanges in JOB_MODE_PROMPT showing ideal response patterns. Model mirrors these better than instruction paragraphs.
+- **Frame reorder** — vision questions get `[image, text]`, all other questions get `[text, image]`. Stops model from describing camera before answering.
+- **TTS filler stripping** — `tts_node` override strips "Great question!", "First, Second, Third", "I'd recommend", "Hope that helps" etc from audio stream before ElevenLabs speaks them.
+
+### What's Partially Working
+- **Verbosity** — improved from ~2/10 to ~4/10. Still too verbose on longer explanations. Model still sounds robotic. Few-shot + filler strip helped but not enough.
+- **Humanity** — ~6/10. Needs more natural conversational patterns. Consider OpenAI Realtime API for audio-native conversation.
+- **Camera flip** — code is in place but untested after latest push. Uses `setCameraEnabled(false)` then re-enable with new facing mode.
+
+### What's NOT Working
+- **Guidance mode** — may not speak. Data channel messages (`guidance_request`, `guidance_stop`) may not be reaching backend. Untested since vision fixes.
+- **Pinch-to-zoom** — not implemented. Requires gesture handler integration with LiveKit camera capture options.
+- **Proactive vision** — hallucinated previously. Proactive monitor exists but needs tuning — currently may speak up about irrelevant things.
+
+### Critical Architecture Facts
+- **Frame delivery:** LiveKit WebRTC video track is the ONLY working path. expo-camera `takePictureAsync` is completely dead when LiveKit audio is active on iOS. HTTP frame upload sends identical frozen frames.
+- **`update_instructions()` bug (FIXED):** Was async but called without `await` — silently failed for weeks. Fixed March 19.
+- **Frame staleness window:** 4 seconds. If `_latest_frame` is older than 4s, falls back to HTTP store (which has stale data).
+- **LiveKit Agents SDK:** v1.4. Has `llm_node`, `tts_node`, `stt_node` pipeline nodes for intercepting/modifying data between stages.
+
+---
+
+## March 19, 2026 Session — Vision Fix, Camera, Verbosity
+
+### Vision: Model Now Sees New Objects
+**Root cause found:** expo-camera's `takePictureAsync` returns identical frozen frames when LiveKit's audio session is active on iOS. Camera session conflict — only one module can access the camera at a time.
+
+**Fix:** Publish camera as a LiveKit video track via `room.localParticipant.setCameraEnabled(true, { facingMode: 'environment' })`. Backend subscribes to the video track in `on_track_subscribed`, converts frames to JPEG, stores in `agent._latest_frame`. No more HTTP upload loop.
+
+**Files changed:**
+- `frontend/components/LiveKitVoiceRoom.tsx` — `setCameraEnabled(true)` in useEffect after connection, `useTracks([Track.Source.Camera])` to get local track ref, callbacks to pass track and flip function to parent
+- `frontend/app/(tabs)/home.tsx` — Renders `LKVideoTrack` at root level for Job Mode camera preview, hides expo-camera CameraView in Job Mode, camera flip button in top bar
+- `backend/livekit_agent/agent.py` — `on_track_subscribed` handler processes WebRTC video frames, stores as base64 JPEG in `_latest_frame`
+
+### Camera Preview: LiveKit VideoTrack Replaces expo-camera
+**Problem:** expo-camera CameraView freezes (black screen) in Job Mode because LiveKit's audio session steals the iOS camera.
+
+**Fix:** Three-layer approach in home.tsx:
+1. Voice/Text mode: expo-camera CameraView (works because no LiveKit)
+2. Job Mode (before LiveKit connects): expo-camera CameraView as fallback
+3. Job Mode (after LiveKit connects): LiveKit VideoTrack component at root level
+
+**Key constraint:** VideoTrack must be rendered OUTSIDE LiveKitRoom context (at root level of home.tsx) because LiveKitVoiceRoom is nested inside the Job Mode container. Track reference is passed up via `onLocalVideoTrack` callback. VideoTrack works outside LiveKitRoom because it just wraps RTCView with a stream URL.
+
+**React hooks ordering:** All hooks (`useTracks`, `useEffect` for `onLocalVideoTrack`, `useEffect` for `onFlipCameraReady`) MUST be before any early returns in RoomContent. Previous attempts crashed with "Rendered fewer hooks than expected" because hooks were after conditional returns.
+
+### Verbosity Reduction
+
+**1. Few-shot examples in JOB_MODE_PROMPT:**
+```
+Tech: 'How do I turn this on?'
+You: 'Switch on the side of the unit, flip it up.'
+
+Tech: 'What size wire for a 40 amp circuit?'
+You: '8 AWG copper.'
+```
+Models follow examples more reliably than instructions for format/length control.
+
+**2. Frame injection reorder:**
+- Vision questions ("what do you see", "what is this"): `[image, user_text]`
+- All other questions: `[user_text, image]`
+- Removed `[CURRENT CAMERA FEED]` label that drew attention to the image
+- Detection via `_VISION_QUESTIONS` keyword list in `on_user_turn_completed`
+
+**3. `tts_node` override (engineering fix, not prompt fix):**
+- Intercepts text stream between LLM and ElevenLabs
+- Strips filler openers: "Sure!", "Great question!", "Okay, so..."
+- Strips robotic transitions: "First, " "Second, " "Third, "
+- Strips AI-assistant phrases: "It's important to note", "I'd recommend", "Hope that helps", "Feel free to"
+- Strips closing pleasantries: "Let me know if you need anything", "If you have any questions"
+- Cleans double spaces from removal
+
+**4. Prompt tightening:**
+- SEE section: reduced from 8 lines to 4. Explicitly says "ONLY describe what you see when they ask"
+- HOW TO TALK section: reduced from 12 lines to 5. "Match length to the question"
+- Added: "NEVER start by describing what you see unless they asked"
+
+### Bug Fixes
+- `update_instructions()` — was `async` but called without `await` throughout codebase. Every dynamic prompt update silently failed. Fixed all call sites.
+- Camera facing — `setCameraEnabled(true)` defaults to front camera. Fixed with `facingMode: 'environment'`.
+- Camera flip — disables then re-enables to force restart with new facing mode.
+
+---
+
+## Research: Making AI Voice More Human (March 19)
+
+### Tools Evaluated
+1. **LiveKit Agents 1.4 pipeline nodes** — `llm_node`, `tts_node`, `stt_node` allow intercepting/modifying data between pipeline stages. Currently using `tts_node` for filler stripping.
+2. **Anthropic prefilling** — DEAD on Claude Sonnet 4.5+. Trailing assistant messages rejected with 400 error.
+3. **OpenAI Realtime API** — Audio-to-audio, no STT/LLM/TTS chain. Natural response length because trained on conversational audio. Doesn't support vision in realtime API yet.
+4. **Cartesia Sonic 3 TTS** — 40ms TTFA vs ElevenLabs 832ms. LiveKit has first-class plugin. Would save ~600ms per utterance.
+5. **Hume AI EVI** — Emotion-aware turn detection. Replaces entire pipeline — too invasive for now.
+6. **Model routing** — Haiku for simple questions (naturally terse), Sonnet for complex. Implementable in `llm_node`.
+7. **Few-shot prompting** — Proven: examples beat instructions for format/length control. Implemented.
+
+### Recommended Next Steps (Priority Order)
+1. **OpenAI Realtime for Job Mode voice** — biggest impact on naturalness, but no vision support means separate camera path needed
+2. **Cartesia Sonic 3** — drop-in LiveKit plugin, saves 600ms/utterance
+3. **Model routing in `llm_node`** — Haiku for simple, Sonnet for complex
+4. **More few-shot examples** — add examples of longer explanations done naturally
 
 ---
 
@@ -236,7 +345,7 @@ Next question about cap tube superheat:
 
 ## Architecture Quick Reference
 
-- **Backend:** FastAPI (Python), hosted on Render
+- **Backend:** FastAPI (Python), hosted on Render (`arrival-backend-81x7.onrender.com`)
 - **Frontend:** React Native + Expo, TypeScript
 - **Auth:** Supabase (JWT)
 - **Vector DB:** Pinecone (integrated inference, multilingual-e5-large)
@@ -244,8 +353,9 @@ Next question about cap tube superheat:
 - **AI:** Anthropic Claude Sonnet for ALL modes (text, voice, job) — upgraded from Haiku for voice on March 4
 - **STT:** Deepgram Nova-2
 - **TTS:** ElevenLabs Flash v2.5
-- **Voice agent (LiveKit):** `backend/livekit_agent/agent.py` — proactive camera vision, function tools (`lookup_error_code`, `search_knowledge`, `look_at_camera`)
-- **Voice pipeline:** Record -> STT (with 61 brand aliases) -> error code lookup -> diagnostic flow lookup -> Claude (with RAG + job context) -> TTS
+- **Voice agent (LiveKit 1.4):** `backend/livekit_agent/agent.py` — proactive camera vision, function tools (`lookup_error_code`, `search_knowledge`), `tts_node` filler stripping, few-shot examples, frame reorder
+- **Frame delivery:** LiveKit WebRTC video track (ONLY working path). expo-camera `takePictureAsync` is dead when LiveKit audio active on iOS.
+- **Voice pipeline:** Deepgram STT (61 brand aliases) -> error code lookup -> diagnostic flow lookup -> Claude Sonnet (with RAG + job context + camera frame) -> `tts_node` filler strip -> ElevenLabs TTS
 - **Instant lookup chain:** Error codes (418 codes, 19 brands, 13 equipment types) -> Diagnostic flows (22 scenarios) -> RAG (Pinecone)
 - **Feedback flywheel:** User feedback -> Mem0 (user-specific) + Supabase -> Admin review -> Pinecone (global) -> correction cache (per-request)
 - **Crash Reporting:** Sentry (@sentry/react-native)
@@ -347,8 +457,6 @@ Next question about cap tube superheat:
 - `GET /api/livekit-debug` — checks agent process (pgrep), SDK import, memory, LiveKit Cloud rooms/participants
 - `start.sh` — writes agent output to log file with unbuffered Python (`python -u`)
 
-**Commits:** `ec3cf2f` (mic icon color) → `30d5327` → `fd75987` → `ebcd404` → `f710f6f` → `320a29d` → `6357b1c` → `51a0590` → `d241cfa` → `5b3be7e` → `1cc792f` → `8972ba3` (debug) → `36fe75f` (restore extras)
-
 ### Mic Icon Color Indicator
 
 **File:** `frontend/components/JobModeView.tsx`
@@ -368,99 +476,32 @@ Next question about cap tube superheat:
 
 ## Known Issues / Next Steps
 
-1. **Remove demo mode** (user request, not yet done)
-2. **OpenAI Realtime API for job mode voice** — post-launch priority
-3. **Re-run 100-question test** after all fixes
-4. **Proactive vision testing** — need a way to test without being on a building site
-5. **Area-specific codes/plans** — upload plans/codes for certain areas so workers can ask "what are the restrictions for here"
-6. **Speed optimization** — target 3s max per answer (currently 3-5s voice, similar text — acceptable for now)
-7. **home.tsx refactor** (deferred)
-8. **Thumbs up comment feature** — currently thumbs up sends immediately with no comment option; user requested adding comment input like thumbs down has
-9. **Render free tier sleep** — server spins down after 15min inactivity, delays first request by 50+ seconds. $7/month Starter plan fixes this
+1. **Guidance mode untested** — data channel messages may not reach backend. Needs testing.
+2. **Pinch-to-zoom** — not implemented. Needs gesture handler + LiveKit camera zoom options.
+3. **Proactive vision tuning** — hallucinated earlier, needs grounding to current task context.
+4. **Verbosity still ~4/10 on explanations** — `tts_node` helps but model still generates verbose text. Consider model routing (Haiku for simple) or Cartesia Sonic 3 for faster TTS.
+5. **OpenAI Realtime API for Job Mode** — best path to natural conversation. No vision support yet means separate camera path.
+6. **Cartesia Sonic 3 TTS** — would save ~600ms/utterance vs ElevenLabs. LiveKit plugin exists.
+7. **Job Mode memory** — needs persistent memory across sessions (Supabase). Currently no memory of 3 hours ago.
+8. **Re-run 100-question test** after all fixes
+9. **home.tsx refactor** (deferred)
+10. **Demo mode REMOVED** (was in settings, store, home.tsx — all cleaned out)
 
 ---
 
-## File Map (All Changes)
+## File Map (Key Changes March 19)
 
 ```
-backend/
-  app/
-    config.py                    — Expert system prompt, image analysis rules, STT aliases
-    main.py                      — All routers registered (feedback, job_context, account, error_codes_api, admin_feedback)
-    routers/
-      chat.py                    — Error code + diagnostic flow + feedback_context lookup, parallel gather
-      voice_chat.py              — Error code + diagnostic flow + feedback_context + job context
-      feedback.py                — POST /api/feedback + learning pipeline trigger
-      admin_feedback.py          — GET/POST admin review + correction + Pinecone promotion (NEW Mar 6)
-      job_context.py             — Job context CRUD endpoints
-      account.py                 — DELETE /api/account
-      error_codes_api.py         — GET /api/error-codes (public)
-      livekit_token.py           — LiveKit token generation, /agent-log, /livekit-debug, /livekit-frame endpoints
-      analyze.py                 — Frame analysis endpoint
-    services/
-      anthropic.py               — _score_confidence(), frame analysis, OK detection
-      rag.py                     — global_knowledge namespace, chunk_text_smart()
-      error_codes.py             — 19 brands, 418 codes, 13 equipment types, 61 STT aliases (expanded Mar 7)
-      diagnostic_flows.py        — 22 diagnostic scenarios (expanded Mar 7)
-      feedback_learning.py       — Correction cache + process_negative_feedback (NEW Mar 6)
-      job_context.py             — In-memory store with 8hr TTL
-      memory.py                  — Mem0 integration (store_memory, retrieve_memories)
-      supabase.py                — log_query, get_user_team_id
-      usage.py                   — check_query_limit
-      elevenlabs.py              — TTS
-      demo.py                    — Fixed responses
-    middleware/
-      auth.py                    — JWT auth
-  start.sh                       — Launches agent process + uvicorn (Render Start Command: `bash start.sh`)
-  livekit_agent/
-    agent.py                     — Voice agent: proactive vision, search_knowledge tool (NEW Mar 6), improved prompts
-  knowledge/
-    hvac_expert_knowledge.md
-    plumbing_expert_knowledge.md
-    electrical_expert_knowledge.md
-    appliance_expert_knowledge.md               — Washer/dryer/fridge/dishwasher/oven diagnostics (NEW Mar 7)
-    commercial_refrigeration_knowledge.md       — Walk-ins, compressors, ice machines, HACCP (NEW Mar 7)
-    building_codes/
-      HVAC_Refrigerant_Technical_Reference.md   — Superheat/subcooling, pressure charts (NEW Mar 6)
-      building_codes_reference.md               — NEC, IPC/UPC, IMC/IFGC reference (NEW Mar 7)
-      quick_reference_tables.md                 — P-T charts, wire sizing, pipe sizing tables (NEW Mar 7)
-  migrations/
-    003_create_feedback_table.sql — Supabase migration (RUN)
-    004_enhance_feedback_table.sql — Learning columns + indexes (RUN Mar 6)
-  scripts/
-    download_manuals.py          — Downloads manufacturer PDFs
-    seed_knowledge_base.py       — Indexes to Pinecone
-    quality_test.py              — 100-question quality test
+backend/livekit_agent/
+  agent.py                     — tts_node filler strip, few-shot examples, frame reorder,
+                                  setCameraEnabled video track, on_track_subscribed frame processing,
+                                  update_instructions await fix, vision question detection
 
 frontend/
-  app/
-    _layout.tsx                  — Root layout, Sentry, iOS audio, OfflineBanner
-    app.json                     — bundleIdentifier, buildNumber, iOS permissions
-    (tabs)/
-      _layout.tsx                — Tab bar hidden, drawer primary nav
-      home.tsx                   — Main screen, all modes, feedback callback wired (Mar 6)
-      settings.tsx               — Redesigned
-      history.tsx                — Flat bordered cards
-      codes.tsx                  — Error codes
-      saved-answers.tsx          — Confidence colors
-      manuals.tsx                — SectionList, upload
-      quick-tools.tsx            — Quick tools
-  components/
-    ChatBubble.tsx               — Thumbs up/down + comment input (Mar 6), bookmark, 92% width
-    JobModeView.tsx              — Two glass pills, equipment chips, green mic when voice connected (Mar 8)
-    LiveKitVoiceRoom.tsx         — WebRTC voice room, agent timeout, onVoiceConnected callback (Mar 8)
-    ModeSelector.tsx             — Mode switching
-    VoiceStatusIndicator.tsx     — Voice status
-    OfflineBanner.tsx            — Network polling + banner
-  services/
-    api.ts                       — feedbackAPI, jobContextAPI
-    jobModeController.ts         — interrupt(), 30s watchdog
-    voiceActivityDetector.ts     — Fixed dead zone, iOS audio reset
-  constants/
-    Colors.ts                    — Design tokens, bg #F3F0EB
-  store/
-    conversationStore.ts         — Message interface + feedbackRating (Mar 6)
-    authStore.ts, documentsStore.ts, savedAnswersStore.ts, settingsStore.ts
+  app/(tabs)/home.tsx          — LiveKit VideoTrack preview at root level, camera flip button,
+                                  conditional CameraView (hidden in Job Mode), localVideoTrackRef state
+  components/LiveKitVoiceRoom.tsx — setCameraEnabled(true, {facingMode}), useTracks for local camera,
+                                    onLocalVideoTrack/onFlipCameraReady callbacks, camera facing state
 ```
 
 ---
