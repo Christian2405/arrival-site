@@ -230,7 +230,7 @@ JOB_MODE_PROMPT = (
     "  - 'What is that?' → look at the frame and answer directly. No tools needed.\n"
     "  - 'What error code is that?' → use lookup_error_code.\n"
     "  - 'What size wire do I need for a 40A circuit?' → use search_knowledge.\n"
-    "  - 'Walk me through replacing this capacitor' → use start_guidance.\n"
+    "  - 'Walk me through replacing this capacitor' → use start_guidance to load your knowledge, then guide naturally.\n"
     "  - 'Is this up to code?' → use search_knowledge for the specific code requirement.\n"
     "- Lead with the most likely answer. Don't list 5 possibilities.\n"
     "- Never make something up. If you don't know, say 'I'm not sure on that one.'\n"
@@ -238,13 +238,13 @@ JOB_MODE_PROMPT = (
     "If both miss, say 'I don't have that code — what does the chart on the unit show?'\n\n"
 
     # ── GUIDE ──
-    "GUIDE — Walk them through the job, step by step when needed.\n"
+    "GUIDE — Walk them through the job naturally.\n"
     "- start_guidance: When they want to be walked through a procedure. "
-    "Builds a guided procedure and activates camera-assisted real-time guidance.\n"
-    "- advance_guidance: Move to the next step when they say 'done'/'next' or "
-    "you can see they've completed the current step.\n"
+    "Loads your knowledge of the job so you can guide them like a vet.\n"
+    "- You guide by watching the camera and telling them what to do next "
+    "based on what you see. No numbered steps. No lists. Just talk.\n"
     "- If you spot a safety issue, wrong part, or bad technique — speak up immediately.\n"
-    "- If they confirm or say 'yeah I see it', give the next step.\n\n"
+    "- If they confirm or say 'yeah I see it', tell them what's next.\n\n"
 
     # ── HOW TO TALK ──
     "VOICE — You're spoken aloud. Talk like a coworker, not a manual.\n"
@@ -390,11 +390,8 @@ class ArrivalAgent(Agent):
         # Real-Time Guidance state
         self._guidance_active: bool = False
         self._guidance_task: str = ""           # "replacing capacitor on Carrier 24ACC"
-        self._guidance_steps: list[str] = []    # ordered steps from procedure
-        self._guidance_current_step: int = 0    # index into _guidance_steps
+        self._guidance_brief: str = ""          # knowledge brief (not numbered steps)
         self._guidance_context: str = ""        # RAG context for the procedure
-        self._guidance_step_confirmed: bool = False  # camera confirmed current step done
-        self._guidance_advancing: bool = False  # lock to prevent double-advance race
         # Equipment context (sent from frontend)
         self._equipment_type: str = ""
         self._equipment_brand: str = ""
@@ -410,23 +407,17 @@ class ArrivalAgent(Agent):
         return {
             "active": True,
             "task": self._guidance_task,
-            "steps": self._guidance_steps,
-            "current_step": self._guidance_current_step,
+            "brief": self._guidance_brief,
         }
 
     def restore_guidance_state(self, state: dict):
         """Restore guidance state from data channel (on reconnect)."""
         if not state.get("active"):
             return
-        steps = state.get("steps", [])
-        if not steps:
-            return
         self._guidance_active = True
         self._guidance_task = state.get("task", "")
-        self._guidance_steps = steps
-        self._guidance_current_step = min(state.get("current_step", 0), len(steps) - 1)
-        self._guidance_step_confirmed = False
-        logger.info(f"[guidance] ✓ Restored guidance state: step {self._guidance_current_step+1}/{len(steps)} for '{self._guidance_task}'")
+        self._guidance_brief = state.get("brief", "")
+        logger.info(f"[guidance] ✓ Restored guidance state for '{self._guidance_task}'")
 
     def update_camera_frame(self, frame_b64: str):
         """Store the latest camera frame from the mobile app."""
@@ -727,14 +718,13 @@ class ArrivalAgent(Agent):
 
     @function_tool()
     async def start_guidance(self, task_description: str) -> str:
-        """Start step-by-step Real-Time Guidance for a task. Use when the tech asks you to
-        walk them through something, guide them, or help them do a procedure step by step.
+        """Start Real-Time Guidance for a task. Use when the tech asks you to walk them
+        through something, guide them, or help them do a procedure.
         Examples: 'walk me through replacing this capacitor', 'guide me through this install',
-        'help me step by step', 'what do I do first'."""
+        'help me with this', 'what do I do first'."""
         logger.info(f"[guidance] ★ Starting guidance: {task_description}")
 
-        # If no task specified (e.g. user pressed "Guide me" button without context),
-        # ask what they need help with instead of generating garbage
+        # If no task specified, ask what they need help with
         if not task_description or len(task_description.strip()) < 3:
             return (
                 "The tech wants guidance but hasn't said what they need help with. "
@@ -761,201 +751,95 @@ class ArrivalAgent(Agent):
         except Exception as e:
             logger.warning(f"[guidance] RAG search failed: {e}")
 
-        # 2. Use Claude to extract ordered steps from knowledge + task
+        # 2. Generate a knowledge brief — NOT numbered steps
         client = _get_anthropic_client()
-        # Equipment context for more accurate procedures
         eq_str = self._equipment_context_str()
         eq_note = f"\nEquipment: {eq_str}\n" if eq_str else ""
 
-        step_prompt = (
-            "You are Arrival's guidance engine. A trade worker is on-site right now with "
-            "their phone camera. You need to build a guided procedure for them.\n\n"
+        brief_prompt = (
+            "A trade worker is on-site with their phone camera. They need guidance on a task. "
+            "You need to write a KNOWLEDGE BRIEF — everything a veteran tradesman would "
+            "have in their head before starting this job.\n\n"
             f"TASK: {task_description}\n{eq_note}\n"
         )
         if rag_context:
-            step_prompt += f"REFERENCE MATERIAL:\n{rag_context}\n\n"
+            brief_prompt += f"REFERENCE MATERIAL:\n{rag_context}\n\n"
 
-        step_prompt += (
-            "Break this into key milestones — the critical waypoints to get this done "
-            "safely and correctly.\n\n"
-            "Rules:\n"
-            "- 4-8 milestones max. Each one is a meaningful action or check.\n"
-            "- ALWAYS start with safety (kill power, shut gas, verify zero-energy) if applicable\n"
-            "- Use specific tool/part names: '⅜ inch wrench', '10mm socket', not 'appropriate tool'\n"
-            "- Write how you'd SAY it out loud, not how a manual would write it\n"
-            "- Include what they should SEE or FEEL to confirm it's done right\n"
-            "- End with a verification step (test, check for leaks, verify operation)\n"
-            "- If the task is simple (1-2 steps), just give 1-2 milestones. Don't pad.\n\n"
-            "Format: Return ONLY numbered milestones, one per line. No intro text.\n"
-            "Example:\n"
-            "1. Kill the power at the disconnect and verify with your meter — should read 0V\n"
-            "2. Pop the access panel (4 phillips screws) and find the capacitor — silver or black cylinder near the contactor\n"
-            "3. Discharge it with an insulated screwdriver across the terminals — you'll see a small spark\n"
+        brief_prompt += (
+            "Write a concise knowledge brief with these sections:\n"
+            "SAFETY: What to shut off/lock out/verify before touching anything\n"
+            "WHAT YOU NEED: Specific tools and parts (⅜ wrench, not 'appropriate tool')\n"
+            "THE JOB: What needs to happen, in the order it happens — written as prose, "
+            "how a vet would explain it over the phone. NOT numbered steps.\n"
+            "GOTCHAS: Common mistakes, things that catch people out\n"
+            "DONE RIGHT: How to verify the job is done correctly\n\n"
+            "Keep it tight. No fluff. Write it how a tradesman thinks about a job, "
+            "not how a manual documents it. Skip sections that don't apply.\n"
+            "Example for 'replacing a capacitor':\n"
+            "SAFETY: Kill power at disconnect, verify 0V both legs with meter\n"
+            "WHAT YOU NEED: Insulated screwdriver, new cap (match μF and voltage rating exactly), "
+            "phone camera to photo the wiring before disconnecting\n"
+            "THE JOB: Discharge the old cap by shorting terminals with insulated screwdriver. "
+            "Photo the wiring. Pull the old cap, note the ratings on the label. "
+            "Wire the new one exactly the same way — Common to C, Herm to compressor, Fan to fan motor.\n"
+            "GOTCHAS: If you wire Herm and Fan backwards, compressor runs but fan doesn't. "
+            "Some caps have different terminal layouts even with same ratings.\n"
+            "DONE RIGHT: Power on, compressor and fan both start, amp draw is normal."
         )
 
         try:
             response = await client.messages.create(
-                model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for better procedure quality
-                max_tokens=800,
-                messages=[{"role": "user", "content": step_prompt}],
+                model=config.ANTHROPIC_VISION_MODEL,
+                max_tokens=600,
+                messages=[{"role": "user", "content": brief_prompt}],
             )
-            steps_text = response.content[0].text.strip()
+            brief = response.content[0].text.strip()
         except Exception as e:
-            logger.error(f"[guidance] Failed to generate steps: {e}")
-            return "I couldn't put together a procedure for that. Tell me what you're trying to do and I'll help you through it."
+            logger.error(f"[guidance] Failed to generate brief: {e}")
+            return "I couldn't put together guidance for that. Just tell me what you're working on and I'll talk you through it."
 
-        # 3. Parse steps
-        steps = []
-        for line in steps_text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            # Strip leading number/bullet: "1. ", "1) ", "- "
-            cleaned = re.sub(r"^\d+[\.\)]\s*", "", line)
-            cleaned = re.sub(r"^[-•]\s*", "", cleaned)
-            if cleaned and len(cleaned) > 5:
-                steps.append(cleaned)
-
-        if not steps:
-            return "I couldn't break that down into steps. Just tell me where you're at and I'll guide you."
-
-        # Limit steps
-        steps = steps[:GUIDANCE_MAX_STEPS]
-
-        # 4. Activate guidance mode
+        # 3. Activate guidance mode
         self._guidance_active = True
         self._guidance_task = task_description
-        self._guidance_steps = steps
-        self._guidance_current_step = 0
+        self._guidance_brief = brief
         self._guidance_context = rag_context
-        self._guidance_step_confirmed = False
-        # Set task context for proactive vision (persists after guidance ends)
+        # Set task context for proactive vision
         self._inferred_task = task_description
         self._inferred_task_updated_at = time.time()
 
-        logger.info(f"[guidance] ✓ Loaded {len(steps)} steps for: {task_description}")
-        for i, step in enumerate(steps):
-            logger.info(f"[guidance]   Step {i+1}: {step[:80]}")
+        logger.info(f"[guidance] ✓ Knowledge brief generated for: {task_description}")
+        logger.info(f"[guidance]   Brief: {brief[:200]}...")
 
-        # 5. Return first step context to the LLM
-        total = len(steps)
         return (
             f"GUIDANCE ACTIVE — Task: {task_description}\n\n"
-            f"First thing: {steps[0]}\n\n"
-            f"Full plan ({total} milestones):\n" +
-            "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)) +
-            "\n\nHOW TO GUIDE:\n"
-            "- Never say 'Step 1', 'Step 2', 'milestone', or 'next step'. Just talk naturally.\n"
-            "- Reference what you see on camera: 'See that silver cylinder? That's your capacitor.'\n"
-            "- Be specific: tool sizes, part names, what they should see/hear/feel.\n"
-            "- When they finish a milestone, use advance_guidance.\n"
-            "- They can interrupt with questions anytime — answer and keep guiding.\n"
-            "Start by telling them what to do first. Keep it conversational and concise."
+            f"KNOWLEDGE BRIEF:\n{brief}\n\n"
+            "HOW TO GUIDE:\n"
+            "- You now know this job inside out. Guide them naturally based on what you "
+            "see on camera, like a vet standing next to them.\n"
+            "- Tell them what to do FIRST right now. One thing at a time.\n"
+            "- When you see they've done something, tell them what's next.\n"
+            "- NEVER say 'step 1', 'step 2', or use numbered lists. Just talk.\n"
+            "- Reference what you see: 'See that silver cylinder? That's your cap.'\n"
+            "- If they ask a question mid-task, answer it and pick up where you left off.\n"
+            "- When the job looks done, tell them how to verify it.\n"
+            "Start by telling them the very first thing to do."
         )
 
     @function_tool()
-    async def advance_guidance(self, reason: str) -> str:
-        """Move to the next step in the guided procedure. Use when the tech says 'done',
-        'next', 'what's next', 'ok', or when you can see through the camera that they
-        completed the current step."""
-        if not self._guidance_active or not self._guidance_steps:
-            return "No active guidance to advance."
-
-        # Prevent race condition: camera auto-advance and LLM tool call may fire simultaneously
-        if self._guidance_advancing:
-            return "Already advancing — hold on."
-        self._guidance_advancing = True
-        try:
-            return self._do_advance_guidance(reason)
-        finally:
-            self._guidance_advancing = False
-
-    def _do_advance_guidance(self, reason: str) -> str:
-        """Internal advance logic — separated so the lock wraps it cleanly."""
-        self._guidance_current_step += 1
-        step_num = self._guidance_current_step
-        total = len(self._guidance_steps)
-
-        if step_num >= total:
-            # All steps complete
-            self._guidance_active = False
-            task = self._guidance_task
-            self._guidance_task = ""
-            self._guidance_steps = []
-            self._guidance_current_step = 0
-            self._guidance_context = ""
-            logger.info(f"[guidance] ✓ All {total} steps complete for: {task}")
-            return (
-                f"They just finished: {task}. "
-                "Tell them 'nice work' or 'you're all set' — something brief and encouraging. "
-                "Remind them to do a final check if relevant (test it, check for leaks, power up). "
-                "Don't recap steps. Just wrap it up naturally."
-            )
-
-        current_step = self._guidance_steps[step_num]
-        self._guidance_step_confirmed = False
-        logger.info(f"[guidance] → Step {step_num + 1}/{total}: {current_step[:60]}")
-
+    async def stop_guidance(self) -> str:
+        """Stop the current guidance session. Use when the tech says 'stop', 'I'm done',
+        'that's enough', 'nevermind', or when the job is clearly finished."""
+        if not self._guidance_active:
+            return "No active guidance to stop."
+        task = self._guidance_task
+        self._guidance_active = False
+        self._guidance_task = ""
+        self._guidance_brief = ""
+        self._guidance_context = ""
+        logger.info(f"[guidance] ✓ Guidance stopped for: {task}")
         return (
-            f"Next thing to do: {current_step}\n\n"
-            "Tell them what to do next naturally — 'Alright, now...' or 'OK so next...'. "
-            "Never say 'step 2' or 'next step' or 'milestone'. "
-            "Reference what you see on camera. Be specific about tools and "
-            "what they should see/hear/feel when it's done right."
-        )
-
-    @function_tool()
-    async def previous_step(self, reason: str) -> str:
-        """Go back to the previous step in guidance. Use when the tech says 'go back',
-        'wait', 'previous step', 'repeat that', 'what was the last step', or when they
-        need to redo something."""
-        if not self._guidance_active or not self._guidance_steps:
-            return "No active guidance to go back in."
-
-        if self._guidance_current_step <= 0:
-            current_step = self._guidance_steps[0]
-            return (
-                f"Already at step 1 — there's no previous step.\n"
-                f"Current step: {current_step}\n"
-                "Re-explain this step to the tech clearly."
-            )
-
-        self._guidance_current_step -= 1
-        step_num = self._guidance_current_step
-        total = len(self._guidance_steps)
-        current_step = self._guidance_steps[step_num]
-        self._guidance_step_confirmed = False
-        logger.info(f"[guidance] ← Back to step {step_num + 1}/{total}: {current_step[:60]}")
-
-        return (
-            f"## GOING BACK: {current_step}\n"
-            f"(Milestone {step_num + 1} of {total})\n\n"
-            "The tech wants to go back. Re-explain this naturally — "
-            "maybe approach it from a different angle, or add more detail. "
-            "DON'T say 'going back to step X'. Just say something like 'OK let's revisit that...' "
-            "Use the camera to reference what you see."
-        )
-
-    @function_tool()
-    async def repeat_step(self) -> str:
-        """Repeat/re-explain the current guidance step. Use when the tech says 'say that again',
-        'repeat', 'what was that', 'what step am I on', 'can you explain that again'."""
-        if not self._guidance_active or not self._guidance_steps:
-            return "No active guidance right now."
-
-        step_num = self._guidance_current_step
-        if step_num >= len(self._guidance_steps):
-            return "Guidance is complete — all steps done."
-
-        total = len(self._guidance_steps)
-        current_step = self._guidance_steps[step_num]
-        logger.info(f"[guidance] ↻ Repeating step {step_num + 1}/{total}")
-
-        return (
-            f"## REPEATING: {current_step}\n"
-            f"(Milestone {step_num + 1} of {total})\n\n"
-            "The tech wants to hear this again. Explain it differently — maybe simpler, "
-            "maybe with more detail about what they should see. Use the camera to point things out."
+            f"Guidance stopped for: {task}. "
+            "Acknowledge briefly — 'No problem' or 'You're all set'. Keep it short."
         )
 
     @function_tool()
@@ -1179,17 +1063,15 @@ async def _analyze_frame_contextual(
 
 async def _analyze_frame_guidance(
     frame_b64: str,
-    current_step: str,
-    step_num: int,
-    total_steps: int,
     task: str,
+    brief: str,
     conversation_context: list[dict] | None = None,
     equipment_context: str = "",
 ) -> Optional[tuple[str, str]]:
     """
     Analyze a frame during Real-Time Guidance.
     Returns: (status, observation) or None.
-    status: "DONE" (step complete), "WORKING" (in progress), "ISSUE" (problem), "SAFETY" (danger)
+    status: "SPEAK" (something useful to say), "ISSUE" (problem), "SAFETY" (danger), "QUIET" (nothing to say)
     """
     client = _get_anthropic_client()
 
@@ -1204,7 +1086,7 @@ async def _analyze_frame_guidance(
     response = await asyncio.wait_for(
         client.messages.create(
             model=config.ANTHROPIC_VISION_MODEL,
-            max_tokens=GUIDANCE_STEP_VERIFY_TOKENS,
+            max_tokens=60,
             messages=[{
                 "role": "user",
                 "content": [
@@ -1215,30 +1097,20 @@ async def _analyze_frame_guidance(
                     {
                         "type": "text",
                         "text": (
-                            "You are Arrival's guidance system — watching a tech through their phone camera, "
-                            "guiding them step by step. See what's happening, reason about progress, guide the next move.\n\n"
+                            "You're watching a tech through their phone camera while guiding them.\n\n"
                             f"TASK: {task}\n"
                             + (f"EQUIPMENT: {equipment_context}\n" if equipment_context else "")
-                            + f"CURRENT MILESTONE ({step_num}/{total_steps}): {current_step}\n"
+                            + f"\nYOUR KNOWLEDGE OF THIS JOB:\n{brief}\n"
                             f"{conv_context}\n"
-                            "Look at what the camera shows. Respond in this EXACT format (one line):\n"
-                            "STATUS|observation\n\n"
-                            "STATUS must be one of:\n"
-                            "- DONE: The current step appears to be completed based on what you see\n"
-                            "- WORKING: Tech is actively working on this step — you can see progress\n"
-                            "- ISSUE: Something looks wrong — wrong tool, wrong part, incorrect technique\n"
-                            "- SAFETY: Immediate danger — stop and alert\n"
-                            "- WAITING: Nothing happening yet, or camera isn't showing relevant action\n\n"
-                            "Your observation should be specific and actionable — reference what you ACTUALLY SEE.\n"
-                            "NEVER HALLUCINATE. Only describe what is clearly visible. If you can't see the work area "
-                            "or can't confirm the step, use WAITING — don't invent progress or objects.\n"
-                            "NEVER complain about image quality. No 'blurry', 'dark', 'unclear'.\n\n"
-                            "Examples:\n"
-                            "DONE|I can see the disconnect is flipped off and the panel is open\n"
-                            "WORKING|You're getting those screws out, looks like 2 more to go\n"
-                            "ISSUE|That looks like a ¼ inch wrench but you need ⅜ for those fittings\n"
-                            "SAFETY|Hold on — I can see the disconnect is still on, kill the power first\n"
-                            "WAITING|Standing by — point the camera at the work area when you're ready"
+                            "Based on what you see, is there anything useful to say RIGHT NOW?\n"
+                            "Only speak if you see:\n"
+                            "- They finished something and need to know what's next\n"
+                            "- They're about to make a mistake\n"
+                            "- Safety issue\n"
+                            "- They look stuck\n\n"
+                            "If nothing useful to say: QUIET\n"
+                            "If something to say: say it in under 15 words, like a coworker would.\n"
+                            "Never describe the scene. Never list steps. Just the one thing they need to hear."
                         ),
                     },
                 ],
@@ -1248,16 +1120,25 @@ async def _analyze_frame_guidance(
     )
     result = response.content[0].text.strip()
 
-    # Parse STATUS|observation
-    parts = result.split("|", 1)
-    if len(parts) == 2:
-        status = parts[0].strip().upper()
-        observation = parts[1].strip()
-        if status in ("DONE", "WORKING", "ISSUE", "SAFETY", "WAITING"):
-            return (status, observation)
+    if not result or "QUIET" in result.upper():
+        return None
 
-    # Fallback
-    return ("WORKING", result)
+    # Determine severity
+    safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
+                       "kill the breaker", "shut off", "stop", "careful", "disconnect"}
+    is_safety = any(kw in result.lower() for kw in safety_keywords)
+
+    if is_safety:
+        return ("SAFETY", result)
+
+    # Check if it's flagging an issue
+    issue_keywords = {"wrong", "backwards", "mistake", "not right", "check that"}
+    is_issue = any(kw in result.lower() for kw in issue_keywords)
+
+    if is_issue:
+        return ("ISSUE", result)
+
+    return ("SPEAK", result)
 
 
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
@@ -1323,78 +1204,48 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not frame:
                 continue
 
-            # ── STATE: GUIDED — step verification (existing logic, unchanged) ──
-            if state == "GUIDED" and agent._guidance_steps:
-                step_idx = agent._guidance_current_step
-                if step_idx < len(agent._guidance_steps):
-                    current_step = agent._guidance_steps[step_idx]
-                    total = len(agent._guidance_steps)
+            # ── STATE: GUIDED — brief-based natural guidance ──
+            if state == "GUIDED" and agent._guidance_active:
+                if (now - last_guidance_check) < GUIDANCE_CHECK_INTERVAL:
+                    continue
+                last_guidance_check = now
 
-                    if (now - last_guidance_check) < GUIDANCE_CHECK_INTERVAL:
-                        continue
-                    last_guidance_check = now
+                try:
+                    guidance_result = await _analyze_frame_guidance(
+                        frame,
+                        task=agent._guidance_task,
+                        brief=agent._guidance_brief,
+                        conversation_context=list(agent._conversation_context),
+                        equipment_context=agent._equipment_context_str(),
+                    )
+                except Exception as e:
+                    logger.warning(f"[guidance] Vision check failed: {e}")
+                    continue
 
-                    try:
-                        guidance_result = await _analyze_frame_guidance(
-                            frame,
-                            current_step=current_step,
-                            step_num=step_idx + 1,
-                            total_steps=total,
-                            task=agent._guidance_task,
-                            conversation_context=list(agent._conversation_context),
-                            equipment_context=agent._equipment_context_str(),
-                        )
-                    except Exception as e:
-                        logger.warning(f"[guidance] Vision check failed: {e}")
-                        continue
+                if not guidance_result:
+                    continue
 
-                    if not guidance_result:
-                        continue
+                status, observation = guidance_result
+                logger.info(f"[guidance] {status}: {observation[:60]}")
 
-                    status, observation = guidance_result
-                    logger.info(f"[guidance] Step {step_idx+1}/{total} → {status}: {observation[:60]}")
+                # Don't interrupt active conversation
+                if status != "SAFETY" and (now - agent._last_user_speech_time) < 4:
+                    continue
 
-                    if status == "SAFETY":
-                        await session.generate_reply(
-                            instructions=f"STOP — safety issue: {observation}. Alert the tech immediately."
-                        )
-                    elif status == "DONE":
-                        if agent._guidance_advancing:
-                            continue
-                        agent._guidance_advancing = True
-                        agent._guidance_step_confirmed = True
-                        next_idx = step_idx + 1
-                        if next_idx >= total:
-                            agent._guidance_active = False
-                            logger.info(f"[guidance] ✓ All {total} steps complete!")
-                            await session.generate_reply(
-                                instructions=(
-                                    f"They just finished: {agent._guidance_task}. "
-                                    f"Camera shows: {observation}. "
-                                    "Quick 'nice work!' and remind them to test/check for leaks. Brief."
-                                )
-                            )
-                            agent._guidance_task = ""
-                            agent._guidance_steps = []
-                            agent._guidance_current_step = 0
-                        else:
-                            agent._guidance_current_step = next_idx
-                            next_step = agent._guidance_steps[next_idx]
-                            agent._guidance_step_confirmed = False
-                            await session.generate_reply(
-                                instructions=(
-                                    f"That looks good — camera shows: {observation}. "
-                                    f"Now guide them to: {next_step}. "
-                                    "Say it naturally — 'Alright, now...' — use the camera."
-                                )
-                            )
-                        agent._guidance_advancing = False
-                    elif status == "ISSUE":
-                        if (now - agent._last_user_speech_time) > 4:
-                            await session.generate_reply(
-                                instructions=f"Quick thing — {observation}"
-                            )
+                if status == "SAFETY":
+                    await session.generate_reply(
+                        instructions=f"STOP — {observation}. Alert them immediately."
+                    )
+                elif status == "ISSUE":
+                    await session.generate_reply(
+                        instructions=f"Quick — {observation}"
+                    )
+                elif status == "SPEAK":
+                    await session.generate_reply(
+                        instructions=observation
+                    )
 
+                agent._last_proactive_time = now
                 continue  # Skip other states during guidance
 
             # ── STATE: DORMANT — safety-only scan ──
@@ -1681,22 +1532,16 @@ async def entrypoint(ctx: JobContext):
                     # User tapped "Stop guidance" button
                     if agent._guidance_active:
                         task = agent._guidance_task
-                        step_idx = agent._guidance_current_step
-                        total = len(agent._guidance_steps)
                         agent._guidance_active = False
                         agent._guidance_task = ""
-                        agent._guidance_steps = []
-                        agent._guidance_current_step = 0
+                        agent._guidance_brief = ""
                         agent._guidance_context = ""
                         # Reset prompt
                         asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
                         agent._has_injected_codes = False
-                        logger.info(f"[guidance] User stopped guidance at step {step_idx+1}/{total}")
+                        logger.info(f"[guidance] User stopped guidance for: {task}")
                         asyncio.ensure_future(session.generate_reply(
-                            instructions=(
-                                f"The tech just stopped guidance (was on step {step_idx+1} of {total} for: {task}). "
-                                "Acknowledge briefly — something like 'No problem, I'm here if you need me.' Keep it short."
-                            )
+                            instructions=f"Tech stopped guidance for: {task}. Say 'No problem, I'm here if you need me.'"
                         ))
                     else:
                         logger.debug("[guidance] Stop received but no guidance active")
@@ -1734,20 +1579,17 @@ async def entrypoint(ctx: JobContext):
                     elif msg_type == "guidance_stop":
                         if agent._guidance_active:
                             task = agent._guidance_task
-                            step_idx = agent._guidance_current_step
-                            total = len(agent._guidance_steps)
                             agent._guidance_active = False
                             agent._guidance_task = ""
-                            agent._guidance_steps = []
-                            agent._guidance_current_step = 0
+                            agent._guidance_brief = ""
                             agent._guidance_context = ""
                             asyncio.ensure_future(agent.update_instructions(
                                 (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
                             ))
                             agent._has_injected_codes = False
-                            logger.info(f"[text-stream] User stopped guidance at step {step_idx+1}/{total}")
+                            logger.info(f"[text-stream] User stopped guidance for: {task}")
                             await session.generate_reply(
-                                instructions=f"Tech stopped guidance at step {step_idx+1}/{total}. Say 'No problem, I'm here if you need me.'"
+                                instructions=f"Tech stopped guidance for: {task}. Say 'No problem, I'm here if you need me.'"
                             )
                     elif msg_type == "equipment_context":
                         agent._equipment_type = payload.get("equipment_type", "")
@@ -1869,53 +1711,32 @@ async def entrypoint(ctx: JobContext):
             # Detect guidance exit — user wants to stop guided procedure
             if agent._guidance_active and text_lower in _GUIDANCE_EXIT_PHRASES:
                 task = agent._guidance_task
-                step_idx = agent._guidance_current_step
-                total = len(agent._guidance_steps)
                 agent._guidance_active = False
                 agent._guidance_task = ""
-                agent._guidance_steps = []
-                agent._guidance_current_step = 0
+                agent._guidance_brief = ""
                 agent._guidance_context = ""
                 # Reset prompt to clean state
                 asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
                 agent._has_injected_codes = False
-                logger.info(f"[guidance] User exited guidance at step {step_idx+1}/{total}: '{text_lower}'")
-                # Acknowledge — don't just go silent
+                logger.info(f"[guidance] User exited guidance for: {task}")
                 asyncio.ensure_future(session.generate_reply(
-                    instructions=(
-                        f"The tech just said '{transcript}' to end guidance (was on step {step_idx+1} of {total} for: {task}). "
-                        "Acknowledge casually and encouragingly — something like 'Alright, you got it!' or "
-                        "'Sounds good, holler if you need me.' Keep it short and warm, don't recap steps."
-                    )
+                    instructions=f"Tech said '{transcript}' to end guidance for: {task}. Say something like 'You got it!' or 'Holler if you need me.' Brief."
                 ))
                 return
 
             # Inject guidance context + error code context into prompt (merged, not exclusive)
-            if agent._guidance_active and agent._guidance_steps:
-                step_idx = agent._guidance_current_step
-                if step_idx < len(agent._guidance_steps):
-                    current_step = agent._guidance_steps[step_idx]
-                    total = len(agent._guidance_steps)
-                    base = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
-                    guidance_inject = (
-                        f"\n\n## REAL-TIME GUIDANCE ACTIVE\n"
-                        f"Task: {agent._guidance_task}\n"
-                        f"Currently guiding on: {current_step}\n"
-                        f"(Milestone {step_idx+1} of {total})\n\n"
-                        f"Full game plan:\n" +
-                        "\n".join(
-                            f"{'→ ' if i == step_idx else '  '}{i+1}. {s}"
-                            for i, s in enumerate(agent._guidance_steps)
-                        ) +
-                        "\n\nYou're coaching them through this live. IMPORTANT RULES:\n"
-                        "- NEVER say 'step 1', 'step 2', etc. Guide naturally like a buddy.\n"
-                        "- If they ask a question, answer it and stay on the current milestone.\n"
-                        "- Use the camera to reference what you see.\n"
-                        "- When they finish (say 'done'/'next' or camera shows it), use advance_guidance.\n"
-                        "- They can interrupt anytime — that's fine, answer and continue."
-                    )
-                    # Merge: guidance + error code (if user asked about a code mid-guidance)
-                    asyncio.ensure_future(agent.update_instructions(base + guidance_inject + error_inject))
+            if agent._guidance_active and agent._guidance_brief:
+                base = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                guidance_inject = (
+                    f"\n\n## REAL-TIME GUIDANCE ACTIVE\n"
+                    f"Task: {agent._guidance_task}\n\n"
+                    f"YOUR KNOWLEDGE OF THIS JOB:\n{agent._guidance_brief}\n\n"
+                    "You know this job inside out. Guide them naturally based on what you see "
+                    "on camera. Tell them what to do next when they're ready. "
+                    "NEVER use numbered lists or steps. Just talk like a vet would."
+                )
+                # Merge: guidance + error code (if user asked about a code mid-guidance)
+                asyncio.ensure_future(agent.update_instructions(base + guidance_inject + error_inject))
             else:
                 # No guidance active — just base + error codes (if any)
                 base = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
