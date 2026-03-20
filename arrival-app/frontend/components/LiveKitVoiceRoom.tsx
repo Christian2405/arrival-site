@@ -320,7 +320,14 @@ function RoomContent({
 
   // Expose camera flip function to parent
   useEffect(() => {
-    const flipFn = () => setCameraFacing(prev => prev === 'environment' ? 'user' : 'environment');
+    const flipFn = () => {
+      console.log('[LiveKitVoice] Flip camera triggered');
+      setCameraFacing(prev => {
+        const next = prev === 'environment' ? 'user' : 'environment';
+        console.log(`[LiveKitVoice] Camera facing: ${prev} → ${next}`);
+        return next;
+      });
+    };
     onFlipCameraReady?.(flipFn);
     return () => onFlipCameraReady?.(null);
   }, [onFlipCameraReady]);
@@ -479,21 +486,31 @@ function RoomContent({
   // Publish camera as LiveKit video track — the backend subscribes to this
   // and grabs frames directly via WebRTC. This bypasses expo-camera's
   // takePictureAsync which freezes when LiveKit's audio session activates.
+  // Track if this is the first camera enable (skip disable on first run)
+  const cameraInitialized = useRef(false);
+
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || !room?.localParticipant) {
       return;
     }
 
+    let cancelled = false;
+
     const enableCamera = async () => {
       try {
-        // Disable first to force restart with new facing mode
-        await room.localParticipant.setCameraEnabled(false);
-        // Brief delay so iOS releases the camera before re-acquiring
-        await new Promise(r => setTimeout(r, 300));
+        // Only disable first when switching cameras (not on initial enable)
+        if (cameraInitialized.current) {
+          await room.localParticipant.setCameraEnabled(false);
+          // iOS needs time to release the camera hardware before re-acquiring
+          await new Promise(r => setTimeout(r, 500));
+          if (cancelled) return;
+        }
         await room.localParticipant.setCameraEnabled(true, {
           facingMode: cameraFacing,
-          resolution: { width: 720, height: 1280, frameRate: 15 },
+          // High res for user preview, backend downscales for model
+          resolution: { width: 1080, height: 1920, frameRate: 30 },
         });
+        cameraInitialized.current = true;
         console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing})`);
       } catch (e: any) {
         console.warn(`[LiveKitVoice] Camera publish failed: ${e?.message || e}`);
@@ -503,7 +520,7 @@ function RoomContent({
     enableCamera();
 
     return () => {
-      room?.localParticipant?.setCameraEnabled(false).catch(() => {});
+      cancelled = true;
     };
   }, [connectionState, room, cameraFacing]);
 

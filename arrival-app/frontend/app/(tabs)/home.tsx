@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
-  Animated, Keyboard, Platform, Alert, Dimensions,
+  Animated, Keyboard, Platform, Alert, Dimensions, PanResponder,
   TouchableWithoutFeedback, AppState, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -159,9 +159,38 @@ export default function HomeScreen() {
   const [livekitActive, setLivekitActive] = useState(false);
   const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
   const flipCameraRef = useRef<(() => void) | null>(null);
-  const [cameraZoom, setCameraZoom] = useState(1);
-  const lastScale = useRef(1);
-  const baseScale = useRef(1);
+  const cameraZoomRef = useRef(1);
+  const cameraZoomAnim = useRef(new Animated.Value(1)).current;
+  const pinchBaseDistance = useRef(0);
+  const pinchBaseZoom = useRef(1);
+
+  const pinchResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: (_, gestureState) => gestureState.numberActiveTouches === 2,
+    onMoveShouldSetPanResponder: (_, gestureState) => gestureState.numberActiveTouches === 2,
+    onPanResponderGrant: (evt) => {
+      const touches = evt.nativeEvent.touches;
+      if (touches.length >= 2) {
+        const dx = touches[0].pageX - touches[1].pageX;
+        const dy = touches[0].pageY - touches[1].pageY;
+        pinchBaseDistance.current = Math.sqrt(dx * dx + dy * dy);
+        pinchBaseZoom.current = cameraZoomRef.current;
+      }
+    },
+    onPanResponderMove: (evt) => {
+      const touches = evt.nativeEvent.touches;
+      if (touches.length >= 2 && pinchBaseDistance.current > 0) {
+        const dx = touches[0].pageX - touches[1].pageX;
+        const dy = touches[0].pageY - touches[1].pageY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const scale = Math.min(Math.max(pinchBaseZoom.current * (dist / pinchBaseDistance.current), 1), 5);
+        cameraZoomRef.current = scale;
+        cameraZoomAnim.setValue(scale);
+      }
+    },
+    onPanResponderRelease: () => {
+      pinchBaseDistance.current = 0;
+    },
+  }), []);
   const { saveAnswer } = useSavedAnswersStore();
   const { profile, subscription } = useAuthStore();
 
@@ -922,27 +951,9 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
-      <View
-        style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoom }] }]}
-        onTouchStart={(e) => {
-          if (e.nativeEvent.touches?.length === 2) {
-            const t = e.nativeEvent.touches;
-            const dx = (t as any)[0].pageX - (t as any)[1].pageX;
-            const dy = (t as any)[0].pageY - (t as any)[1].pageY;
-            baseScale.current = Math.sqrt(dx * dx + dy * dy);
-            lastScale.current = cameraZoom;
-          }
-        }}
-        onTouchMove={(e) => {
-          if (e.nativeEvent.touches?.length === 2) {
-            const t = e.nativeEvent.touches;
-            const dx = (t as any)[0].pageX - (t as any)[1].pageX;
-            const dy = (t as any)[0].pageY - (t as any)[1].pageY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const scale = Math.min(Math.max(lastScale.current * (dist / baseScale.current), 1), 5);
-            setCameraZoom(scale);
-          }
-        }}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoomAnim }] }]}
+        {...pinchResponder.panHandlers}
       >
         {permission?.granted && interactionMode !== 'job' && (
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
@@ -953,7 +964,7 @@ export default function HomeScreen() {
         {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
         )}
-      </View>
+      </Animated.View>
 
       {/* Dark overlay on camera feed */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
