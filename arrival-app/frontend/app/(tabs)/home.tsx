@@ -953,7 +953,6 @@ export default function HomeScreen() {
       {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
       <Animated.View
         style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoomAnim }] }]}
-        {...pinchResponder.panHandlers}
       >
         {permission?.granted && interactionMode !== 'job' && (
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
@@ -966,8 +965,11 @@ export default function HomeScreen() {
         )}
       </Animated.View>
 
-      {/* Dark overlay on camera feed */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+      {/* Dark overlay on camera feed — also handles pinch-to-zoom */}
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]}
+        {...pinchResponder.panHandlers}
+      />
 
       {/* Main content */}
       <View style={{ flex: 1, paddingBottom: interactionMode === 'text' ? keyboardHeight : 0 }}>

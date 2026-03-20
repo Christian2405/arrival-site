@@ -318,19 +318,38 @@ function RoomContent({
     return () => onLocalVideoTrack?.(null);
   }, [localCameraTrack, onLocalVideoTrack]);
 
-  // Expose camera flip function to parent
+  // Expose camera flip function to parent — uses restartTrack for reliable switching
   useEffect(() => {
-    const flipFn = () => {
+    const flipFn = async () => {
       console.log('[LiveKitVoice] Flip camera triggered');
-      setCameraFacing(prev => {
-        const next = prev === 'environment' ? 'user' : 'environment';
-        console.log(`[LiveKitVoice] Camera facing: ${prev} → ${next}`);
-        return next;
-      });
+      const newFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+
+      try {
+        // Get the existing video track publication
+        const pub = room?.localParticipant?.getTrackPublication(Track.Source.Camera);
+        const track = pub?.track;
+        if (track && 'restartTrack' in track) {
+          // restartTrack changes the camera without unpublish/republish
+          await (track as any).restartTrack({
+            facingMode: newFacing,
+            resolution: { width: 1080, height: 1920, frameRate: 30 },
+          });
+          setCameraFacing(newFacing);
+          console.log(`[LiveKitVoice] ✓ Camera flipped to ${newFacing}`);
+        } else {
+          // Fallback: disable/enable
+          console.log('[LiveKitVoice] No track for restartTrack, using disable/enable');
+          setCameraFacing(newFacing);
+        }
+      } catch (e: any) {
+        console.warn(`[LiveKitVoice] Camera flip failed: ${e?.message || e}`);
+        // Fallback
+        setCameraFacing(newFacing);
+      }
     };
     onFlipCameraReady?.(flipFn);
     return () => onFlipCameraReady?.(null);
-  }, [onFlipCameraReady]);
+  }, [onFlipCameraReady, room, cameraFacing]);
 
   // Send equipment context to agent whenever it changes
   useEffect(() => {
