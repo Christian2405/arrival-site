@@ -159,6 +159,9 @@ export default function HomeScreen() {
   const [livekitActive, setLivekitActive] = useState(false);
   const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
   const flipCameraRef = useRef<(() => void) | null>(null);
+  const [cameraZoom, setCameraZoom] = useState(1);
+  const lastScale = useRef(1);
+  const baseScale = useRef(1);
   const { saveAnswer } = useSavedAnswersStore();
   const { profile, subscription } = useAuthStore();
 
@@ -919,15 +922,38 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
-      {permission?.granted && interactionMode !== 'job' && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-      )}
-      {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
-        <LKVideoTrack trackRef={localVideoTrackRef} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
-      )}
-      {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-      )}
+      <View
+        style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoom }] }]}
+        onTouchStart={(e) => {
+          if (e.nativeEvent.touches?.length === 2) {
+            const t = e.nativeEvent.touches;
+            const dx = (t as any)[0].pageX - (t as any)[1].pageX;
+            const dy = (t as any)[0].pageY - (t as any)[1].pageY;
+            baseScale.current = Math.sqrt(dx * dx + dy * dy);
+            lastScale.current = cameraZoom;
+          }
+        }}
+        onTouchMove={(e) => {
+          if (e.nativeEvent.touches?.length === 2) {
+            const t = e.nativeEvent.touches;
+            const dx = (t as any)[0].pageX - (t as any)[1].pageX;
+            const dy = (t as any)[0].pageY - (t as any)[1].pageY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const scale = Math.min(Math.max(lastScale.current * (dist / baseScale.current), 1), 5);
+            setCameraZoom(scale);
+          }
+        }}
+      >
+        {permission?.granted && interactionMode !== 'job' && (
+          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+        )}
+        {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
+          <LKVideoTrack trackRef={localVideoTrackRef} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
+        )}
+        {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
+          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+        )}
+      </View>
 
       {/* Dark overlay on camera feed */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />

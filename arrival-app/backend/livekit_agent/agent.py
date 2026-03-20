@@ -530,7 +530,15 @@ class ArrivalAgent(Agent):
             r"it'?s also worth mentioning that |"
             r"(?:please )?keep in mind that |"
             r"as (?:always|a reminder),? |"
-            r"just to (?:be clear|clarify),? "
+            r"just to (?:be clear|clarify),? |"
+            r"what you(?:'re| are) going to want to do is |"
+            r"what you(?:'ll)? want to do is |"
+            r"so basically,? |"
+            r"the (?:first|main|key) thing (?:to do |is )|"
+            r"you(?:'re| are) going to (?:want|need) to |"
+            r"i(?:'d| would) (?:also )?like to (?:point out|mention|note) (?:that )?|"
+            r"for (?:this|that) (?:particular |specific )?(?:task|job|situation),? |"
+            r"in (?:this|that) case,? "
             r")"
         )
         # Numbered/step patterns — "Step 1:", "1.", "1)", "First,", "Second,"
@@ -1503,7 +1511,7 @@ def _build_frame_context(frame_b64: Optional[str]) -> list[dict]:
         },
         {
             "type": "text",
-            "text": "[This is what the tech's phone camera is showing you RIGHT NOW. You can always see this. Describe what you see when asked.]",
+            "text": "[Camera feed]",
         },
     ]
 

@@ -488,9 +488,11 @@ function RoomContent({
       try {
         // Disable first to force restart with new facing mode
         await room.localParticipant.setCameraEnabled(false);
+        // Brief delay so iOS releases the camera before re-acquiring
+        await new Promise(r => setTimeout(r, 300));
         await room.localParticipant.setCameraEnabled(true, {
           facingMode: cameraFacing,
-          resolution: { width: 1280, height: 720, frameRate: 15 },
+          resolution: { width: 720, height: 1280, frameRate: 15 },
         });
         console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing})`);
       } catch (e: any) {
