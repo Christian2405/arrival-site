@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arrival - AI Voice & Camera Assistant for Trade Workers</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="toast-container" class="toast-container"></div>
+    <nav class="nav" id="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-logo" onclick="showPage('home'); return false;"><img src="logo.svg" alt="Arrival" class="nav-logo-img"></a>
+            <div class="nav-links" id="navLinks">
+                <a href="#" onclick="showPage('home'); return false;">Home</a>
+                <a href="#" onclick="showPage('product'); return false;">Product</a>
+                <a href="#" onclick="showPage('pricing'); return false;">Pricing</a>
+                <a href="#" onclick="showPage('business'); return false;">For Businesses</a>
+                <a href="#" onclick="showPage('login'); return false;" class="nav-login" id="nav-login-link">Login</a>
+                <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-sm" id="nav-signup-link">Start Free Trial</a>
+                <a href="#" onclick="navigateToDashboard(); return false;" class="nav-login" id="nav-dashboard-link" style="display: none;">Dashboard</a>
+                <a href="#" onclick="handleLogout(); return false;" class="btn btn-outline btn-sm" id="nav-logout-link" style="display: none;">Sign Out</a>
+            </div>
+            <button class="nav-toggle" onclick="toggleNav()">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- HOME PAGE -->
+    <div class="page active" id="page-home">
+        <!-- Hero Section -->
+        <section class="section">
+            <div class="container">
+                <div class="hero-centered">
+                    <h1 class="hero-headline">Every answer you need. On every job.</h1>
+                    <p class="hero-sub">Voice, camera, error codes, diagnostics, and your company's own manuals — for HVAC, plumbing, electrical, and appliance repair.</p>
+                    <div class="hero-ctas">
+                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                    </div>
+                    <p class="hero-note">No credit card required.</p>
+                    <div class="hero-stats">
+                        <div class="hero-stat">
+                            <span class="hero-stat-num">&lt;3s</span>
+                            <span class="hero-stat-label">Response</span>
+                        </div>
+                        <div class="hero-stat-divider"></div>
+                        <div class="hero-stat">
+                            <span class="hero-stat-num">400+</span>
+                            <span class="hero-stat-label">Error Codes</span>
+                        </div>
+                        <div class="hero-stat-divider"></div>
+                        <div class="hero-stat">
+                            <span class="hero-stat-num">24/7</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature 1: Voice -->
+        <section class="section section-light">
+            <div class="container">
+                <div class="feature-row">
+                    <div class="feature-text reveal reveal-left">
+                        <span class="section-label">VOICE</span>
+                        <h2 class="section-header">"What refrigerant does this unit take?"</h2>
+                        <p>Ask out loud. Get your answer out loud.</p>
+                    </div>
+                    <div class="feature-visual reveal reveal-right">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">🎤</div>
+                                <div>Hold to talk</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">🔊</div>
+                                <div>Answers out loud</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Saved to history</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature 2: Camera -->
+        <section class="section">
+            <div class="container">
+                <div class="feature-row feature-row-reverse">
+                    <div class="feature-text reveal reveal-right">
+                        <span class="section-label">CAMERA</span>
+                        <h2 class="section-header">"What's wrong with this?"</h2>
+                        <p>The AI sees what you're looking at.</p>
+                    </div>
+                    <div class="feature-visual reveal reveal-left">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">📷</div>
+                                <div>Identifies equipment</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">🔍</div>
+                                <div>Reads error codes</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">💡</div>
+                                <div>Answers based on what it sees</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Job Mode -->
+        <section class="section section-warm">
+            <div class="container">
+                <div class="feature-row">
+                    <div class="feature-text reveal reveal-left">
+                        <span class="section-label">JOB MODE</span>
+                        <h2 class="section-header">It watches while you work.</h2>
+                        <p>Turn on Job Mode and point the camera at your work. Arrival monitors what you're doing and speaks up if it sees something wrong — corrosion, wrong parts, safety issues. You don't have to ask.</p>
+                        <a href="#" onclick="showPage('business'); return false;" class="btn btn-outline" style="margin-top: 24px;">Learn more</a>
+                    </div>
+                    <div class="feature-visual reveal reveal-right">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">👁</div>
+                                <div>Sees what you see through the camera</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">⚠</div>
+                                <div>Flags problems before you ask</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">🔇</div>
+                                <div>Only speaks up when it's certain</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works -->
+        <section class="section section-dark">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 60px;">
+                    <h2 class="section-header reveal" style="color: white;">How it works.</h2>
+                </div>
+                <div class="steps-horizontal">
+                    <div class="step-h-item reveal reveal-delay-1">
+                        <div class="step-h-num">1</div>
+                        <h3>You're on a job and you don't know the answer.</h3>
+                    </div>
+                    <div class="step-h-item reveal reveal-delay-2">
+                        <div class="step-h-num">2</div>
+                        <h3>You ask Arrival — voice, camera, or text.</h3>
+                    </div>
+                    <div class="step-h-item reveal reveal-delay-3">
+                        <div class="step-h-num">3</div>
+                        <h3>You get the answer in seconds and keep working.</h3>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Capabilities -->
+        <section class="section">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 80px;">
+                    <h2 class="section-header reveal">Every question you'd call the office about.</h2>
+                </div>
+                <div class="ask-grid">
+                    <div class="ask-card reveal reveal-delay-1">
+                        <div class="ask-category">Fault Codes</div>
+                        <p>"What does error code E4 mean?"</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-2">
+                        <div class="ask-category">Refrigerant</div>
+                        <p>"What refrigerant should I use?"</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-3">
+                        <div class="ask-category">Code Compliance</div>
+                        <p>"What does the code require here?"</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-4">
+                        <div class="ask-category">Walkthroughs</div>
+                        <p>"Walk me through the install."</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-5">
+                        <div class="ask-category">Diagnosis</div>
+                        <p>"What's wrong with this?"</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-6">
+                        <div class="ask-category">Sizing</div>
+                        <p>"What size wire do I need?"</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-7">
+                        <div class="ask-category">Troubleshooting</div>
+                        <p>"Why isn't this working?"</p>
+                    </div>
+                    <div class="ask-card reveal reveal-delay-8">
+                        <div class="ask-category">Repair</div>
+                        <p>"How do I fix this?"</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final CTA -->
+        <section class="section cta-section">
+            <div class="container">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+                    <h2 class="section-header reveal">Try it free.</h2>
+                    <p style="font-size: 18px; color: #7c736a; margin: 24px 0 48px;">10 questions a day. No card required.</p>
+                    <div class="hero-ctas reveal reveal-delay-1">
+                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                        <a href="#" onclick="showPage('pricing'); return false;" class="btn btn-outline btn-lg">See Pricing</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- PRODUCT PAGE -->
+    <div class="page" id="page-product">
+        <!-- Hero Short -->
+        <section class="section hero-illustrated">
+            <div class="hero-bg hero-bg-product"></div>
+            <div class="container" style="text-align: center; padding: 120px 0;">
+                <h1 class="hero-headline hero-short">Voice. Camera. Answers.</h1>
+                <p class="hero-sub" style="max-width: 600px; margin: 20px auto;">Ask while you work. The AI sees what you see.</p>
+            </div>
+        </section>
+
+        <!-- Voice Section -->
+        <section class="section section-light">
+            <div class="container">
+                <div class="feature-row">
+                    <div class="feature-text reveal reveal-left">
+                        <h2 class="section-header">"What's the torque spec on this?"</h2>
+                        <p>Ask while you work. Hear the answer.</p>
+                    </div>
+                    <div class="feature-visual reveal reveal-right">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Works in noisy environments</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Responds in seconds</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Listen or read</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Camera Section -->
+        <section class="section">
+            <div class="container">
+                <div class="feature-row feature-row-reverse">
+                    <div class="feature-text reveal reveal-right">
+                        <h2 class="section-header">"What model is this?"</h2>
+                        <p>The AI sees what you're looking at and answers based on that.</p>
+                    </div>
+                    <div class="feature-visual reveal reveal-left">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Identifies equipment</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Reads labels and codes</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Ask follow-ups</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Your Docs Section -->
+        <section class="section section-light">
+            <div class="container">
+                <div class="feature-row">
+                    <div class="feature-text reveal reveal-left">
+                        <span class="section-label">YOUR DOCS</span>
+                        <h2 class="section-header">Your manuals. Your answers.</h2>
+                        <p>Upload your company's documentation. The AI uses it to answer your questions. Not generic results — your actual procedures.</p>
+                    </div>
+                    <div class="feature-visual reveal reveal-right">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Upload once, use anywhere</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Private to you or your team</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Cites where the answer came from</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Job Mode Section -->
+        <section class="section">
+            <div class="container">
+                <div class="feature-row feature-row-reverse">
+                    <div class="feature-text reveal reveal-right">
+                        <span class="section-label">BUSINESS TIER</span>
+                        <h2 class="section-header">Job Mode</h2>
+                        <p>Turn it on and work. If the AI sees something wrong, it tells you.</p>
+                    </div>
+                    <div class="feature-visual reveal reveal-left">
+                        <div class="feature-card">
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Flags problems before you ask</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Corrosion, wrong parts, safety issues</div>
+                            </div>
+                            <div class="feature-card-item">
+                                <div class="check">✓</div>
+                                <div>Business tier only</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Works Everywhere -->
+        <section class="section section-light">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 80px;">
+                    <h2 class="section-header reveal">Works where you work.</h2>
+                </div>
+                <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 700px; margin: 0 auto;">
+                    <div class="card reveal reveal-delay-1">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">iOS and Android</h3>
+                    </div>
+                    <div class="card reveal reveal-delay-2">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Syncs across devices</h3>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="section cta-section">
+            <div class="container">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+                    <h2 class="section-header reveal">Try it.</h2>
+                    <p style="font-size: 18px; color: #7c736a; margin: 24px 0 48px;">Free to start.</p>
+                    <div class="hero-ctas">
+                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                        <a href="#" onclick="showPage('pricing'); return false;" class="btn btn-outline btn-lg">See Pricing</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- PRICING PAGE -->
+    <div class="page" id="page-pricing">
+        <!-- Hero Short -->
+        <section class="section">
+            <div class="container" style="text-align: center; padding: 120px 0 60px;">
+                <h1 class="hero-headline hero-short">Pricing</h1>
+                <p class="hero-sub" style="max-width: 600px; margin: 20px auto;">Start free. Upgrade when you need more.</p>
+            </div>
+        </section>
+
+        <section class="section section-light" style="padding-top: 80px;">
+            <div class="container">
+                <!-- Individual / Business toggle -->
+                <div style="display: flex; justify-content: center; margin-bottom: 48px;">
+                    <div class="pricing-toggle">
+                        <button class="pricing-toggle-btn pricing-toggle-active" id="pricing-toggle-individual" onclick="showPricingView('individual')">Individual</button>
+                        <button class="pricing-toggle-btn" id="pricing-toggle-business" onclick="showPricingView('business')">Business</button>
+                    </div>
+                </div>
+
+                <!-- Individual Plans: Free + Pro -->
+                <div id="pricing-individual" class="pricing-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 700px; margin: 0 auto;">
+                    <!-- Free Plan -->
+                    <div class="pricing-card">
+                        <div class="pricing-badge" style="visibility: hidden;">‎</div>
+                        <div class="pricing-header">
+                            <h3>Free</h3>
+                        </div>
+                        <div class="pricing-subtitle">Try it out.</div>
+                        <div class="pricing-price">$0</div>
+                        <div class="pricing-desc">&nbsp;</div>
+                        <div class="pricing-cta">
+                            <a href="#" onclick="showDownloadModal(); return false;" class="btn btn-outline">Download App</a>
+                        </div>
+                        <hr class="pricing-divider">
+                        <div class="pricing-inherits" style="visibility: hidden;">‎</div>
+                        <div class="pricing-features">
+                            <div class="pricing-feature">10 questions/day</div>
+                            <div class="pricing-feature">Voice + camera</div>
+                            <div class="pricing-feature">No documents</div>
+                            <div class="pricing-feature">Sign up in app</div>
+                        </div>
+                    </div>
+
+                    <!-- Pro Plan -->
+                    <div class="pricing-card pricing-featured">
+                        <div class="pricing-badge">Most Popular</div>
+                        <div class="pricing-header">
+                            <h3>Pro</h3>
+                        </div>
+                        <div class="pricing-subtitle">For individuals.</div>
+                        <div class="pricing-price">$20 <span>/month</span></div>
+                        <div class="pricing-desc">&nbsp;</div>
+                        <div class="pricing-cta">
+                            <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary">Start Free Trial</a>
+                        </div>
+                        <hr class="pricing-divider">
+                        <div class="pricing-inherits" style="visibility: hidden;">‎</div>
+                        <div class="pricing-features">
+                            <div class="pricing-feature">50 questions/day</div>
+                            <div class="pricing-feature">20 documents</div>
+                            <div class="pricing-feature">Chat history</div>
+                            <div class="pricing-feature">Saved answers</div>
+                            <div class="pricing-feature">Quick tools</div>
+                            <div class="pricing-feature">Email support</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Business Plans: Business + Enterprise -->
+                <div id="pricing-business" class="pricing-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 700px; margin: 0 auto; display: none;">
+                    <!-- Business Plan -->
+                    <div class="pricing-card pricing-featured">
+                        <div class="pricing-badge">Most Popular</div>
+                        <div class="pricing-header">
+                            <h3>Business</h3>
+                        </div>
+                        <div class="pricing-subtitle">For teams.</div>
+                        <div class="pricing-price">$200 <span>/seat/month</span></div>
+                        <div class="pricing-desc">&nbsp;</div>
+                        <div class="pricing-cta">
+                            <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary">Start Free Trial</a>
+                        </div>
+                        <hr class="pricing-divider">
+                        <div class="pricing-inherits" style="visibility: hidden;">‎</div>
+                        <div class="pricing-features">
+                            <div class="pricing-feature">250 questions/day per person</div>
+                            <div class="pricing-feature">Unlimited documents</div>
+                            <div class="pricing-feature">Job Mode</div>
+                            <div class="pricing-feature">Team document library</div>
+                            <div class="pricing-feature">See what your team is asking</div>
+                            <div class="pricing-feature">Priority support</div>
+                        </div>
+                    </div>
+
+                    <!-- Enterprise Plan -->
+                    <div class="pricing-card">
+                        <div class="pricing-badge" style="visibility: hidden;">‎</div>
+                        <div class="pricing-header">
+                            <h3>Enterprise</h3>
+                        </div>
+                        <div class="pricing-subtitle">For large organizations.</div>
+                        <div class="pricing-price" style="font-size: 24px;">Contact Sales</div>
+                        <div class="pricing-desc">&nbsp;</div>
+                        <div class="pricing-cta">
+                            <a href="mailto:sales@arrivalcompany.com" class="btn btn-primary" style="background: #1a1a18;">Contact Sales</a>
+                        </div>
+                        <hr class="pricing-divider">
+                        <div class="pricing-inherits" style="visibility: hidden;">‎</div>
+                        <div class="pricing-features">
+                            <div class="pricing-feature">Unlimited questions</div>
+                            <div class="pricing-feature">Unlimited documents</div>
+                            <div class="pricing-feature">Unlimited seats</div>
+                            <div class="pricing-feature">SSO</div>
+                            <div class="pricing-feature">API access</div>
+                            <div class="pricing-feature">Dedicated Slack channel</div>
+                            <div class="pricing-feature">Dedicated support</div>
+                            <div class="pricing-feature">SLA</div>
+                        </div>
+                    </div>
+                </div>
+
+                <p style="text-align: center; font-size: 13px; color: #9a9590; margin-top: 2rem;">Prices don't include applicable tax.</p>
+            </div>
+        </section>
+
+        <!-- FAQ -->
+        <section class="section" id="faq-section">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 60px;">
+                    <h2 class="section-header">Frequently asked questions</h2>
+                    <!-- FAQ Category Tabs -->
+                    <div style="display: flex; justify-content: center; gap: 8px; margin-top: 32px; flex-wrap: wrap;">
+                        <button class="faq-tab faq-tab-active" onclick="showFaqCategory('product', this)">Product</button>
+                        <button class="faq-tab" onclick="showFaqCategory('docs', this)">Documentation</button>
+                        <button class="faq-tab" onclick="showFaqCategory('jobmode', this)">Job Mode</button>
+                        <button class="faq-tab" onclick="showFaqCategory('billing', this)">Pricing & Billing</button>
+                        <button class="faq-tab" onclick="showFaqCategory('teams', this)">Teams & Business</button>
+                        <button class="faq-tab" onclick="showFaqCategory('privacy', this)">Privacy & Security</button>
+                        <button class="faq-tab" onclick="showFaqCategory('support', this)">Support</button>
+                    </div>
+                </div>
+
+                <!-- Product -->
+                <div class="faq-category" id="faq-product">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What is Arrival?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>AI assistant for trade workers. Voice and camera. Answers from your company's documentation.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How does it work?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Open the app, point at what you're working on, ask your question. AI answers.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What trades is it for?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>HVAC, plumbing, electrical, appliance repair, general construction. If you work with equipment and need answers on the job, it's for you.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Does it work offline?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No. You need an internet connection.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What devices does it support?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>iPhone and Android.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documentation -->
+                <div class="faq-category" id="faq-docs" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What can I upload?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>PDFs, manuals, SOPs, procedures, spec sheets, parts lists. Anything your team needs to reference.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How does the AI use my documents?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>When you ask a question, the AI searches your uploaded docs first. If the answer is there, it uses it. If not, it uses general knowledge.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Are my documents private?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Your documents are only accessible to you or your team. We don't share them or use them to train AI models.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What if I don't upload any documents?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>It still works. You just get general answers instead of answers specific to your company.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Job Mode -->
+                <div class="faq-category" id="faq-jobmode" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What is Job Mode?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>AI watches what you're looking at while you work. If it sees something wrong, it tells you. You don't have to ask.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What does Job Mode catch?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Corrosion, wrong parts, safety issues, obvious problems. It only speaks up when it's certain.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Does Job Mode drain my battery?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>More than regular use, yes. But it's designed to be efficient.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can I turn Job Mode off?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Toggle it anytime.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing & Billing -->
+                <div class="faq-category" id="faq-billing" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Is there a free version?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. 10 questions a day, forever. No card required.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How much does Pro cost?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>$20/month. 50 questions a day, 20 documents.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How much does Business cost?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>$200 per seat per month. 250 questions a day, unlimited documents, Job Mode.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can I cancel anytime?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. You keep access until the end of your billing period.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you offer annual billing?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Save 15% with annual on Pro and Business.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What payment methods do you accept?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>All major credit cards. Business and Enterprise can pay by invoice.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Teams & Business -->
+                <div class="faq-category" id="faq-teams" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How do I add team members?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Invite them from your dashboard. They get a link to create their account.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can my team share documents?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Upload to the team library and everyone has access.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Can I see what my team is asking?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. The dashboard shows team activity — questions asked, topics, usage.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">What's the difference between Pro and Business?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Pro is for individuals. Business is for teams — you get Job Mode, unlimited documents, team document library, and team activity.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Privacy & Security -->
+                <div class="faq-category" id="faq-privacy" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Is my data secure?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Encrypted in transit and at rest.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you store my camera images?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No. Images are processed in real time and discarded. We don't keep them unless you save them.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you store my voice recordings?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No. Voice is transcribed, then the audio is discarded.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you use my data to train AI?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>No.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support -->
+                <div class="faq-category" id="faq-support" style="display: none;">
+                    <div class="faq-layout">
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">How do I get help?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Email support@arrivalcompany.com. We typically respond within 2 hours.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Is there phone support?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Not currently. Email only.</p></div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" onclick="toggleFaq(this)">Do you offer onboarding for teams?<span class="faq-icon">+</span></button>
+                            <div class="faq-answer"><p>Yes. Business and Enterprise customers get onboarding support.</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="section section-light cta-section">
+            <div class="container">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+                    <h2 class="section-header">Try it free.</h2>
+                    <div class="hero-ctas" style="margin-top: 48px;">
+                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- FOR BUSINESS PAGE -->
+    <div class="page" id="page-business">
+        <!-- Hero Short -->
+        <section class="section hero-illustrated">
+            <div class="hero-bg hero-bg-business"></div>
+            <div class="container" style="text-align: center; padding: 120px 0;">
+                <h1 class="hero-headline hero-short">Every tech on your team knows what your best tech knows.</h1>
+                <p class="hero-sub" style="max-width: 600px; margin: 20px auto;">Upload your manuals and SOPs. Arrival answers your team's questions from your own documentation — instantly.</p>
+                <div class="hero-ctas">
+                    <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                    <a href="mailto:sales@arrivalcompany.com" class="btn btn-outline btn-lg">Talk to Sales</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- The Problem -->
+        <section class="section section-light">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 60px;">
+                    <span class="section-label reveal">THE PROBLEM</span>
+                    <h2 class="section-header reveal">Your best tech can't answer every call.</h2>
+                    <p style="max-width: 600px; margin: 24px auto 0;">Your best people can't answer every question. New hires take months to learn what experienced workers know. When someone leaves, their knowledge goes with them.</p>
+                </div>
+                <div class="stat-row reveal">
+                    <div class="stat-block">
+                        <div class="stat-number">3hrs</div>
+                        <div class="stat-desc">Average time lost per week to repeated questions</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-number">6mo</div>
+                        <div class="stat-desc">Before a new hire works independently</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-desc">Of knowledge lost when your best tech leaves</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- The Solution -->
+        <section class="section">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 60px;">
+                    <span class="section-label reveal">THE SOLUTION</span>
+                    <h2 class="section-header reveal">Put 20 years of experience in everyone's pocket.</h2>
+                    <p style="max-width: 600px; margin: 24px auto 0;">Upload your manuals, SOPs, and procedures. When anyone on your team has a question, Arrival answers from your documentation — not generic search results.</p>
+                </div>
+                <div class="before-after reveal">
+                    <div class="before-col">
+                        <h4>Without Arrival</h4>
+                        <p>Tech calls the office. Office pulls up the manual. Reads it over the phone. 15 minutes gone.</p>
+                    </div>
+                    <div class="after-col">
+                        <h4>With Arrival</h4>
+                        <p>Tech asks out loud. Gets the answer from your manual in 3 seconds. Keeps working.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Job Mode Section -->
+        <section class="section section-light">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 60px;">
+                    <span class="section-label reveal">BUSINESS ONLY</span>
+                    <h2 class="section-header reveal">Job Mode</h2>
+                    <p style="max-width: 600px; margin: 24px auto 0;">Turn it on and work. If the AI sees something wrong, it tells you. Corrosion, wrong parts, safety issues — before you even ask.</p>
+                </div>
+                <div class="feature-card reveal" style="max-width: 500px; margin: 0 auto;">
+                    <div class="feature-card-item">
+                        <div class="check">✓</div>
+                        <div>AI sees what you see</div>
+                    </div>
+                    <div class="feature-card-item">
+                        <div class="check">✓</div>
+                        <div>Speaks up when something's wrong</div>
+                    </div>
+                    <div class="feature-card-item">
+                        <div class="check">✓</div>
+                        <div>You don't have to ask</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- What Business Includes -->
+        <section class="section section-dark">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 80px;">
+                    <h2 class="section-header reveal" style="color: white;">What you get.</h2>
+                </div>
+                <div class="benefits-grid">
+                    <div class="benefit-card reveal reveal-delay-1">
+                        <div class="benefit-num">1</div>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Job Mode</h3>
+                        <p>AI flags problems before you ask.</p>
+                    </div>
+                    <div class="benefit-card reveal reveal-delay-2">
+                        <div class="benefit-num">2</div>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Unlimited documents</h3>
+                        <p>Upload everything your team needs.</p>
+                    </div>
+                    <div class="benefit-card reveal reveal-delay-3">
+                        <div class="benefit-num">3</div>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Team document library</h3>
+                        <p>Shared across your whole team.</p>
+                    </div>
+                    <div class="benefit-card reveal reveal-delay-4">
+                        <div class="benefit-num">4</div>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Team activity</h3>
+                        <p>See what questions your team is asking.</p>
+                    </div>
+                    <div class="benefit-card reveal reveal-delay-5">
+                        <div class="benefit-num">5</div>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">250 questions/day per person</h3>
+                        <p>Plenty for a full day.</p>
+                    </div>
+                    <div class="benefit-card reveal reveal-delay-6">
+                        <div class="benefit-num">6</div>
+                        <h3 style="font-weight: 600; margin: 16px 0 12px;">Priority support</h3>
+                        <p>We respond fast.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How to Start -->
+        <section class="section">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 80px;">
+                    <h2 class="section-header reveal">How to get started.</h2>
+                </div>
+                <div class="steps-timeline reveal">
+                    <div class="timeline-step">
+                        <div class="timeline-step-num">1</div>
+                        <h3>Sign up</h3>
+                        <p>Create your team.</p>
+                    </div>
+                    <div class="timeline-step">
+                        <div class="timeline-step-num">2</div>
+                        <h3>Upload your docs</h3>
+                        <p>Manuals, SOPs, procedures.</p>
+                    </div>
+                    <div class="timeline-step">
+                        <div class="timeline-step-num">3</div>
+                        <h3>Invite your team</h3>
+                        <p>They get access immediately.</p>
+                    </div>
+                    <div class="timeline-step">
+                        <div class="timeline-step-num">4</div>
+                        <h3>Start working</h3>
+                        <p>Ask questions, get answers.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="section cta-section">
+            <div class="container">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+                    <h2 class="section-header reveal">Try it with your team.</h2>
+                    <div class="hero-ctas reveal reveal-delay-1" style="margin-top: 48px;">
+                        <a href="#" onclick="showPage('signup'); return false;" class="btn btn-primary btn-lg">Start Free Trial</a>
+                        <a href="mailto:sales@arrivalcompany.com" class="btn btn-outline btn-lg">Contact Sales</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- CONTACT PAGE -->
+    <div class="page" id="page-contact">
+        <!-- Contact Form -->
+        <section class="section" style="padding-top: 40px; padding-bottom: 60px;">
+            <div class="container">
+                <div style="margin-bottom: 24px; text-align: center;">
+                    <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 600; color: var(--text-dark); margin: 0 0 8px;">Get in touch</h1>
+                    <p style="font-size: 15px; color: var(--text-muted); margin: 0 auto; max-width: 480px;">Question, demo request, or partnership? We'd like to hear from you.</p>
+                </div>
+                <div style="max-width: 560px; margin: 0 auto;">
+                    <form class="auth-form" id="contact-form" name="contact" data-netlify="true" netlify-honeypot="bot-field">
+                        <p class="hidden" style="display:none"><input name="bot-field"></p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>First Name</label>
+                                <input type="text" name="firstName" placeholder="Your name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Last Name</label>
+                                <input type="text" name="lastName" placeholder="Your last name" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" name="email" placeholder="you@company.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Subject</label>
+                            <select name="subject" required>
+                                <option value="">Select...</option>
+                                <option>General</option>
+                                <option>Support</option>
+                                <option>Sales</option>
+                                <option>Partnership</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Message</label>
+                            <textarea name="message" placeholder="Tell us how we can help..." rows="6" style="padding: 12px 16px; border: 1px solid var(--bg-border); border-radius: 6px; font-family: var(--font-body); font-size: 14px; color: var(--text-dark); resize: vertical; width: 100%; box-sizing: border-box;" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Send Message</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Email Contacts -->
+        <section class="section section-light" style="padding-top: 48px; padding-bottom: 48px;">
+            <div class="container">
+                <div style="margin-bottom: 32px; text-align: center;">
+                    <p style="font-size: 14px; color: var(--text-muted); margin: 0;">Or reach us directly</p>
+                </div>
+                <div class="contact-list" style="grid-template-columns: repeat(2, 1fr); max-width: 500px; margin: 0 auto;">
+                    <div class="contact-item">
+                        <div class="contact-label">Support</div>
+                        <p><a href="mailto:support@arrivalcompany.com">support@arrivalcompany.com</a></p>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-label">Sales</div>
+                        <p><a href="mailto:sales@arrivalcompany.com">sales@arrivalcompany.com</a></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP CENTER PAGE -->
+    <div class="page" id="page-help">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Help Center</h1>
+                <span style="font-size: 13px; color: var(--text-light);">Find answers and guides</span>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="container">
+                <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 60px;">
+                    <a href="#" onclick="showPage('help-getting-started'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Getting Started</h3>
+                        <p style="color: var(--text-muted); margin: 0;">Learn how to set up your account, ask your first question, and start using voice and camera features on the job site.</p>
+                    </a>
+                    <a href="#" onclick="showPage('help-voice-camera'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Voice & Camera</h3>
+                        <p style="color: var(--text-muted); margin: 0;">Tips for getting the best results from push-to-talk voice and camera snap features. How to ask better questions.</p>
+                    </a>
+                    <a href="#" onclick="showPage('help-billing'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Account & Billing</h3>
+                        <p style="color: var(--text-muted); margin: 0;">Manage your subscription, update payment info, upgrade or downgrade your plan, and view invoices.</p>
+                    </a>
+                    <a href="#" onclick="showPage('help-teams'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Team Management</h3>
+                        <p style="color: var(--text-muted); margin: 0;">For business accounts: add or remove team members, manage permissions, and access the admin dashboard.</p>
+                    </a>
+                    <a href="#" onclick="showPage('help-proactive'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Job Mode</h3>
+                        <p style="color: var(--text-muted); margin: 0;">How Job Mode works on Business plans. Automatic alerts, safety warnings, and smart suggestions while you work.</p>
+                    </a>
+                    <a href="#" onclick="showPage('help-troubleshooting'); return false;" class="card" style="padding: 40px; cursor: pointer; transition: all 0.2s; text-decoration: none;">
+                        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text-dark);">Troubleshooting</h3>
+                        <p style="color: var(--text-muted); margin: 0;">Common issues and fixes. Camera not working, voice not recognized, slow responses, and other known issues.</p>
+                    </a>
+                </div>
+
+                <div style="text-align: center; padding: 60px 0; border-top: 1px solid var(--bg-border);">
+                    <h2 class="section-header" style="font-size: 28px;">Still need help?</h2>
+                    <p style="color: var(--text-muted); margin: 16px 0 32px;">Our support team typically responds within 2 hours during business hours.</p>
+                    <a href="mailto:support@arrivalcompany.com" class="btn btn-primary btn-lg">Email Support</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP: GETTING STARTED -->
+    <div class="page" id="page-help-getting-started">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
+                    <span style="color: var(--bg-border);">/</span>
+                    <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Getting Started</h1>
+                </div>
+            </div>
+        </section>
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Creating your account</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Download Arrival from the App Store or Google Play. Sign up with your email and select your trade. The free plan gives you 10 questions a day with voice and camera — no credit card required.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Your first question</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Hold the mic button and ask something. "What refrigerant does this unit take?" or "What wire gauge for a 40-amp circuit at 150 feet?" Arrival answers out loud so you can keep working.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Using the camera</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Tap the camera icon. Point it at a unit, label, or wiring and ask a follow-up question about what you see. Good for model numbers, identifying parts, and diagnosing visible issues.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Conversation history</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Every conversation is saved. Swipe right or tap the menu icon to see past conversations.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Settings</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Adjust voice speed, toggle between listen and read modes, and set your preferred units in Settings.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP: VOICE & CAMERA -->
+    <div class="page" id="page-help-voice-camera">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
+                    <span style="color: var(--bg-border);">/</span>
+                    <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Voice & Camera</h1>
+                </div>
+            </div>
+        </section>
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Push-to-talk voice</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Hold the mic button, talk, release. Arrival filters background noise from compressors, tools, and HVAC systems. Speak naturally — no keywords or commands needed.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Tips for better results</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Be specific. "What's the torque spec on the compressor bolts for a Trane XR15?" beats "what's the torque spec?" Include model numbers and context. If an answer isn't right, ask a follow-up.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Camera</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Tap the camera icon to snap a photo. Arrival can read data plates, identify wiring, recognize pipe types, and read diagnostic codes. Make sure the subject is well-lit and in focus.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Voice + camera together</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Snap a photo, then ask about it. "What's wrong with this?" while pointing at a circuit board gives Arrival visual context plus your question.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Audio responses</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Arrival reads answers out loud. Works through your phone speaker or Bluetooth earpiece. Adjust speed in Settings.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP: ACCOUNT & BILLING -->
+    <div class="page" id="page-help-billing">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
+                    <span style="color: var(--bg-border);">/</span>
+                    <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Account & Billing</h1>
+                </div>
+            </div>
+        </section>
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Plans</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Free — 10 questions/day, voice and camera. Pro ($20/month) — 50 questions/day, 20 documents, chat history. Business ($200/seat/month) — 250 questions/day, unlimited documents, Job Mode, team analytics. Enterprise — custom pricing, SSO, API, SLA.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Upgrading or downgrading</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Go to Settings &gt; Subscription. Upgrades take effect immediately. Downgrades take effect at the end of your current billing cycle.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Payment methods</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">We accept Visa, Mastercard, and Amex. Business accounts can pay by invoice with net-30 terms. Update your method in Settings &gt; Billing.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Invoices</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Invoices are emailed on each billing date. View past invoices in Settings &gt; Billing &gt; Invoice History.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Cancellation</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Cancel anytime from Settings. You keep access until the end of your billing period. History is retained for 90 days.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP: TEAM MANAGEMENT -->
+    <div class="page" id="page-help-teams">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
+                    <span style="color: var(--bg-border);">/</span>
+                    <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Team Management</h1>
+                </div>
+            </div>
+        </section>
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Setting up your team</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Admins invite team members by email from the dashboard. Each person gets a link to create their account under your organization.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Roles</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Admin — billing, invites, analytics, settings. Manager — analytics, shared documents. Technician — full AI access, can contribute to the team library.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Team documents</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Upload SOPs, manuals, and best practices. Arrival references your documents alongside its built-in knowledge when answering questions from your team.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Analytics</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">The dashboard shows total queries, common questions, and which equipment your team asks about most. Use it to find training gaps and track adoption.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Removing members</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Admins can deactivate accounts from the dashboard. Documents they uploaded are retained. Deactivated seats can be reassigned.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP: JOB MODE -->
+    <div class="page" id="page-help-proactive">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
+                    <span style="color: var(--bg-border);">/</span>
+                    <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Job Mode</h1>
+                </div>
+            </div>
+        </section>
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">What is Job Mode?</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Job Mode is a Business-only feature. Instead of waiting for you to ask, Arrival watches what you're working on through the camera and speaks up when it sees something worth flagging.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">How it works</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Enable Job Mode and point the camera at your work. Arrival monitors the feed and surfaces safety warnings, common mistakes, and code requirements automatically — without you having to ask.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">What it can do</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Flag common mistakes for the equipment you're servicing. Surface safety warnings and code requirements. Suggest next steps based on what it sees. Alert you to known recalls or service bulletins.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Enabling Job Mode</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Admins can enable Job Mode for their team from the dashboard. Individual techs can toggle it on or off in the app. A small indicator at the top of the screen shows when Job Mode is active.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Privacy</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Job Mode only uses the current session context. It doesn't monitor you outside of active jobs. You can dismiss any alert with a swipe and turn it off at any time.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- HELP: TROUBLESHOOTING -->
+    <div class="page" id="page-help-troubleshooting">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                    <a href="#" onclick="showPage('help'); return false;" style="font-size: 13px; color: var(--text-light); text-decoration: none;">&larr; Help Center</a>
+                    <span style="color: var(--bg-border);">/</span>
+                    <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Troubleshooting</h1>
+                </div>
+            </div>
+        </section>
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Voice not recognized</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Check that Arrival has microphone permissions in your phone settings. On noisy sites, hold the phone closer or use a Bluetooth earpiece. Make sure you're pressing and holding the mic button, not just tapping.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Camera not identifying equipment</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Make sure there's good lighting. Try to capture the data plate or label clearly. Clean your camera lens. If identification fails, type or speak the model number instead.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Slow or no responses</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Arrival needs a stable internet connection. If you're in a weak signal area, move to a better spot. Business users get priority routing.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">Inaccurate answers</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Always verify critical information with official sources and local codes. If an answer seems wrong, tap the flag icon to report it. Arrival is an assistive tool — it doesn't replace professional judgment.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">App crashing</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Force-close and reopen. Make sure you're on the latest version. If it persists, go to Settings &gt; Advanced &gt; Clear Cache. Still broken? Email <a href="mailto:support@arrivalcompany.com" style="color: var(--text-dark); text-decoration: underline;">support@arrivalcompany.com</a> with your device model and OS version.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- PRIVACY POLICY PAGE -->
+    <div class="page" id="page-privacy">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Privacy Policy</h1>
+                <span style="font-size: 13px; color: var(--text-light);">Last updated: February 2026</span>
+            </div>
+        </section>
+
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">1. What we collect</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Name, email, trade type, and the questions you ask. Camera images are processed in real time and not stored unless you save them. Voice recordings are transcribed and the audio is discarded.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">2. How we use it</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">To answer your questions, improve the service, and communicate about your account. We do not sell your data.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">3. Security</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Data is encrypted in transit and at rest. Conversations are stored securely and retained unless you delete them.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">4. Business accounts</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Admins can see usage analytics (question types, frequency). They cannot see individual conversation content.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">5. Your rights</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Request a copy of your data, correct it, or delete your account at any time. Contact <a href="mailto:privacy@arrivalcompany.com" style="color: var(--text-dark); text-decoration: underline;">privacy@arrivalcompany.com</a>. We respond within 30 days.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">6. Contact</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Questions about this policy? Email <a href="mailto:privacy@arrivalcompany.com" style="color: var(--text-dark); text-decoration: underline;">privacy@arrivalcompany.com</a>.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- TERMS OF SERVICE PAGE -->
+    <div class="page" id="page-terms">
+        <section class="section-light" style="padding: 40px 40px 20px; border-bottom: 1px solid var(--bg-border);">
+            <div class="container" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <h1 style="font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 0;">Terms of Service</h1>
+                <span style="font-size: 13px; color: var(--text-light);">Last updated: February 2026</span>
+            </div>
+        </section>
+
+        <section class="section" style="padding-top: 60px;">
+            <div class="container">
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">1. Acceptance</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">By using Arrival, you agree to these terms. If you're using it on behalf of a business, you confirm you have authority to bind that business.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">2. The service</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Arrival is an AI assistant for trade professionals. It provides answers, equipment identification, troubleshooting, and code compliance information. It does not replace professional judgment, licensed expertise, or local codes.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">3. Liability</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Information is for reference only. We strive for accuracy but cannot guarantee it. Verify critical information with official sources. Arrival is not liable for damages resulting from use of the service.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">4. Your responsibilities</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Keep your credentials secure. Don't reverse-engineer the AI, use it for unlawful purposes, or share your account with unauthorized users.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">5. Billing</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Paid plans are billed monthly. Cancel anytime — you keep access through the end of your billing period. 30-day money-back guarantee on new subscriptions.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">6. Intellectual property</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">Arrival's content and features are ours. Documents you upload are yours.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">7. Changes</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 40px;">We may update these terms. We'll notify you of material changes by email. Continued use means acceptance.</p>
+
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 0 0 12px;">8. Contact</h3>
+                    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 0;">Questions? Email <a href="mailto:legal@arrivalcompany.com" style="color: var(--text-dark); text-decoration: underline;">legal@arrivalcompany.com</a>.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- LOGIN PAGE -->
+    <div class="page" id="page-login">
+        <section class="auth-section">
+            <div class="container">
+                <div class="auth-card">
+                    <div style="text-align: center; margin-bottom: 32px;">
+                        <img src="logo.svg" alt="Arrival" style="height: 72px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: var(--text-muted); font-size: 15px;">Sign in to your account</p>
+                    </div>
+                    <form class="auth-form" id="login-form">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="login-email" placeholder="you@company.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="login-password" placeholder="••••••••" required>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <label class="form-check">
+                                <input type="checkbox" id="login-remember">
+                                <span>Keep me signed in</span>
+                            </label>
+                            <a href="#" onclick="showPage('reset-password'); return false;" style="font-size: 14px; color: #2a2622; text-decoration: underline;">Forgot password?</a>
+                        </div>
+                        <div id="login-error" class="form-error" style="display: none;"></div>
+                        <button type="submit" class="btn btn-primary" id="login-submit" style="width: 100%;">
+                            <span class="btn-text">Sign In</span>
+                            <span class="btn-loading" style="display: none;">Signing in...</span>
+                        </button>
+                    </form>
+                    <!-- Divider -->
+                    <div style="display: flex; align-items: center; margin: 20px 0;">
+                        <div style="flex: 1; height: 1px; background: #ddd9d5;"></div>
+                        <span style="padding: 0 14px; font-size: 13px; color: #7c736a; font-weight: 500;">or</span>
+                        <div style="flex: 1; height: 1px; background: #ddd9d5;"></div>
+                    </div>
+                    <!-- Google Sign-In -->
+                    <button type="button" class="google-signin-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; background: white; border: 1.5px solid #ddd9d5; border-radius: 10px; font-size: 15px; font-weight: 600; color: #2a2622; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-family: inherit;">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                        Continue with Google
+                    </button>
+                    <div id="dev-bypass-buttons" style="text-align: center; padding-top: 16px; margin-top: 16px; display: none; gap: 10px;">
+                        <button type="button" class="btn btn-outline" id="dev-skip-pro" style="flex: 1; border-style: dashed; color: var(--text-muted); font-size: 12px;">Skip as Pro User</button>
+                        <button type="button" class="btn btn-outline" id="dev-skip-business" style="flex: 1; border-style: dashed; color: var(--text-muted); font-size: 12px;">Skip as Business Admin</button>
+                    </div>
+                    <div style="text-align: center; padding-top: 16px; margin-top: 8px; border-top: 1px solid #ddd9d5;">
+                        <p style="margin: 0; color: #7c736a; font-size: 14px;">Don't have an account? <a href="#" onclick="showPage('signup'); return false;" style="color: #2a2622; font-weight: 600; text-decoration: underline;">Start free trial</a></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- SIGNUP PAGE -->
+    <div class="page" id="page-signup">
+        <section class="auth-section">
+            <div class="container">
+                <div class="auth-card">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <img src="logo.svg" alt="Arrival" style="height: 72px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: var(--text-muted); font-size: 15px;">Start your free trial</p>
+                    </div>
+                    <form class="auth-form" id="signup-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>First Name</label>
+                                <input type="text" id="signup-first-name" placeholder="Your name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Last Name</label>
+                                <input type="text" id="signup-last-name" placeholder="Your last name" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="signup-email" placeholder="you@company.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="signup-password" placeholder="Minimum 6 characters" required minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label>What's your trade?</label>
+                            <select id="signup-trade" required>
+                                <option value="">Select...</option>
+                                <option value="hvac">HVAC</option>
+                                <option value="plumbing">Plumbing</option>
+                                <option value="electrical">Electrical</option>
+                                <option value="general_construction">General Construction</option>
+                                <option value="appliance_repair">Appliance Repair</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Experience Level</label>
+                            <select id="signup-experience" required>
+                                <option value="">Select...</option>
+                                <option value="apprentice">Apprentice</option>
+                                <option value="1_3_years">1-3 Years</option>
+                                <option value="3_10_years">3-10 Years</option>
+                                <option value="10_plus_years">10+ Years</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Choose your free trial plan</label>
+                            <div style="display: flex; gap: 10px; margin-top: 4px;">
+                                <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 1.5px solid #ddd9d5; border-radius: 10px; cursor: pointer; transition: border-color 0.2s, background 0.2s;" id="plan-option-pro" onclick="selectTrialPlan('pro')">
+                                    <input type="radio" name="signup-plan" value="pro" checked style="accent-color: #2a2622;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 15px; color: #2a2622;">Pro</div>
+                                        <div style="font-size: 12px; color: #7c736a;">Individual tech</div>
+                                    </div>
+                                </label>
+                                <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 1.5px solid #ddd9d5; border-radius: 10px; cursor: pointer; transition: border-color 0.2s, background 0.2s;" id="plan-option-business" onclick="selectTrialPlan('business')">
+                                    <input type="radio" name="signup-plan" value="business" style="accent-color: #2a2622;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 15px; color: #2a2622;">Business</div>
+                                        <div style="font-size: 12px; color: #7c736a;">Team + Job Mode</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        <label class="form-check" style="margin-bottom: 16px;">
+                            <input type="checkbox" id="signup-terms" required>
+                            <span>I agree to the <a href="#" onclick="showPage('terms'); return false;" style="color: #2a2622; text-decoration: underline;">terms of service</a> and <a href="#" onclick="showPage('privacy'); return false;" style="color: #2a2622; text-decoration: underline;">privacy policy</a></span>
+                        </label>
+                        <div id="signup-error" class="form-error" style="display: none;"></div>
+                        <button type="submit" class="btn btn-primary" id="signup-submit" style="width: 100%;">
+                            <span class="btn-text">Create Account</span>
+                            <span class="btn-loading" style="display: none;">Creating account...</span>
+                        </button>
+                    </form>
+                    <!-- Divider -->
+                    <div style="display: flex; align-items: center; margin: 20px 0;">
+                        <div style="flex: 1; height: 1px; background: #ddd9d5;"></div>
+                        <span style="padding: 0 14px; font-size: 13px; color: #7c736a; font-weight: 500;">or</span>
+                        <div style="flex: 1; height: 1px; background: #ddd9d5;"></div>
+                    </div>
+                    <!-- Google Sign-Up -->
+                    <button type="button" class="google-signin-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; background: white; border: 1.5px solid #ddd9d5; border-radius: 10px; font-size: 15px; font-weight: 600; color: #2a2622; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-family: inherit;">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                        Continue with Google
+                    </button>
+                    <div style="text-align: center; padding-top: 16px; margin-top: 16px; border-top: 1px solid #ddd9d5;">
+                        <p style="margin: 0; color: #7c736a; font-size: 14px;">Already have an account? <a href="#" onclick="showPage('login'); return false;" style="color: #2a2622; font-weight: 600; text-decoration: underline;">Sign in</a></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- RESET PASSWORD PAGE -->
+    <div class="page" id="page-reset-password">
+        <section class="auth-section">
+            <div class="container">
+                <div class="auth-card">
+                    <div style="text-align: center; margin-bottom: 32px;">
+                        <img src="logo.svg" alt="Arrival" style="height: 72px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: var(--text-muted); font-size: 15px;">Reset your password</p>
+                    </div>
+                    <!-- Request reset form -->
+                    <form class="auth-form" id="reset-request-form">
+                        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">Enter your email address and we'll send you a link to reset your password.</p>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="reset-email" placeholder="you@company.com" required>
+                        </div>
+                        <div id="reset-error" class="form-error" style="display: none;"></div>
+                        <div id="reset-success" class="form-success" style="display: none;"></div>
+                        <button type="submit" class="btn btn-primary" id="reset-submit" style="width: 100%;">
+                            <span class="btn-text">Send Reset Link</span>
+                            <span class="btn-loading" style="display: none;">Sending...</span>
+                        </button>
+                    </form>
+                    <!-- Update password form (shown on recovery callback) -->
+                    <form class="auth-form" id="reset-update-form" style="display: none;">
+                        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">Enter your new password below.</p>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="reset-new-password" placeholder="Minimum 6 characters" required minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm Password</label>
+                            <input type="password" id="reset-confirm-password" placeholder="Confirm new password" required minlength="6">
+                        </div>
+                        <div id="reset-update-error" class="form-error" style="display: none;"></div>
+                        <button type="submit" class="btn btn-primary" id="reset-update-submit" style="width: 100%;">
+                            <span class="btn-text">Update Password</span>
+                            <span class="btn-loading" style="display: none;">Updating...</span>
+                        </button>
+                    </form>
+                    <div style="text-align: center; padding-top: 16px; margin-top: 16px; border-top: 1px solid #ddd9d5;">
+                        <p style="margin: 0; color: #7c736a; font-size: 14px;">
+                            <a href="#" onclick="showPage('login'); return false;" style="color: #2a2622; font-weight: 600; text-decoration: underline;">Back to sign in</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- INDIVIDUAL DASHBOARD PAGE -->
+    <div class="page" id="page-dashboard-individual">
+        <section class="section" style="padding-top: 40px; padding-bottom: 60px;">
+            <div class="container">
+                <div class="dashboard-header">
+                    <div>
+                        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 600; color: var(--text-dark); margin: 0 0 4px;">
+                            Welcome back, <span id="dashboard-user-name">User</span>
+                        </h1>
+                        <p style="font-size: 14px; color: var(--text-muted); margin: 0;">
+                            <span id="dashboard-user-trade" style="text-transform: capitalize;"></span>
+                            &middot;
+                            <span id="dashboard-user-plan" style="text-transform: capitalize;">Free</span> Plan
+                        </p>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="handleLogout()">Sign Out</button>
+                </div>
+                <div class="dashboard-grid" style="margin-top: 32px;">
+                    <div class="dashboard-card">
+                        <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 8px;">Queries Today</h3>
+                        <p style="font-size: 32px; font-weight: 700; margin: 0; color: var(--text-dark);">0 <span style="font-size: 14px; font-weight: 400; color: var(--text-muted);">/ 10</span></p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 8px;">Documents</h3>
+                        <p style="font-size: 32px; font-weight: 700; margin: 0; color: var(--text-dark);">0</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 8px;">Account Status</h3>
+                        <p style="font-size: 14px; margin: 0; color: var(--accent-green); font-weight: 600;">Active</p>
+                    </div>
+                </div>
+                <div style="margin-top: 40px; padding: 32px; background: var(--bg-light); border-radius: 12px; border: 1px solid var(--bg-border);">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 12px;">Getting Started</h3>
+                    <p style="font-size: 14px; color: var(--text-muted); margin: 0;">Download the app, sign in, and start asking questions. Your usage and documents will appear here.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- BUSINESS DASHBOARD PAGE -->
+    <div class="page" id="page-dashboard-business">
+        <section class="section" style="padding-top: 40px; padding-bottom: 60px;">
+            <div class="container">
+                <div class="dashboard-header">
+                    <div>
+                        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 600; color: var(--text-dark); margin: 0 0 4px;">
+                            <span id="business-team-name">Team</span> Dashboard
+                        </h1>
+                        <p style="font-size: 14px; color: var(--text-muted); margin: 0;">
+                            Business Plan &middot; <span id="business-member-count">0</span> team members
+                        </p>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="handleLogout()">Sign Out</button>
+                </div>
+                <div class="dashboard-grid" style="margin-top: 32px;">
+                    <div class="dashboard-card">
+                        <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 8px;">Team Queries Today</h3>
+                        <p style="font-size: 32px; font-weight: 700; margin: 0; color: var(--text-dark);">0</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 8px;">Team Documents</h3>
+                        <p style="font-size: 32px; font-weight: 700; margin: 0; color: var(--text-dark);" id="business-doc-count">0</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 8px;">Seats Used</h3>
+                        <p style="font-size: 32px; font-weight: 700; margin: 0; color: var(--text-dark);"><span id="business-seats-used">0</span> <span style="font-size: 14px; font-weight: 400; color: var(--text-muted);">/ 10</span></p>
+                    </div>
+                </div>
+                <!-- Team Members Table -->
+                <div style="margin-top: 40px;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 16px;">Team Members</h3>
+                    <div style="border: 1px solid var(--bg-border); border-radius: 8px; overflow: hidden;">
+                        <table class="dashboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="team-members-tbody">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Team Documents Table -->
+                <div style="margin-top: 32px;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; margin: 0 0 16px;">Team Documents</h3>
+                    <div style="border: 1px solid var(--bg-border); border-radius: 8px; overflow: hidden;">
+                        <table class="dashboard-table">
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Category</th>
+                                    <th>Uploaded By</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="team-documents-tbody">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No documents yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-top">
+                <div class="footer-brand">
+                    <img src="logo.svg" alt="Arrival" class="footer-logo" style="height: 88px; margin-bottom: 12px;">
+                    <p style="margin: 0; color: #7c736a; font-size: 14px; max-width: 300px;">AI assistant for trade workers.</p>
+                </div>
+                <div class="footer-columns">
+                    <div class="footer-col">
+                        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 16px;">Product</h4>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li><a href="#" onclick="showPage('product'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Product</a></li>
+                            <li><a href="#" onclick="showPage('pricing'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Pricing</a></li>
+                            <li><a href="#" onclick="showPage('business'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">For Businesses</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 16px;">Resources</h4>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li><a href="#" onclick="showPage('help'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Help Center</a></li>
+                            <li><a href="#" onclick="showPage('privacy'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Privacy Policy</a></li>
+                            <li><a href="#" onclick="showPage('terms'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Terms of Service</a></li>
+                            <li><a href="#" onclick="showPage('contact'); return false;" style="color: #7c736a; text-decoration: none; font-size: 14px;">Contact</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 16px;">Connect</h4>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li><a href="#" style="color: #7c736a; text-decoration: none; font-size: 14px;">TikTok</a></li>
+                            <li><a href="#" style="color: #7c736a; text-decoration: none; font-size: 14px;">Instagram</a></li>
+                            <li><a href="#" style="color: #7c736a; text-decoration: none; font-size: 14px;">LinkedIn</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 16px;">Contact</h4>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li><a href="mailto:support@arrivalcompany.com" style="color: #7c736a; text-decoration: none; font-size: 14px;">support@arrivalcompany.com</a></li>
+                            <li><a href="mailto:sales@arrivalcompany.com" style="color: #7c736a; text-decoration: none; font-size: 14px;">sales@arrivalcompany.com</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom" style="padding-top: 48px; border-top: 1px solid #ddd9d5; margin-top: 48px; text-align: center;">
+                <p style="margin: 0; font-size: 12px; color: #9a9590;">
+                    &copy; 2026 Arrival. All rights reserved. |
+                    <a href="#" onclick="showPage('privacy'); return false;" style="color: #9a9590; text-decoration: none;">Privacy Policy</a> |
+                    <a href="#" onclick="showPage('terms'); return false;" style="color: #9a9590; text-decoration: none;">Terms of Service</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        // Show/hide pages
+        function showPage(pageId) {
+            const pages = document.querySelectorAll('.page');
+            pages.forEach(page => page.classList.remove('active'));
+            document.getElementById('page-' + pageId).classList.add('active');
+
+            // Close mobile nav
+            document.getElementById('navLinks').classList.remove('open');
+
+            // Scroll to top
+            window.scrollTo(0, 0);
+        }
+
+        // Show page and scroll to a specific section
+        function showPageAndScroll(pageId, sectionId) {
+            showPage(pageId);
+            setTimeout(() => {
+                const el = document.getElementById(sectionId);
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+
+        // Toggle mobile nav
+        function toggleNav() {
+            document.getElementById('navLinks').classList.toggle('open');
+        }
+
+        // Toggle FAQ accordion
+        function toggleFaq(button) {
+            const item = button.parentElement;
+            const isOpen = item.classList.contains('open');
+
+            // Close all other items in this category
+            item.closest('.faq-layout').querySelectorAll('.faq-item').forEach(faqItem => {
+                if (faqItem !== item && faqItem.classList.contains('open')) {
+                    faqItem.classList.remove('open');
+                }
+            });
+
+            // Toggle this item
+            if (isOpen) {
+                item.classList.remove('open');
+            } else {
+                item.classList.add('open');
+            }
+        }
+
+        // Pricing toggle
+        function showPricingView(view) {
+            document.getElementById('pricing-individual').style.display = view === 'individual' ? '' : 'none';
+            document.getElementById('pricing-business').style.display = view === 'business' ? '' : 'none';
+            document.getElementById('pricing-toggle-individual').classList.toggle('pricing-toggle-active', view === 'individual');
+            document.getElementById('pricing-toggle-business').classList.toggle('pricing-toggle-active', view === 'business');
+        }
+
+        // FAQ category tabs
+        function showFaqCategory(category, btn) {
+            // Hide all categories
+            document.querySelectorAll('.faq-category').forEach(c => c.style.display = 'none');
+            // Show selected
+            document.getElementById('faq-' + category).style.display = 'block';
+            // Update active tab
+            document.querySelectorAll('.faq-tab').forEach(t => t.classList.remove('faq-tab-active'));
+            btn.classList.add('faq-tab-active');
+            // Close any open FAQ items
+            document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+        }
+
+        // Scroll listener for nav.scrolled
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('.nav');
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        // Close mobile nav when clicking links
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('open');
+            });
+        });
+
+        // Scroll reveal animations
+        function initRevealAnimations() {
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('active');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+
+            document.querySelectorAll('.reveal').forEach(function(el) {
+                var page = el.closest('.page');
+                if (!page || page.classList.contains('active')) {
+                    observer.observe(el);
+                }
+            });
+            return observer;
+        }
+
+        var revealObserver = initRevealAnimations();
+
+        // Wrap showPage to re-observe elements on newly visible pages
+        var _origShowPage = showPage;
+        showPage = function(pageId) {
+            _origShowPage(pageId);
+            setTimeout(function() {
+                var pg = document.getElementById('page-' + pageId);
+                if (pg) {
+                    pg.querySelectorAll('.reveal:not(.active)').forEach(function(el) {
+                        if (revealObserver) revealObserver.observe(el);
+                    });
+                }
+            }, 50);
+        };
+        // Auto-show page based on URL path (for /privacy, /terms direct links)
+        (function() {
+            var path = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+            if (path === 'privacy' || path === 'terms') {
+                showPage(path);
+            }
+        })();
+
+        // Contact form submission
+        document.getElementById('contact-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var btn = this.querySelector('button[type="submit"]');
+            var inputs = this.querySelectorAll('input, select, textarea');
+            var firstName = inputs[0].value.trim();
+            var lastName = inputs[1].value.trim();
+            var email = inputs[2].value.trim();
+            var subject = inputs[3].value;
+            var message = inputs[4].value.trim();
+
+            if (!firstName || !email || !subject || !message) return;
+
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+
+            try {
+                // Submit to Netlify Forms (guaranteed delivery to site owner)
+                var formData = new FormData();
+                formData.append('form-name', 'contact');
+                formData.append('firstName', firstName);
+                formData.append('lastName', lastName);
+                formData.append('email', email);
+                formData.append('subject', subject);
+                formData.append('message', message);
+                await fetch('/', { method: 'POST', body: formData });
+
+                // Also try Resend email (may fail if not configured)
+                try {
+                    await fetch('/.netlify/functions/send-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            to: 'hello@arrivalcompany.com',
+                            template: 'contact_form',
+                            args: [firstName, lastName, email, subject, message]
+                        })
+                    });
+                } catch (e) { /* Resend optional */ }
+
+                btn.textContent = 'Message Sent ✓';
+                btn.style.background = '#4caf50';
+                inputs.forEach(function(i) { i.value = ''; });
+                setTimeout(function() {
+                    btn.textContent = 'Send Message';
+                    btn.style.background = '';
+                    btn.disabled = false;
+                }, 3000);
+            } catch (err) {
+                btn.textContent = 'Error — try again';
+                btn.style.background = '#c0392b';
+                btn.disabled = false;
+                setTimeout(function() {
+                    btn.textContent = 'Send Message';
+                    btn.style.background = '';
+                }, 3000);
+            }
+        });
+    </script>
+    <!-- Download App Modal -->
+    <div id="download-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+        <div style="background:#fff; border-radius:20px; padding:48px 40px; max-width:400px; width:90%; text-align:center; position:relative;">
+            <button onclick="document.getElementById('download-modal').style.display='none'" style="position:absolute; top:16px; right:16px; background:none; border:none; font-size:20px; cursor:pointer; color:#7c736a;">&times;</button>
+            <div style="font-family:Georgia,serif; font-size:28px; font-weight:700; font-style:italic; margin-bottom:8px;">arrival</div>
+            <p style="font-size:15px; color:#4a4640; margin-bottom:24px;">Scan the QR code to download Arrival on your phone.</p>
+            <div id="download-qr" style="margin:0 auto 24px; width:200px; height:200px; background:#f5f3ef; border-radius:12px; display:flex; align-items:center; justify-content:center;">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://arrivalcompany.com" alt="QR Code" style="width:180px; height:180px;">
+            </div>
+            <p style="font-size:13px; color:#9a9590;">Available on iOS. Android coming soon.</p>
+        </div>
+    </div>
+    <script>
+        function showDownloadModal() {
+            document.getElementById('download-modal').style.display = 'flex';
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="auth.js"></script>
+</body>
+</html>

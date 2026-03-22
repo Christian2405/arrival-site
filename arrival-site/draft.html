@@ -57,16 +57,11 @@ a { color: inherit; text-decoration: none; }
 
 /* ── NAV ── */
 .nav {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: rgba(248,245,241,0.92);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  height: 64px;
+  background: #f8f5f1;
   border-bottom: 1px solid transparent;
+  z-index: 999;
   transition: all 0.3s ease;
 }
 .nav.scrolled {
@@ -76,8 +71,7 @@ a { color: inherit; text-decoration: none; }
 .nav-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 48px;
-  height: 100%;
+  padding: 16px 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -89,7 +83,7 @@ a { color: inherit; text-decoration: none; }
   transition: opacity 0.2s;
 }
 .nav-logo:hover { opacity: 0.8; }
-.nav-logo img { height: 96px; }
+.nav-logo img { height: 80px; width: auto; }
 .nav-right {
   display: flex;
   align-items: center;
@@ -117,7 +111,7 @@ a { color: inherit; text-decoration: none; }
   padding: 10px 24px;
   background: #1a1a1a;
   color: #fff !important;
-  border-radius: 100px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   transition: background 0.2s;
@@ -142,7 +136,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ── HERO ── */
 .hero {
-  padding: 140px 48px 0;
+  padding: 80px 48px 0;
   text-align: center;
 }
 .hero-inner {
@@ -150,19 +144,19 @@ a { color: inherit; text-decoration: none; }
   margin: 0 auto;
 }
 .hero h1 {
-  font-size: clamp(40px, 5vw, 62px);
+  font-size: clamp(32px, 4vw, 50px);
   font-weight: 300;
-  line-height: 1.12;
+  line-height: 1.15;
   letter-spacing: -0.03em;
   color: #1a1a1a;
-  max-width: 820px;
-  margin: 0 auto 24px;
+  max-width: 720px;
+  margin: 0 auto 20px;
 }
 .hero-sub {
-  font-size: clamp(16px, 1.5vw, 19px);
+  font-size: clamp(15px, 1.3vw, 17px);
   color: #777;
-  max-width: 560px;
-  margin: 0 auto 44px;
+  max-width: 520px;
+  margin: 0 auto 40px;
   font-weight: 400;
   line-height: 1.7;
 }
@@ -1646,13 +1640,13 @@ a { color: inherit; text-decoration: none; }
       <h2 class="reveal">An AI that actually knows the trade.</h2>
     </div>
 
-    <!-- Panel 1: Voice -->
+    <!-- Panel 1: Fewer Callbacks -->
     <div class="scroll-panel scroll-panel-bg-1">
       <div class="scroll-panel-inner">
         <div class="scroll-panel-text">
-          <p class="label">Voice</p>
-          <h3>Talk to it like a coworker.</h3>
-          <p>Hands full, crawlspace, attic, rooftop — doesn't matter. Hold the mic and ask. Arrival hears you over compressors, power tools, and wind. You get your answer out loud and keep working.</p>
+          <p class="label">First-Time Fix Rate</p>
+          <h3>Fewer callbacks. More completed jobs.</h3>
+          <p>Your techs get the right answer the first time — fault codes, wiring specs, torque values, refrigerant charges. No calling the office, no guessing, no second trips. Every callback costs you $150–$500. Arrival pays for itself the first week.</p>
         </div>
         <div class="scroll-panel-image">
           <img src="images/hvac.jpg" alt="HVAC technician working with gauges">
@@ -1660,13 +1654,13 @@ a { color: inherit; text-decoration: none; }
       </div>
     </div>
 
-    <!-- Panel 2: Camera -->
+    <!-- Panel 2: Your Knowledge -->
     <div class="scroll-panel scroll-panel-bg-2">
       <div class="scroll-panel-inner">
         <div class="scroll-panel-text">
-          <p class="label">Camera</p>
-          <h3>Show it what you're looking at.</h3>
-          <p>Point your phone at a unit, a label, a wire — Arrival sees it. Reads model numbers, identifies parts, spots problems. No typing, no searching. Just point and ask.</p>
+          <p class="label">Company Knowledge</p>
+          <h3>Your manuals. Your SOPs. Always accessible.</h3>
+          <p>Upload your company's documentation — service manuals, installation procedures, safety protocols. When your techs ask a question, Arrival answers from your procedures first. Not generic internet results. Your standards, every time.</p>
         </div>
         <div class="scroll-panel-image">
           <img src="images/electrician.png" alt="Electrician wiring an outlet">
@@ -1674,13 +1668,13 @@ a { color: inherit; text-decoration: none; }
       </div>
     </div>
 
-    <!-- Panel 3: Job Mode -->
+    <!-- Panel 3: Onboarding -->
     <div class="scroll-panel scroll-panel-bg-3">
       <div class="scroll-panel-inner">
         <div class="scroll-panel-text">
-          <p class="label">Job Mode</p>
-          <h3>A second pair of eyes on every job.</h3>
-          <p>Mount your phone or prop it up. Arrival watches what you're doing in real time and speaks up if something's off — wrong fitting, safety issue, missed step. You don't have to ask it anything.</p>
+          <p class="label">Onboarding</p>
+          <h3>New hires perform like 5-year techs.</h3>
+          <p>Stop pairing every new tech with a senior for 6 months. Arrival gives them instant access to your company's collective knowledge — the same answers your best tech would give, available on every job from day one.</p>
         </div>
         <div class="scroll-panel-image">
           <img src="images/plumber.png" alt="Plumber working under a sink">
@@ -1689,28 +1683,94 @@ a { color: inherit; text-decoration: none; }
     </div>
   </div>
 
-  <!-- How It Works -->
+  <!-- Job Mode -->
+  <div style="padding: 120px 48px; background: #1a1a1a; color: #fff;">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;">
+        <div class="reveal">
+          <p class="label" style="color: rgba(255,255,255,0.4); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 16px;">Job Mode</p>
+          <h2 style="font-size: clamp(32px, 3.5vw, 44px); font-weight: 300; letter-spacing: -0.02em; margin-bottom: 24px; color: #fff;">It watches while you work.</h2>
+          <p style="font-size: 17px; color: rgba(255,255,255,0.6); line-height: 1.7; margin-bottom: 32px;">Point your camera at the job. Arrival monitors what you're doing and speaks up when it sees something wrong — corrosion, wrong parts, safety issues. You don't have to ask.</p>
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: flex; align-items: flex-start; gap: 16px;">
+              <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.08); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              </div>
+              <div>
+                <p style="font-size: 15px; font-weight: 600; margin-bottom: 4px; color: #fff;">Real-time guidance</p>
+                <p style="font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.5;">Talks you through procedures step by step. Like having a senior tech looking over your shoulder.</p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: flex-start; gap: 16px;">
+              <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.08); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div>
+                <p style="font-size: 15px; font-weight: 600; margin-bottom: 4px; color: #fff;">Proactive safety alerts</p>
+                <p style="font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.5;">Flags exposed wires, missing PPE, gas leaks, or code violations before they become problems.</p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: flex-start; gap: 16px;">
+              <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.08); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+              <div>
+                <p style="font-size: 15px; font-weight: 600; margin-bottom: 4px; color: #fff;">See. Reason. Guide.</p>
+                <p style="font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.5;">Identifies equipment, reads model numbers, spots issues — and knows what to do about them.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="reveal" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 40px; display: flex; flex-direction: column; gap: 24px;">
+          <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+            <div style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 8px rgba(74,222,128,0.4);"></div>
+            <span style="font-size: 13px; color: rgba(255,255,255,0.5); font-weight: 500;">Job Mode Active — Monitoring</span>
+          </div>
+          <div style="background: rgba(255,255,255,0.06); border-radius: 12px; padding: 16px;">
+            <p style="font-size: 12px; color: rgba(255,255,255,0.35); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Safety Alert</p>
+            <p style="font-size: 15px; color: #fff; line-height: 1.5;">"That wire nut's loose on the neutral. Tighten it before you energize."</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.06); border-radius: 12px; padding: 16px;">
+            <p style="font-size: 12px; color: rgba(255,255,255,0.35); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Equipment Identified</p>
+            <p style="font-size: 15px; color: #fff; line-height: 1.5;">"Carrier 59TP6 — 96% two-stage. Common flame sensor issue on these after 5 years."</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.06); border-radius: 12px; padding: 16px;">
+            <p style="font-size: 12px; color: rgba(255,255,255,0.35); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Guidance</p>
+            <p style="font-size: 15px; color: #fff; line-height: 1.5;">"Pull the flame sensor. If it's got white buildup, hit it with emery cloth — not sandpaper."</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice & Camera -->
   <div style="padding: 120px 48px; background: #f3efe9;">
     <div style="max-width: 1200px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 80px;">
-        <p class="label reveal" style="color: #999; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 16px;">How it works</p>
-        <h2 style="font-size: clamp(32px, 3.5vw, 48px); font-weight: 300; letter-spacing: -0.02em;" class="reveal">Open the app. Ask your question. Keep working.</h2>
+        <p class="label reveal" style="color: #999; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 16px;">Voice & Camera</p>
+        <h2 style="font-size: clamp(32px, 3.5vw, 48px); font-weight: 300; letter-spacing: -0.02em;" class="reveal">Ask however is fastest. Get the answer in seconds.</h2>
       </div>
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px;">
         <div class="reveal" style="text-align: center;">
-          <div style="width: 56px; height: 56px; background: #fff; border: 1px solid #e8e1da; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 24px;">🎙</div>
-          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Ask</h3>
-          <p style="font-size: 15px; color: #666; line-height: 1.6;">Voice, camera, or text. Whatever's fastest. Ask like you'd ask someone standing next to you.</p>
+          <div style="width: 56px; height: 56px; background: #fff; border: 1px solid #e8e1da; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.5"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </div>
+          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Talk to it</h3>
+          <p style="font-size: 15px; color: #666; line-height: 1.6;">Hold the mic and ask. Hands are dirty, you're on a ladder, you're under a unit — just talk.</p>
         </div>
         <div class="reveal" style="text-align: center;">
-          <div style="width: 56px; height: 56px; background: #fff; border: 1px solid #e8e1da; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 24px;">📄</div>
-          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Your docs first</h3>
-          <p style="font-size: 15px; color: #666; line-height: 1.6;">If your company has uploaded manuals or SOPs, Arrival answers from those first. Your procedures, not generic results.</p>
+          <div style="width: 56px; height: 56px; background: #fff; border: 1px solid #e8e1da; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Show it</h3>
+          <p style="font-size: 15px; color: #666; line-height: 1.6;">Point your camera at a label, a wiring diagram, an error code, or a part you can't identify. It sees what you see.</p>
         </div>
         <div class="reveal" style="text-align: center;">
-          <div style="width: 56px; height: 56px; background: #fff; border: 1px solid #e8e1da; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 24px;">⚡</div>
-          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Seconds, not minutes</h3>
-          <p style="font-size: 15px; color: #666; line-height: 1.6;">No calling the office. No flipping through binders. You get the answer and keep working.</p>
+          <div style="width: 56px; height: 56px; background: #fff; border: 1px solid #e8e1da; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          </div>
+          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Type it</h3>
+          <p style="font-size: 15px; color: #666; line-height: 1.6;">In a loud environment or need a longer answer? Type your question and get a detailed written response.</p>
         </div>
       </div>
     </div>
@@ -1768,40 +1828,6 @@ a { color: inherit; text-decoration: none; }
     </div>
   </div>
 
-  <!-- For Business Preview -->
-  <div class="split-section">
-    <div class="split-inner">
-      <div class="split-text reveal">
-        <p class="label">For Business</p>
-        <h2>Every tech on your team knows what your best tech knows.</h2>
-        <p>Upload your manuals, SOPs, and procedures. When anyone on your team has a question, Arrival answers from your documentation — not generic search results.</p>
-        <a href="#" onclick="showPage('business'); return false;" class="btn btn-dark">Learn More</a>
-      </div>
-      <div class="split-visual reveal">
-        <div class="split-item">
-          <div class="split-check">&#10003;</div>
-          <span>Job Mode — AI flags problems before you ask</span>
-        </div>
-        <div class="split-item">
-          <div class="split-check">&#10003;</div>
-          <span>Unlimited document uploads</span>
-        </div>
-        <div class="split-item">
-          <div class="split-check">&#10003;</div>
-          <span>Team document library</span>
-        </div>
-        <div class="split-item">
-          <div class="split-check">&#10003;</div>
-          <span>See what your team is asking</span>
-        </div>
-        <div class="split-item">
-          <div class="split-check">&#10003;</div>
-          <span>250 questions/day per person</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- CTA Bar -->
   <div class="cta-bar">
     <div class="cta-bar-inner">
@@ -1819,11 +1845,6 @@ a { color: inherit; text-decoration: none; }
 <!-- PRODUCT PAGE -->
 <!-- ============================================================ -->
 <div class="page" id="page-product">
-
-  <div class="product-hero">
-    <h1 class="reveal">See. Reason. Guide.</h1>
-    <p class="reveal">An AI that watches while you work, answers when you ask, and speaks up when something's wrong.</p>
-  </div>
 
   <!-- Job Mode — THE STAR -->
   <div style="padding: 80px 48px 120px;">
@@ -1955,11 +1976,6 @@ a { color: inherit; text-decoration: none; }
 <!-- PRICING PAGE -->
 <!-- ============================================================ -->
 <div class="page" id="page-pricing">
-
-  <div class="product-hero">
-    <h1 class="reveal">Pricing</h1>
-    <p class="reveal">Start free. Upgrade when you need more.</p>
-  </div>
 
   <div class="section-full section-light-bg" style="padding-top: 80px;">
     <div class="container">
@@ -2726,9 +2742,11 @@ a { color: inherit; text-decoration: none; }
     <p>Data is encrypted in transit and at rest. Conversations are stored securely and retained unless you delete them.</p>
     <h3>4. Business accounts</h3>
     <p>Admins can see usage analytics (question types, frequency). They cannot see individual conversation content.</p>
-    <h3>5. Your rights</h3>
+    <h3>5. Video & Image Data</h3>
+    <p>When you use camera features including Job Mode, Arrival collects video clips and images of your work environment. This data is used to improve our AI assistant and train machine learning models. We collect video clips triggered by voice queries or Job Mode alerts, images captured during camera sessions, and associated metadata including equipment detected, query text, and timestamps. We use this to improve Arrival's accuracy, train AI models, and develop new features. We do not sell your video or image data to third parties, share raw footage outside of Arrival, or collect video without your consent. Your data is stored securely using industry-standard encryption. You can disable video collection at any time in Settings.</p>
+    <h3>6. Your rights</h3>
     <p>Request a copy of your data, correct it, or delete your account at any time. Contact <a href="mailto:privacy@arrivalcompany.com">privacy@arrivalcompany.com</a>. We respond within 30 days.</p>
-    <h3>6. Contact</h3>
+    <h3>7. Contact</h3>
     <p>Questions about this policy? Email <a href="mailto:privacy@arrivalcompany.com">privacy@arrivalcompany.com</a>.</p>
   </div>
 </div>
@@ -2756,9 +2774,11 @@ a { color: inherit; text-decoration: none; }
     <p>Paid plans are billed monthly. Cancel anytime — you keep access through the end of your billing period. 30-day money-back guarantee on new subscriptions.</p>
     <h3>6. Intellectual property</h3>
     <p>Arrival's content and features are ours. Documents you upload are yours.</p>
-    <h3>7. Changes</h3>
+    <h3>7. Video & Camera License</h3>
+    <p>By enabling camera features or Job Mode, you grant Arrival a non-exclusive, worldwide, royalty-free license to use, store, process, and learn from video clips and images captured during your use of the service. This license is for the purpose of operating, improving, and developing the Arrival service and related AI technologies. You retain ownership of any original content depicted in your recordings. Arrival will not sell raw video footage to third parties. You may revoke this license by disabling video collection in Settings, which will apply to future recordings only.</p>
+    <h3>8. Changes</h3>
     <p>We may update these terms. We'll notify you of material changes by email. Continued use means acceptance.</p>
-    <h3>8. Contact</h3>
+    <h3>9. Contact</h3>
     <p>Questions? Email <a href="mailto:legal@arrivalcompany.com">legal@arrivalcompany.com</a>.</p>
   </div>
 </div>
@@ -3282,18 +3302,62 @@ showPage = function(pageId) {
 })();
 
 // Contact form submission
-document.getElementById('contact-form').addEventListener('submit', function(e) {
+document.getElementById('contact-form').addEventListener('submit', async function(e) {
     e.preventDefault();
-    var firstName = this.querySelector('input[name="firstName"]').value.trim();
-    var lastName = this.querySelector('input[name="lastName"]').value.trim();
-    var email = this.querySelector('input[name="email"]').value.trim();
-    var subject = this.querySelector('select[name="subject"]').value;
-    var message = this.querySelector('textarea[name="message"]').value.trim();
+    var btn = this.querySelector('button[type="submit"]');
+    var inputs = this.querySelectorAll('input, select, textarea');
+    var firstName = inputs[0].value.trim();
+    var lastName = inputs[1].value.trim();
+    var email = inputs[2].value.trim();
+    var subject = inputs[3].value;
+    var message = inputs[4].value.trim();
 
     if (!firstName || !email || !subject || !message) return;
 
-    var body = 'Name: ' + firstName + ' ' + lastName + '%0D%0AEmail: ' + email + '%0D%0ASubject: ' + subject + '%0D%0A%0D%0A' + encodeURIComponent(message);
-    window.location.href = 'mailto:support@arrivalcompany.com?subject=' + encodeURIComponent('[Arrival Contact] ' + subject) + '&body=' + body;
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+
+    try {
+        // Submit to Netlify Forms
+        var formData = new FormData();
+        formData.append('form-name', 'contact');
+        formData.append('firstName', firstName);
+        formData.append('lastName', lastName);
+        formData.append('email', email);
+        formData.append('subject', subject);
+        formData.append('message', message);
+        await fetch('/', { method: 'POST', body: formData });
+
+        // Also try Resend email
+        try {
+            await fetch('/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: 'hello@arrivalcompany.com',
+                    template: 'contact_form',
+                    args: [firstName, lastName, email, subject, message]
+                })
+            });
+        } catch (e) { /* Resend optional */ }
+
+        btn.textContent = 'Message Sent ✓';
+        btn.style.background = '#4caf50';
+        inputs.forEach(function(i) { i.value = ''; });
+        setTimeout(function() {
+            btn.textContent = 'Send Message';
+            btn.style.background = '';
+            btn.disabled = false;
+        }, 3000);
+    } catch (err) {
+        btn.textContent = 'Error — try again';
+        btn.style.background = '#c0392b';
+        btn.disabled = false;
+        setTimeout(function() {
+            btn.textContent = 'Send Message';
+            btn.style.background = '';
+        }, 3000);
+    }
 });
 
 // Select trial plan helper
