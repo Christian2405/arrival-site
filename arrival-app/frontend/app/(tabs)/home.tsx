@@ -640,6 +640,21 @@ export default function HomeScreen() {
       return;
     }
 
+    // Spatial capture consent — ask once on first Job Mode entry
+    if (newMode === 'job') {
+      const spatialConsent = useAuthStore.getState().profile?.spatial_capture_consent;
+      if (spatialConsent === null || spatialConsent === undefined) {
+        Alert.alert(
+          'Video Recording',
+          'Arrival records short video clips when you ask questions or receive alerts. This helps us improve our AI.\n\nYour data is stored securely and never sold. You can disable this anytime in Settings.',
+          [
+            { text: 'Not Now', style: 'cancel', onPress: () => useAuthStore.getState().updateSpatialConsent(false) },
+            { text: 'Enable Recording', onPress: () => useAuthStore.getState().updateSpatialConsent(true) },
+          ]
+        );
+      }
+    }
+
     // Dismiss keyboard when switching modes
     Keyboard.dismiss();
 

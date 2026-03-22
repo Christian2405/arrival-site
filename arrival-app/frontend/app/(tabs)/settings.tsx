@@ -36,7 +36,7 @@ export default function SettingsScreen() {
     setTextSize,
   } = useSettingsStore();
 
-  const { profile, subscription, signOut } = useAuthStore();
+  const { profile, subscription, signOut, updateSpatialConsent } = useAuthStore();
   const { fetchUsage, isLoaded: usageLoaded } = useUsageStore();
 
   useEffect(() => {
@@ -354,6 +354,23 @@ export default function SettingsScreen() {
               <Switch
                 value={cameraPermission === true}
                 onValueChange={() => handlePermissionToggle('camera')}
+                trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
+                thumbColor="#FFF"
+              />
+            }
+          />
+        </View>
+
+        {/* Data & Privacy */}
+        <Text style={st.section}>DATA & PRIVACY</Text>
+        <View style={st.group}>
+          <Row
+            icon="videocam-outline"
+            label="AI training recordings"
+            right={
+              <Switch
+                value={profile?.spatial_capture_consent === true}
+                onValueChange={(val) => updateSpatialConsent(val)}
                 trackColor={{ false: '#E0E0E0', true: Colors.textDark }}
                 thumbColor="#FFF"
               />

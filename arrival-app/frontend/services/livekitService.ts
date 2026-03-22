@@ -35,6 +35,7 @@ export interface LiveKitSession {
  */
 export async function createLiveKitSession(
   mode: 'default' | 'job' = 'job',
+  recordingConsent: boolean = false,
 ): Promise<LiveKitSession> {
   // Get fresh auth token — always refresh to avoid expired JWT
   const { data: refreshed } = await supabase.auth.refreshSession();
@@ -63,7 +64,7 @@ export async function createLiveKitSession(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ mode, recording_consent: recordingConsent }),
       signal: controller.signal,
     });
 
@@ -116,6 +117,7 @@ export async function prefetchLiveKitSession(): Promise<void> {
  */
 export async function getLiveKitSession(
   mode: 'default' | 'job' = 'job',
+  recordingConsent: boolean = false,
 ): Promise<LiveKitSession> {
   if (cachedSession && (Date.now() - cacheTimestamp) < CACHE_TTL_MS) {
     console.log('[LiveKitService] Using cached session');
@@ -124,5 +126,5 @@ export async function getLiveKitSession(
     prefetchLiveKitSession().catch(() => {}); // Refill cache in background
     return session;
   }
-  return createLiveKitSession(mode);
+  return createLiveKitSession(mode, recordingConsent);
 }

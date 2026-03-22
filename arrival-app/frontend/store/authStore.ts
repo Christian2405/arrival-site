@@ -25,6 +25,7 @@ export interface UserProfile {
   account_type: string;
   preferred_units?: string;
   voice_output?: boolean;
+  spatial_capture_consent?: boolean | null;
 }
 
 export interface Subscription {
@@ -76,6 +77,7 @@ interface AuthState {
   loadProfile: () => Promise<void>;
   ensureProfileExists: (user: User) => Promise<void>;
   getAccessToken: () => Promise<string | null>;
+  updateSpatialConsent: (consent: boolean) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -522,5 +524,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   getAccessToken: async () => {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
+  },
+
+  updateSpatialConsent: async (consent: boolean) => {
+    const { profile } = get();
+    if (!profile) return;
+    try {
+      await supabase
+        .from('users')
+        .update({ spatial_capture_consent: consent })
+        .eq('id', profile.id);
+      set({ profile: { ...profile, spatial_capture_consent: consent } });
+    } catch (e) {
+      console.error('[authStore] Failed to update spatial consent:', e);
+    }
   },
 }));

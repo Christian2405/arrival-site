@@ -49,6 +49,12 @@ LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 
+# --- AWS (Spatial Intelligence S3) ---
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "arrival-spatial-data")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
+
 # --- System Prompt ---
 SYSTEM_PROMPT = """You are Arrival, an AI field assistant for trade professionals — HVAC techs, plumbers, electricians, and builders. You have the knowledge of a 50-year veteran and the communication style of someone who respects that the person asking is also a professional.
 

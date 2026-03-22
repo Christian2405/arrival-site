@@ -666,7 +666,23 @@ class ArrivalAgent(Agent):
         else:
             logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
 
-        # 4. Also truncate the persistent context to prevent unbounded growth
+        # 4. Trigger spatial recording if consent given
+        if getattr(self, '_spatial_recorder', None):
+            # Extract user text for trigger
+            trigger_text = ""
+            if isinstance(new_message.content, str):
+                trigger_text = new_message.content
+            elif isinstance(new_message.content, list):
+                trigger_text = " ".join(c for c in new_message.content if isinstance(c, str))
+            asyncio.ensure_future(
+                self._spatial_recorder.trigger_recording(
+                    trigger_type='user_query',
+                    trigger_text=trigger_text,
+                    agent=self,
+                )
+            )
+
+        # 5. Also truncate the persistent context to prevent unbounded growth
         #    (the copy we modified above is used for this LLM call; this keeps
         #    the agent's internal context lean for future calls)
         try:
@@ -1236,10 +1252,16 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     await session.generate_reply(
                         instructions=f"STOP — {observation}. Alert them immediately."
                     )
+                    if getattr(agent, '_spatial_recorder', None):
+                        asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
+                            trigger_type='safety_alert', trigger_text=observation, agent=agent, monitor_state='GUIDED'))
                 elif status == "ISSUE":
                     await session.generate_reply(
                         instructions=f"Quick — {observation}"
                     )
+                    if getattr(agent, '_spatial_recorder', None):
+                        asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
+                            trigger_type='guidance_alert', trigger_text=observation, agent=agent, monitor_state='GUIDED'))
                 elif status == "SPEAK":
                     await session.generate_reply(
                         instructions=observation
@@ -1266,6 +1288,9 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     await session.generate_reply(
                         instructions=f"STOP — {danger}. Alert the tech immediately, be direct."
                     )
+                    if getattr(agent, '_spatial_recorder', None):
+                        asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
+                            trigger_type='safety_alert', trigger_text=danger, agent=agent, monitor_state='DORMANT'))
                     agent._last_proactive_time = now
                 continue
 
@@ -1327,6 +1352,10 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             logger.info(f"[proactive/conversational] ★ [{severity}] {observation}")
             await session.generate_reply(instructions=instruction)
+            if getattr(agent, '_spatial_recorder', None):
+                trigger = 'safety_alert' if severity == 'SAFETY' else 'contextual_alert'
+                asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
+                    trigger_type=trigger, trigger_text=observation, agent=agent, monitor_state='CONVERSATIONAL'))
 
             # Update state
             agent._last_proactive_time = now
@@ -1465,6 +1494,34 @@ async def entrypoint(ctx: JobContext):
         agent._room = ctx.room
         agent._user_id = user_id
         agent._team_id = team_id
+
+        # --- Spatial Intelligence Recorder ---
+        recording_consent = False
+        for participant in ctx.room.remote_participants.values():
+            if participant.metadata:
+                try:
+                    meta = json.loads(participant.metadata)
+                    recording_consent = meta.get("recording_consent", False)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                break
+
+        try:
+            from app.services.spatial_recorder import SpatialRecorder
+            spatial_recorder = SpatialRecorder()
+            await spatial_recorder.start_session(
+                room_name=room_name,
+                user_id=user_id,
+                team_id=team_id,
+                trade=None,  # TODO: pass trade from profile when available in metadata
+                equipment=None,  # Updated later via data channel equipment_context
+                consent=recording_consent,
+            )
+            agent._spatial_recorder = spatial_recorder
+            logger.info(f"[arrival-agent] Spatial recorder initialized (consent={recording_consent})")
+        except Exception as e:
+            logger.warning(f"[arrival-agent] Spatial recorder init failed (non-fatal): {e}")
+            agent._spatial_recorder = None
 
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")
@@ -1840,6 +1897,14 @@ async def entrypoint(ctx: JobContext):
         injector_task.cancel()
         if monitor_task:
             monitor_task.cancel()
+
+        # End spatial recording session
+        if getattr(agent, '_spatial_recorder', None):
+            try:
+                await agent._spatial_recorder.end_session()
+            except Exception as e:
+                logger.debug(f"[spatial] End session error: {e}")
+
         logger.info("[arrival-agent] ✓ Background tasks cancelled")
 
     except Exception as e:

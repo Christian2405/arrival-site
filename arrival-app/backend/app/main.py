@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stt, chat, tts, voice_chat, voice_ws, documents, analyze, queries, saved_answers, usage, feedback, job_context, error_codes_api, account, livekit_token, admin_feedback
+from app.routers import stt, chat, tts, voice_chat, voice_ws, documents, analyze, queries, saved_answers, usage, feedback, job_context, error_codes_api, account, livekit_token, admin_feedback, spatial
 
 # Configure logging to show INFO level (Render captures stdout)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -159,6 +159,7 @@ app.include_router(account.router, prefix="/api", tags=["Account"])
 app.include_router(voice_ws.router, prefix="/ws", tags=["Voice WebSocket"])
 app.include_router(livekit_token.router, prefix="/api", tags=["LiveKit"])
 app.include_router(admin_feedback.router, prefix="/api", tags=["Admin"])
+app.include_router(spatial.router, tags=["Spatial Intelligence"])
 
 
 # --- Validation error logging (debug 422s) ---

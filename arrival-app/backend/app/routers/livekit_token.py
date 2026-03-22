@@ -26,6 +26,7 @@ router = APIRouter()
 
 class TokenRequest(BaseModel):
     mode: str = "job"  # "job" or "default"
+    recording_consent: bool = False  # spatial intelligence consent
 
 
 class TokenResponse(BaseModel):
@@ -207,6 +208,7 @@ async def create_livekit_token(req: TokenRequest, request: Request):
         "user_id": user_id,
         "mode": req.mode,
         "team_id": team_id,  # None if user has no team
+        "recording_consent": req.recording_consent,
     })
 
     # --- Generate token ---

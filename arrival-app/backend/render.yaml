@@ -1,8 +1,8 @@
 services:
   - type: web
     name: arrival-backend
-    runtime: python
-    buildCommand: pip install -r requirements.txt
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     startCommand: bash start.sh
     envVars:
       - key: ANTHROPIC_API_KEY
@@ -34,6 +34,14 @@ services:
       - key: LIVEKIT_API_KEY
         sync: false
       - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_REGION
         sync: false
       - key: PORT
         value: "8000"
