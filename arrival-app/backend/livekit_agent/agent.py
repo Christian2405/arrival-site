@@ -144,19 +144,13 @@ logger.info("[arrival-agent] ============================")
 PROACTIVE_CHECK_INTERVAL = 5    # seconds between proactive analysis cycles (unused in new 3-state model)
 FRAME_CHANGE_THRESHOLD = 8     # out of 100 sampled positions
 
-# Three-state proactive monitor intervals
-DORMANT_CHECK_INTERVAL = 30     # Safety-only scan when no task context
-CONVERSATIONAL_CHECK_INTERVAL = 8  # Context-grounded analysis when worker described task
-TASK_CONTEXT_DECAY_SECONDS = 120   # Clear inferred task after 2 min of silence
-
-# Severity-based cooldowns (seconds)
-SEVERITY_COOLDOWNS = {
-    "SAFETY": 0,     # Immediate — no cooldown for safety
-    "NOTICE": 20,    # Wait 20s between notices
-    "INFO": 45,      # Low-priority observations
-}
-PROACTIVE_PUSHBACK_COOLDOWN = 60   # After user says "stop"/"quiet"
-PROACTIVE_MUTE_DURATION = 300      # 5 min mute when user explicitly silences
+# Proactive monitor — adaptive intervals
+SCENE_POLL_INTERVAL = 8           # Base interval for checking frames (seconds)
+SCENE_STATIC_BACKOFF = 30         # Back off to this when nothing changes
+SCENE_ACTIVE_INTERVAL = 10        # Check more often when scene is changing
+SCENE_POST_SPEAK_COOLDOWN = 25    # Minimum gap between proactive interjections
+TASK_CONTEXT_DECAY_SECONDS = 120  # Clear inferred task after 2 min of silence
+PROACTIVE_MUTE_DURATION = 300     # 5 min mute when user explicitly silences
 
 # Task inference patterns — regex-free, fast string matching
 _TASK_PHRASES = [
@@ -176,28 +170,9 @@ _TASK_PHRASES = [
 # ---------------------------------------------------------------------------
 # Real-Time Guidance config
 # ---------------------------------------------------------------------------
-GUIDANCE_CHECK_INTERVAL = 4     # Seconds between camera checks during guidance
 GUIDANCE_MAX_STEPS = 12         # Max steps in a guided procedure
 GUIDANCE_STEP_VERIFY_TOKENS = 200  # More tokens for detailed step verification
 
-# Engagement scoring
-ENGAGEMENT_INITIAL = 50
-ENGAGEMENT_BOOST = 15       # User engaged with observation
-ENGAGEMENT_DECAY = 10       # User ignored observation
-ENGAGEMENT_MIN = 10
-ENGAGEMENT_MAX = 100
-ENGAGEMENT_RESPONSE_WINDOW = 30  # seconds to wait for user response
-
-# Engagement stopwords — common words to exclude when checking if user
-# responded to an observation (module-level for performance)
-ENGAGEMENT_STOPWORDS = frozenset({
-    "the", "a", "an", "is", "it", "that", "this", "what", "yeah",
-    "yes", "no", "ok", "okay", "i", "you", "we", "my", "its",
-    "was", "were", "are", "been", "be", "have", "has", "had",
-    "do", "does", "did", "will", "would", "could", "should", "can",
-    "just", "about", "so", "but", "and", "or", "if", "not",
-    "don't", "doesn't", "to", "in", "on", "of", "for", "at",
-})
 
 # ---------------------------------------------------------------------------
 # Voice prompts
@@ -348,6 +323,49 @@ VOICE_KNOWLEDGE = (
 
 
 # ---------------------------------------------------------------------------
+# Scene Memory — persistent understanding of what's happening on the job
+# ---------------------------------------------------------------------------
+
+class SceneMemory:
+    """Maintains a running understanding of the job site scene."""
+
+    def __init__(self):
+        self.objects: list[str] = []          # "breaker panel", "wire stripper", "12 AWG romex"
+        self.activity: str = ""               # "wiring a 20A circuit"
+        self.stage: str = ""                  # "prep", "execution", "testing", "cleanup"
+        self.observations_made: list[str] = []  # everything we've said (never repeat)
+        self.last_spoken_time: float = 0      # when we last spoke up
+        self.last_spoken_text: str = ""       # what we last said
+        self.frames_since_change: int = 0     # how many consecutive frames looked the same
+        self.last_scene_hash: str = ""        # for frame diffing
+
+    def update_from_analysis(self, objects: list[str], activity: str, stage: str):
+        """Update scene understanding from analysis result."""
+        self.objects = objects
+        if activity:
+            self.activity = activity
+        if stage:
+            self.stage = stage
+        self.frames_since_change = 0
+
+    def record_speech(self, text: str):
+        """Record that we spoke — for anti-repeat and cooldown."""
+        self.observations_made.append(text)
+        if len(self.observations_made) > 20:
+            self.observations_made = self.observations_made[-20:]
+        self.last_spoken_time = time.time()
+        self.last_spoken_text = text
+
+    def already_said(self, text: str) -> bool:
+        """Check if we already said something similar."""
+        text_lower = text.lower()
+        return any(
+            obs.lower() in text_lower or text_lower in obs.lower()
+            for obs in self.observations_made
+        )
+
+
+# ---------------------------------------------------------------------------
 # Agent with tools + always-on vision
 # ---------------------------------------------------------------------------
 
@@ -365,26 +383,14 @@ class ArrivalAgent(Agent):
         self._room_name: str = ""
         self._room = None
         # Proactive vision state
-        self._last_analyzed_hash: str = ""
-        self._recent_observations: list[str] = []
-        self._last_proactive_time: float = 0
-        self._last_proactive_severity: str = "NOTICE"
-        self._user_pushback_count: int = 0
         self._proactive_enabled: bool = True
         self._proactive_muted_until: float = 0  # timestamp when mute expires
         self._last_user_speech_time: float = 0
+        self._user_pushback_count: int = 0
+        # Scene memory — persistent understanding of the job
+        self._scene: SceneMemory = SceneMemory()
         # Conversation context for proactive analyzer
         self._conversation_context: list[dict] = []  # last N exchanges
-        # Engagement tracking
-        self._engagement_score: int = ENGAGEMENT_INITIAL
-        self._awaiting_engagement: bool = False  # True after proactive speak
-        self._engagement_timer_start: float = 0
-        self._last_observation_text: str = ""
-        self._observations_ignored: int = 0  # consecutive ignores
-        # Category-based de-duplication
-        self._observation_categories: dict[str, float] = {}  # category → timestamp
-        # Consecutive failure tracking for proactive analysis
-        self._proactive_consecutive_failures: int = 0
         # Error code pre-injection tracking
         self._has_injected_codes: bool = False
         # Real-Time Guidance state
@@ -473,9 +479,9 @@ class ArrivalAgent(Agent):
     def _frame_changed(self, frame: str) -> bool:
         """Check if frame differs significantly from last analyzed frame."""
         new_hash = self._frame_hash(frame)
-        if not self._last_analyzed_hash:
+        if not self._scene.last_scene_hash:
             return True
-        diff = sum(a != b for a, b in zip(new_hash, self._last_analyzed_hash))
+        diff = sum(a != b for a, b in zip(new_hash, self._scene.last_scene_hash))
         return diff > FRAME_CHANGE_THRESHOLD
 
     def _equipment_context_str(self) -> str:
@@ -923,31 +929,80 @@ def _extract_task_from_speech(text: str) -> str:
     return ""
 
 
-def _determine_monitor_state(agent: "ArrivalAgent") -> str:
-    """Determine proactive monitor operating state based on available context."""
+def _has_task_context(agent: "ArrivalAgent") -> bool:
+    """Check if we have any understanding of what the worker is doing."""
     if agent._guidance_active:
-        return "GUIDED"
-    now = time.time()
-    # Task context from conversation (decays after 2 min of silence)
-    if agent._inferred_task and (now - agent._last_user_speech_time) < TASK_CONTEXT_DECAY_SECONDS:
-        return "CONVERSATIONAL"
-    # Equipment context from frontend = worker is on a job
+        return True
+    if agent._inferred_task and (time.time() - agent._last_user_speech_time) < TASK_CONTEXT_DECAY_SECONDS:
+        return True
     if agent._equipment_type or agent._equipment_brand:
-        return "CONVERSATIONAL"
-    return "DORMANT"
+        return True
+    return False
 
 
-async def _analyze_frame_safety_only(frame_b64: str) -> Optional[str]:
+async def _analyze_scene(frame_b64: str, agent: "ArrivalAgent") -> Optional[dict]:
     """
-    DORMANT state: safety-only scan. Description-first to prevent hallucination.
-    Returns a safety observation string, or None.
+    Unified scene analysis — perception + decision in ONE API call.
+    Returns dict with: {"objects": [...], "activity": "...", "stage": "...", "speak": "..." or null}
+    Or None on failure.
     """
     client = _get_anthropic_client()
+    scene = agent._scene
+
+    # Build context based on what we know
+    task_context = ""
+    if agent._guidance_active:
+        task_context = f"TASK: {agent._guidance_task}\n"
+        if agent._guidance_brief:
+            # Include first 500 chars of brief to keep prompt lean
+            task_context += f"JOB KNOWLEDGE:\n{agent._guidance_brief[:500]}\n"
+    elif agent._inferred_task:
+        task_context = f"TASK: {agent._inferred_task}\n"
+
+    equip = agent._equipment_context_str()
+    if equip:
+        task_context += f"EQUIPMENT: {equip}\n"
+
+    # What we already know about the scene
+    scene_so_far = ""
+    if scene.activity or scene.objects:
+        parts = []
+        if scene.activity:
+            parts.append(f"Activity: {scene.activity}")
+        if scene.objects:
+            parts.append(f"Objects: {', '.join(scene.objects[:8])}")
+        if scene.stage:
+            parts.append(f"Stage: {scene.stage}")
+        scene_so_far = "SCENE SO FAR: " + ". ".join(parts) + "\n"
+
+    # What we already said (anti-repeat)
+    already_said = ""
+    if scene.observations_made:
+        already_said = f"ALREADY SAID (do NOT repeat): {'; '.join(scene.observations_made[-5:])}\n"
+
+    prompt = (
+        "You're a veteran tradesman watching a coworker through their phone camera.\n\n"
+        f"{task_context}"
+        f"{scene_so_far}"
+        f"{already_said}\n"
+        "Look at this frame and respond in JSON only:\n"
+        '{"objects": ["item1", "item2"], "activity": "what they are doing", "stage": "prep|execution|testing|cleanup", "speak": null}\n\n'
+        "Rules for \"speak\":\n"
+        "- Set to null if nothing useful to say (DEFAULT — silence is good)\n"
+        "- Set to a short sentence ONLY if you see: safety hazard, wrong part/tool for the task, "
+        "a mistake about to happen, or they clearly look stuck\n"
+        "- Never describe the scene. Never narrate. Never list steps.\n"
+        "- Never comment on image quality or what you can't see.\n"
+        "- If you're not confident about what you see, set speak to null.\n"
+        "- Talk like a coworker, under 15 words.\n"
+        "JSON only, no other text."
+    )
+
     try:
         response = await asyncio.wait_for(
             client.messages.create(
                 model=config.ANTHROPIC_VISION_MODEL,
-                max_tokens=100,
+                max_tokens=150,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -955,263 +1010,71 @@ async def _analyze_frame_safety_only(frame_b64: str) -> Optional[str]:
                             "type": "image",
                             "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
                         },
-                        {
-                            "type": "text",
-                            "text": (
-                                "Is there IMMEDIATE DANGER visible? Only:\n"
-                                "- Exposed live wiring\n"
-                                "- Gas or water leak\n"
-                                "- Fire or smoke\n"
-                                "- Structural collapse risk\n\n"
-                                "If no danger: NOTHING\n"
-                                "If danger: say what in under 10 words, like a coworker would yell it."
-                            ),
-                        },
+                        {"type": "text", "text": prompt},
                     ],
                 }],
             ),
-            timeout=10.0,
+            timeout=12.0,
         )
         result = response.content[0].text.strip()
 
-        # Simple: NOTHING means no danger, anything else is the danger
-        if not result or "NOTHING" in result.upper():
+        # Parse JSON — handle common issues (markdown fences, etc.)
+        json_str = result
+        if json_str.startswith("```"):
+            json_str = json_str.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        if json_str.startswith("{"):
+            import json as json_mod
+            parsed = json_mod.loads(json_str)
+            return parsed
+        else:
+            logger.debug(f"[scene] Non-JSON response: {result[:100]}")
             return None
-        # Strip any formatting prefix
-        danger = result
-        if danger.upper().startswith("DANGER:"):
-            danger = danger[7:].strip()
-        if len(danger) < 5:
-            return None
-        logger.info(f"[proactive/dormant] Safety detected: {danger}")
-        return danger
+
     except Exception as e:
-        logger.debug(f"[proactive/dormant] Safety scan failed: {e}")
+        logger.debug(f"[scene] Analysis failed: {e}")
         return None
-
-
-async def _analyze_frame_contextual(
-    frame_b64: str,
-    inferred_task: str,
-    recent_observations: list[str],
-    conversation_context: list[dict] | None = None,
-    equipment_context: str = "",
-) -> Optional[tuple[str, str]]:
-    """
-    CONVERSATIONAL state: context-grounded analysis with description-first anti-hallucination.
-    Returns: (severity, observation) or None.
-    """
-    client = _get_anthropic_client()
-
-    obs_context = ""
-    if recent_observations:
-        obs_context = f"\nAlready mentioned: {'; '.join(recent_observations[-3:])}. Don't repeat.\n"
-
-    conv_context = ""
-    if conversation_context:
-        lines = []
-        for msg in conversation_context[-3:]:
-            role = "Tech" if msg.get("role") == "user" else "You"
-            lines.append(f"- {role}: {msg.get('content', '')[:80]}")
-        conv_context = "\nRecent conversation:\n" + "\n".join(lines) + "\n"
-
-    task_line = inferred_task
-    if equipment_context:
-        task_line += f" (Equipment: {equipment_context})"
-
-    response = await asyncio.wait_for(
-        client.messages.create(
-            model=config.ANTHROPIC_VISION_MODEL,
-            max_tokens=50,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"Worker is: {task_line}\n"
-                            f"{conv_context}{obs_context}\n"
-                            "Anything they need to know RIGHT NOW? Only speak if you see:\n"
-                            "- Safety issue\n"
-                            "- Wrong tool/part for their task\n"
-                            "- Readable error code or label\n"
-                            "- Something that looks worn/damaged/wrong\n\n"
-                            "If nothing: NOTHING\n"
-                            "If something: say it in under 10 words like a coworker. No description of the scene."
-                        ),
-                    },
-                ],
-            }],
-        ),
-        timeout=15.0,
-    )
-    result = response.content[0].text.strip()
-
-    # Simple parsing — model either says NOTHING or gives a short observation
-    if not result or "NOTHING" in result.upper():
-        return None
-
-    # Strip any leftover formatting the model might add
-    observation = result
-    # Remove OBSERVATION: prefix if model still uses it
-    if observation.upper().startswith("OBSERVATION:"):
-        observation = observation[12:].strip()
-    # Remove DESCRIPTION: lines if model still includes them
-    lines = [l.strip() for l in observation.split("\n") if l.strip() and not l.strip().upper().startswith("DESCRIPTION:")]
-    observation = " ".join(lines) if lines else ""
-
-    if not observation or len(observation) < 5:
-        return None
-
-    # Determine severity from content
-    safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock", "electrocut",
-                       "kill the breaker", "shut off", "stop", "careful", "PPE", "disconnect"}
-    is_safety = any(kw in observation.lower() for kw in safety_keywords)
-    severity = "SAFETY" if is_safety else "NOTICE"
-
-    logger.info(f"[proactive/contextual] [{severity}] {observation}")
-    return (severity, observation)
-
-
-async def _analyze_frame_guidance(
-    frame_b64: str,
-    task: str,
-    brief: str,
-    conversation_context: list[dict] | None = None,
-    equipment_context: str = "",
-) -> Optional[tuple[str, str]]:
-    """
-    Analyze a frame during Real-Time Guidance.
-    Returns: (status, observation) or None.
-    status: "SPEAK" (something useful to say), "ISSUE" (problem), "SAFETY" (danger), "QUIET" (nothing to say)
-    """
-    client = _get_anthropic_client()
-
-    conv_context = ""
-    if conversation_context:
-        lines = []
-        for msg in conversation_context[-3:]:
-            role = "Tech" if msg.get("role") == "user" else "You"
-            lines.append(f"- {role}: {msg.get('content', '')[:80]}")
-        conv_context = "\nRecent conversation:\n" + "\n".join(lines) + "\n"
-
-    response = await asyncio.wait_for(
-        client.messages.create(
-            model=config.ANTHROPIC_VISION_MODEL,
-            max_tokens=60,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "You're watching a tech through their phone camera while guiding them.\n\n"
-                            f"TASK: {task}\n"
-                            + (f"EQUIPMENT: {equipment_context}\n" if equipment_context else "")
-                            + f"\nYOUR KNOWLEDGE OF THIS JOB:\n{brief}\n"
-                            f"{conv_context}\n"
-                            "Based on what you see, is there anything useful to say RIGHT NOW?\n"
-                            "Only speak if you see:\n"
-                            "- They finished something and need to know what's next\n"
-                            "- They're about to make a mistake\n"
-                            "- Safety issue\n"
-                            "- They look stuck\n\n"
-                            "If nothing useful to say: QUIET\n"
-                            "If something to say: say it in under 15 words, like a coworker would.\n"
-                            "Never describe the scene. Never list steps. Just the one thing they need to hear."
-                        ),
-                    },
-                ],
-            }],
-        ),
-        timeout=15.0,
-    )
-    result = response.content[0].text.strip()
-
-    if not result or "QUIET" in result.upper():
-        return None
-
-    # Determine severity
-    safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
-                       "kill the breaker", "shut off", "stop", "careful", "disconnect"}
-    is_safety = any(kw in result.lower() for kw in safety_keywords)
-
-    if is_safety:
-        return ("SAFETY", result)
-
-    # Check if it's flagging an issue
-    issue_keywords = {"wrong", "backwards", "mistake", "not right", "check that"}
-    is_issue = any(kw in result.lower() for kw in issue_keywords)
-
-    if is_issue:
-        return ("ISSUE", result)
-
-    return ("SPEAK", result)
 
 
 async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
-    """Background task: three-state proactive vision monitor.
+    """Background task: intelligent proactive vision monitor.
 
-    DORMANT: No task context → safety-only scan every 30s
-    CONVERSATIONAL: Worker described task → context-grounded analysis every 8-10s
-    GUIDED: Active guidance → step verification every 4s (existing _analyze_frame_guidance)
+    Phase 1: Frame diff (FREE) — skip if scene unchanged
+    Phase 2: Scene analysis (ONE Sonnet call) — perception + decision together
+    Adaptive intervals: faster when scene changes, slower when static.
     """
     logger.info("[proactive] Monitor started — waiting for greeting to finish...")
     await asyncio.sleep(6)
 
-    last_analysis_time = 0
-    last_guidance_check = 0
-    last_state = "DORMANT"
+    scene = agent._scene
+    consecutive_unchanged = 0
 
     while True:
         try:
-            # Determine operating state
-            state = _determine_monitor_state(agent)
-            if state != last_state:
-                logger.info(f"[proactive] State: {last_state} → {state} (task: '{agent._inferred_task[:40] if agent._inferred_task else 'none'}')")
-                last_state = state
+            # Adaptive interval: back off when nothing changes
+            if consecutive_unchanged > 5:
+                interval = SCENE_STATIC_BACKOFF  # 30s — camera is static
+            elif consecutive_unchanged > 2:
+                interval = 15  # Slowing down
+            else:
+                interval = SCENE_ACTIVE_INTERVAL if _has_task_context(agent) else SCENE_POLL_INTERVAL
 
-            # Set interval based on state
-            if state == "GUIDED":
-                check_interval = GUIDANCE_CHECK_INTERVAL
-            elif state == "CONVERSATIONAL":
-                check_interval = CONVERSATIONAL_CHECK_INTERVAL
-            else:  # DORMANT
-                check_interval = DORMANT_CHECK_INTERVAL
-
-            await asyncio.sleep(check_interval)
+            await asyncio.sleep(interval)
 
             if not agent._proactive_enabled or not agent._room_name:
                 continue
 
             now = time.time()
 
-            # Check if muted (user said "stop"/"quiet")
+            # Muted by user
             if now < agent._proactive_muted_until:
                 continue
 
-            # Task context decay — clear inferred task if worker stopped talking
+            # Task context decay
             if agent._inferred_task and (now - agent._last_user_speech_time) > TASK_CONTEXT_DECAY_SECONDS:
                 logger.info(f"[proactive] Task context expired: '{agent._inferred_task[:40]}'")
                 agent._inferred_task = ""
 
-            # Check engagement — if we're waiting for user response
-            if agent._awaiting_engagement:
-                elapsed = now - agent._engagement_timer_start
-                if elapsed > ENGAGEMENT_RESPONSE_WINDOW:
-                    agent._observations_ignored += 1
-                    agent._engagement_score = max(ENGAGEMENT_MIN, agent._engagement_score - ENGAGEMENT_DECAY)
-                    agent._awaiting_engagement = False
-
-            # Get frame
+            # --- Phase 1: Get frame + diff (FREE) ---
             frame = None
             if agent._latest_frame and (now - agent._frame_received_at) < 4:
                 frame = agent._latest_frame
@@ -1220,154 +1083,84 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not frame:
                 continue
 
-            # ── STATE: GUIDED — brief-based natural guidance ──
-            if state == "GUIDED" and agent._guidance_active:
-                if (now - last_guidance_check) < GUIDANCE_CHECK_INTERVAL:
-                    continue
-                last_guidance_check = now
-
-                try:
-                    guidance_result = await _analyze_frame_guidance(
-                        frame,
-                        task=agent._guidance_task,
-                        brief=agent._guidance_brief,
-                        conversation_context=list(agent._conversation_context),
-                        equipment_context=agent._equipment_context_str(),
-                    )
-                except Exception as e:
-                    logger.warning(f"[guidance] Vision check failed: {e}")
-                    continue
-
-                if not guidance_result:
-                    continue
-
-                status, observation = guidance_result
-                logger.info(f"[guidance] {status}: {observation[:60]}")
-
-                # Don't interrupt active conversation
-                if status != "SAFETY" and (now - agent._last_user_speech_time) < 4:
-                    continue
-
-                if status == "SAFETY":
-                    await session.generate_reply(
-                        instructions=f"STOP — {observation}. Alert them immediately."
-                    )
-                    if getattr(agent, '_spatial_recorder', None):
-                        asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
-                            trigger_type='safety_alert', trigger_text=observation, agent=agent, monitor_state='GUIDED'))
-                elif status == "ISSUE":
-                    await session.generate_reply(
-                        instructions=f"Quick — {observation}"
-                    )
-                    if getattr(agent, '_spatial_recorder', None):
-                        asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
-                            trigger_type='guidance_alert', trigger_text=observation, agent=agent, monitor_state='GUIDED'))
-                elif status == "SPEAK":
-                    await session.generate_reply(
-                        instructions=observation
-                    )
-
-                agent._last_proactive_time = now
-                continue  # Skip other states during guidance
-
-            # ── STATE: DORMANT — safety-only scan ──
-            if state == "DORMANT":
-                # Frame diffing — skip if scene unchanged
-                if not agent._frame_changed(frame) and (now - last_analysis_time) < 60:
-                    continue
-                last_analysis_time = now
-
-                try:
-                    danger = await _analyze_frame_safety_only(frame)
-                except Exception as e:
-                    logger.debug(f"[proactive/dormant] Failed: {e}")
-                    continue
-
-                if danger:
-                    logger.info(f"[proactive/dormant] ★ SAFETY: {danger}")
-                    await session.generate_reply(
-                        instructions=f"STOP — {danger}. Alert the tech immediately, be direct."
-                    )
-                    if getattr(agent, '_spatial_recorder', None):
-                        asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
-                            trigger_type='safety_alert', trigger_text=danger, agent=agent, monitor_state='DORMANT'))
-                    agent._last_proactive_time = now
+            # Frame diff — skip API call if scene hasn't changed
+            frame_hash = agent._frame_hash(frame)
+            if frame_hash == scene.last_scene_hash:
+                consecutive_unchanged += 1
+                scene.frames_since_change += 1
                 continue
 
-            # ── STATE: CONVERSATIONAL — context-grounded analysis ──
-            # Frame diffing
-            force_analyze = (now - last_analysis_time) > 20
-            if not force_analyze and not agent._frame_changed(frame):
-                continue
-            last_analysis_time = now
-            agent._last_analyzed_hash = agent._frame_hash(frame)
+            # Scene changed — reset counter
+            scene.last_scene_hash = frame_hash
+            consecutive_unchanged = 0
 
+            # --- Phase 2: Analyze scene (ONE Sonnet call) ---
             try:
-                result = await _analyze_frame_contextual(
-                    frame,
-                    inferred_task=agent._inferred_task,
-                    recent_observations=list(agent._recent_observations),
-                    conversation_context=list(agent._conversation_context),
-                    equipment_context=agent._equipment_context_str(),
-                )
-                agent._proactive_consecutive_failures = 0
+                result = await _analyze_scene(frame, agent)
             except Exception as e:
-                agent._proactive_consecutive_failures += 1
-                logger.warning(f"[proactive/conversational] Failed: {e}")
+                logger.debug(f"[proactive] Analysis failed: {e}")
                 continue
 
             if not result:
                 continue
 
-            severity, observation = result
+            # Update scene memory from perception
+            objects = result.get("objects", [])
+            activity = result.get("activity", "")
+            stage = result.get("stage", "")
+            speak = result.get("speak")
 
-            # Cooldown check
-            cooldown = SEVERITY_COOLDOWNS.get(severity, 20)
-            if severity != "SAFETY":
-                engagement_factor = agent._engagement_score / ENGAGEMENT_INITIAL
-                cooldown = int(cooldown / max(engagement_factor, 0.5))
-                if agent._user_pushback_count > 2:
-                    cooldown = max(cooldown, PROACTIVE_PUSHBACK_COOLDOWN)
+            scene.update_from_analysis(objects, activity, stage)
 
-            if severity != "SAFETY" and (now - agent._last_proactive_time) < cooldown:
+            if objects or activity:
+                logger.info(f"[scene] Objects: {objects[:5]} | Activity: {activity} | Stage: {stage}")
+
+            # --- Decision: should we speak? ---
+            if not speak or speak == "null" or speak.upper() in ("NULL", "NONE", "QUIET", "NOTHING"):
+                continue
+
+            # Anti-repeat check
+            if scene.already_said(speak):
+                logger.debug(f"[proactive] Skipping repeat: {speak[:50]}")
+                continue
+
+            # Cooldown — don't spam
+            if (now - scene.last_spoken_time) < SCENE_POST_SPEAK_COOLDOWN:
+                logger.debug(f"[proactive] Cooldown active, skipping: {speak[:50]}")
                 continue
 
             # Don't interrupt active conversation
-            if severity != "SAFETY" and (now - agent._last_user_speech_time) < 6:
+            if (now - agent._last_user_speech_time) < 5:
                 continue
 
-            # String de-duplication
-            is_repeat = any(
-                obs.lower() in observation.lower() or observation.lower() in obs.lower()
-                for obs in agent._recent_observations[-3:]
-            )
-            if is_repeat and severity != "SAFETY":
+            # Pushback check
+            if agent._user_pushback_count > 2 and (now - scene.last_spoken_time) < 60:
                 continue
 
-            # ── Speak ──
-            if severity == "SAFETY":
-                instruction = f"STOP — {observation}. Tell them immediately."
+            # --- Speak ---
+            # Determine severity for logging/spatial recording
+            safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
+                               "kill the breaker", "shut off", "stop", "careful", "disconnect"}
+            is_safety = any(kw in speak.lower() for kw in safety_keywords)
+
+            if is_safety:
+                instruction = f"STOP — {speak}. Alert them immediately."
+                trigger_type = "safety_alert"
             else:
-                instruction = observation  # Already natural language from the prompt
+                instruction = speak
+                trigger_type = "contextual_alert"
 
-            logger.info(f"[proactive/conversational] ★ [{severity}] {observation}")
+            logger.info(f"[proactive] ★ {'SAFETY' if is_safety else 'SPEAK'}: {speak}")
             await session.generate_reply(instructions=instruction)
+
+            # Record in scene memory
+            scene.record_speech(speak)
+
+            # Spatial recording
             if getattr(agent, '_spatial_recorder', None):
-                trigger = 'safety_alert' if severity == 'SAFETY' else 'contextual_alert'
                 asyncio.ensure_future(agent._spatial_recorder.trigger_recording(
-                    trigger_type=trigger, trigger_text=observation, agent=agent, monitor_state='CONVERSATIONAL'))
-
-            # Update state
-            agent._last_proactive_time = now
-            agent._last_proactive_severity = severity
-            agent._last_observation_text = observation
-            agent._recent_observations.append(observation)
-            if len(agent._recent_observations) > 5:
-                agent._recent_observations.pop(0)
-
-            # Engagement tracking
-            agent._awaiting_engagement = True
-            agent._engagement_timer_start = now
+                    trigger_type=trigger_type, trigger_text=speak, agent=agent,
+                    monitor_state='GUIDED' if agent._guidance_active else 'ACTIVE'))
 
         except asyncio.CancelledError:
             break
@@ -1803,7 +1596,6 @@ async def entrypoint(ctx: JobContext):
             # to avoid false positives like "stop valve testing" or "that's quiet today"
             if text_lower in _MUTE_PHRASES:
                 agent._proactive_muted_until = time.time() + PROACTIVE_MUTE_DURATION
-                agent._awaiting_engagement = False
                 logger.info(f"[proactive] Muted for {PROACTIVE_MUTE_DURATION}s — user said: '{text_lower}'")
                 return
 
@@ -1811,28 +1603,8 @@ async def entrypoint(ctx: JobContext):
             word_count = len(text_lower.split())
             if word_count <= 7 and any(phrase in text_lower for phrase in _PUSHBACK_PHRASES):
                 agent._user_pushback_count += 1
-                agent._awaiting_engagement = False
                 logger.info(f"[proactive] Pushback #{agent._user_pushback_count} — user said: '{text_lower}'")
                 return
-
-            # Engagement detection — did user respond to our observation?
-            if agent._awaiting_engagement and agent._last_observation_text:
-                elapsed = time.time() - agent._engagement_timer_start
-                if elapsed < ENGAGEMENT_RESPONSE_WINDOW:
-                    # Check if response is related — require 2+ non-stopword keyword matches
-                    # or any question mark (user is asking about what was said)
-                    obs_words = set(agent._last_observation_text.lower().split())
-                    user_words = set(text_lower.split())
-                    overlap = (obs_words & user_words) - ENGAGEMENT_STOPWORDS
-                    if len(overlap) >= 2 or "?" in transcript:
-                        # User engaged! Boost engagement score
-                        agent._engagement_score = min(ENGAGEMENT_MAX, agent._engagement_score + ENGAGEMENT_BOOST)
-                        agent._observations_ignored = 0
-                        # Reset pushback when user is actively engaging
-                        if agent._user_pushback_count > 0:
-                            agent._user_pushback_count = max(0, agent._user_pushback_count - 1)
-                        agent._awaiting_engagement = False
-                        logger.info(f"[proactive] User engaged (overlap: {overlap}), engagement={agent._engagement_score}")
 
         # Track assistant responses for conversation context
         @session.on("agent_speech_committed")
