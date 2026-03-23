@@ -280,45 +280,12 @@ DEFAULT_MODE_PROMPT = (
 # ---------------------------------------------------------------------------
 
 VOICE_KNOWLEDGE = (
-    "\n\n## Brand Knowledge\n"
-    "- Carrier/Bryant: Flame sensor issues 5-10yr. Board failures 10-15yr. 58 series workhorse furnace.\n"
-    "- Trane/American Standard: Built heavy, expensive repair. XV/XR series. ComfortLink proprietary communicating.\n"
-    "- Lennox: SLP98/EL296 premium. Quieter, finicky install. Old Pulse furnaces had unique problems.\n"
-    "- Rheem/Ruud: Reliable, affordable. Classic Plus, Prestige. Same manufacturer, different distribution.\n"
-    "- Goodman/Amana: Budget-friendly, parts everywhere. GMVM97 solid modulating. Amana = premium label, same guts.\n"
-    "- Rinnai: Dominates tankless water heaters. Scale buildup is #1 service issue. Error codes well-documented.\n"
-    "- AO Smith: Standard tank water heaters. Blink codes on gas models. Vertex = premium condensing line.\n"
-    "- Square D: QO = commercial-grade (better trip curves). Homeline = residential. Never mix QO/HOM breakers.\n"
-    "- Mitsubishi/Fujitsu/Daikin: Mini-split leaders. Error codes on remote or indoor unit LEDs. Refrigerant charge critical.\n\n"
-
-    "## Diagnostic Approach\n"
-    "1. Identify symptom (no heat, no cool, tripping breaker, leak, error code)\n"
-    "2. Identify system (brand, model, approximate age, fuel type)\n"
-    "3. Start with the MOST COMMON cause for this symptom on this equipment\n"
-    "4. Give steps in order of likelihood — cheapest/easiest check first\n"
-    "5. If they already checked something, skip it and move to next cause\n\n"
-
-    "## Error Code Rules — CRITICAL\n"
+    "\n\n## Error Code Rules — CRITICAL\n"
     "- For ANY error code, blink code, or fault code: USE lookup_error_code tool FIRST. ALWAYS. No exceptions.\n"
     "- NEVER guess error code meanings. A wrong code sends a tech down the wrong path and wastes hours.\n"
     "- If lookup returns nothing: 'I don't have that code memorized for [brand]. What does the chart on the unit show?'\n"
     "- Getting an error code wrong is the WORST thing you can do. Say 'I don't know' before guessing.\n"
-    "- If VERIFIED ERROR CODE DATA is provided below, use EXACTLY that information.\n\n"
-
-    "## Wire Sizing (NEC Quick Reference)\n"
-    "15A→14AWG, 20A→12AWG, 30A→10AWG, 40A→8AWG, 50A→6AWG, 60A→6AWG, 100A→3AWG\n"
-    "Over 50ft: bump up one size per 50ft for voltage drop. Always verify local code.\n\n"
-
-    "## Refrigerant Reference\n"
-    "R-410A: ~120 PSI suction / 350 PSI discharge at 95°F ambient. Standard since 2010.\n"
-    "R-22: Phased out. ~68 PSI suction / 250 PSI discharge at 75°F. Discuss retrofit/replacement.\n"
-    "Superheat: 10-15°F (cap tube/piston). Subcooling: 8-12°F (TXV). Always weigh in refrigerant.\n\n"
-
-    "## Plumbing Reference\n"
-    "Water heater: 120°F residential, 140°F commercial/dishwasher.\n"
-    "Gas pipe: 3/4\" black iron ≈ 150k BTU at 20ft. Tankless: 3/4\" gas minimum, some need 1\".\n"
-    "Drain slope: 1/4\" per foot for 2\" and smaller, 1/8\" for 3\" and larger.\n"
-    "Copper soldering: Lead-free on potable water. Clean, flux, heat fitting not solder.\n"
+    "- If VERIFIED ERROR CODE DATA is provided below, use EXACTLY that information.\n"
 )
 
 
