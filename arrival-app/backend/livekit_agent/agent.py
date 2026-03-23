@@ -145,11 +145,12 @@ PROACTIVE_CHECK_INTERVAL = 5    # seconds between proactive analysis cycles (unu
 FRAME_CHANGE_THRESHOLD = 8     # out of 100 sampled positions
 
 # Proactive monitor — adaptive intervals
-SCENE_POLL_INTERVAL = 8           # Base interval for checking frames (seconds)
-SCENE_STATIC_BACKOFF = 30         # Back off to this when nothing changes
-SCENE_ACTIVE_INTERVAL = 10        # Check more often when scene is changing
-SCENE_POST_SPEAK_COOLDOWN = 25    # Minimum gap between proactive interjections
+SCENE_POLL_INTERVAL = 15          # Base interval for checking frames (seconds)
+SCENE_STATIC_BACKOFF = 60         # Back off to this when nothing changes
+SCENE_ACTIVE_INTERVAL = 12        # Check more often when scene is changing
+SCENE_POST_SPEAK_COOLDOWN = 30    # Minimum gap between proactive interjections
 TASK_CONTEXT_DECAY_SECONDS = 120  # Clear inferred task after 2 min of silence
+SCENE_IGNORED_BACKOFF = 45        # If user ignored our last comment, wait this long
 PROACTIVE_MUTE_DURATION = 300     # 5 min mute when user explicitly silences
 
 # Task inference patterns — regex-free, fast string matching
@@ -305,6 +306,8 @@ class SceneMemory:
         self.last_spoken_text: str = ""       # what we last said
         self.frames_since_change: int = 0     # how many consecutive frames looked the same
         self.last_scene_hash: str = ""        # for frame diffing
+        self.ignored_count: int = 0           # times user didn't respond after we spoke
+        self.user_responded_after_speak: bool = True  # did user talk after our last interjection
 
     def update_from_analysis(self, objects: list[str], activity: str, stage: str):
         """Update scene understanding from analysis result."""
@@ -556,6 +559,12 @@ class ArrivalAgent(Agent):
            like 'camera moved' still primes the model to anchor on old content
         """
         from livekit.agents.llm import ImageContent
+
+        # Track user speech for proactive monitor ignore detection
+        self._last_user_speech_time = time.time()
+        if hasattr(self, '_scene'):
+            self._scene.user_responded_after_speak = True
+            self._scene.ignored_count = max(0, self._scene.ignored_count - 1)  # Forgive one ignore per interaction
 
         # 1. Truncate — prevents unbounded context growth
         #    Keep 8 items (4 user-assistant pairs) for better context/intelligence
@@ -947,21 +956,36 @@ async def _analyze_scene(frame_b64: str, agent: "ArrivalAgent") -> Optional[dict
     if scene.observations_made:
         already_said = f"ALREADY SAID (do NOT repeat): {'; '.join(scene.observations_made[-5:])}\n"
 
+    # Confidence context — if we've been ignored, be more selective
+    confidence_note = ""
+    if scene.ignored_count >= 2:
+        confidence_note = "You've been ignored recently. Only speak for SAFETY issues.\n"
+    elif scene.ignored_count >= 1:
+        confidence_note = "Your last comment was ignored. Be extra selective about speaking.\n"
+
     prompt = (
-        "You're a veteran tradesman watching a coworker through their phone camera.\n\n"
+        "You're a 30-year veteran tradesman watching a coworker through their phone camera. "
+        "You WATCH QUIETLY unless something genuinely matters.\n\n"
         f"{task_context}"
         f"{scene_so_far}"
-        f"{already_said}\n"
-        "Look at this frame and respond in JSON only:\n"
+        f"{already_said}"
+        f"{confidence_note}\n"
+        "Respond in JSON only:\n"
         '{"objects": ["item1", "item2"], "activity": "what they are doing", "stage": "prep|execution|testing|cleanup", "speak": null}\n\n'
-        "Rules for \"speak\":\n"
-        "- Set to null if nothing useful to say (DEFAULT — silence is good)\n"
-        "- Set to a short sentence ONLY if you see: safety hazard, wrong part/tool for the task, "
-        "a mistake about to happen, or they clearly look stuck\n"
-        "- Never describe the scene. Never narrate. Never list steps.\n"
-        "- Never comment on image quality or what you can't see.\n"
-        "- If you're not confident about what you see, set speak to null.\n"
-        "- Talk like a coworker, under 15 words.\n"
+        "SPEAK RULES (speak = null is ALWAYS the default):\n"
+        "- SAFETY: live exposed wires, gas leak, no PPE where required, fall risk → speak immediately\n"
+        "- WRONG PART: you can clearly see they grabbed the wrong gauge wire, wrong fitting, wrong breaker → speak\n"
+        "- MISTAKE HAPPENING: about to connect to wrong terminal, cutting into wrong pipe, forgetting a step that will cause rework → speak\n"
+        "- STUCK: camera hasn't moved, they seem to be staring at something, been idle for a while → offer help\n"
+        "- EVERYTHING ELSE: stay quiet. If they're working fine, say NOTHING.\n\n"
+        "NEVER speak about:\n"
+        "- What you see (no narrating)\n"
+        "- Image quality\n"
+        "- Things you're not sure about (if unsure → null)\n"
+        "- General advice they didn't ask for\n"
+        "- Anything you already said\n\n"
+        "If you speak, talk like a coworker: casual, under 12 words, no lists.\n"
+        "Example: 'Hey, that's 14 gauge — you need 12 for a 20 amp circuit.'\n"
         "JSON only, no other text."
     )
 
@@ -1014,14 +1038,17 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
     scene = agent._scene
     consecutive_unchanged = 0
+    api_calls_this_session = 0
 
     while True:
         try:
-            # Adaptive interval: back off when nothing changes
-            if consecutive_unchanged > 5:
-                interval = SCENE_STATIC_BACKOFF  # 30s — camera is static
-            elif consecutive_unchanged > 2:
-                interval = 15  # Slowing down
+            # Adaptive interval based on scene state
+            if consecutive_unchanged > 8:
+                interval = SCENE_STATIC_BACKOFF  # 60s — camera is clearly static
+            elif consecutive_unchanged > 3:
+                interval = 30  # Slowing down — not much happening
+            elif scene.ignored_count >= 2:
+                interval = SCENE_IGNORED_BACKOFF  # 45s — user is ignoring us
             else:
                 interval = SCENE_ACTIVE_INTERVAL if _has_task_context(agent) else SCENE_POLL_INTERVAL
 
@@ -1050,20 +1077,27 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not frame:
                 continue
 
-            # Frame diff — skip API call if scene hasn't changed
-            frame_hash = agent._frame_hash(frame)
-            if frame_hash == scene.last_scene_hash:
+            # Frame diff — skip API call if scene hasn't changed meaningfully
+            if not agent._frame_changed(frame):
                 consecutive_unchanged += 1
                 scene.frames_since_change += 1
                 continue
 
-            # Scene changed — reset counter
-            scene.last_scene_hash = frame_hash
+            # Scene changed — reset counter, update hash
+            scene.last_scene_hash = agent._frame_hash(frame)
             consecutive_unchanged = 0
+
+            # Track if user ignored our last interjection
+            # (we spoke, 15+ seconds passed, user didn't talk)
+            if scene.last_spoken_time > 0 and not scene.user_responded_after_speak:
+                if (now - scene.last_spoken_time) > 15 and (agent._last_user_speech_time < scene.last_spoken_time):
+                    scene.ignored_count += 1
+                    logger.debug(f"[proactive] User ignored us (count={scene.ignored_count})")
 
             # --- Phase 2: Analyze scene (ONE Sonnet call) ---
             try:
                 result = await _analyze_scene(frame, agent)
+                api_calls_this_session += 1
             except Exception as e:
                 logger.debug(f"[proactive] Analysis failed: {e}")
                 continue
@@ -1080,7 +1114,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             scene.update_from_analysis(objects, activity, stage)
 
             if objects or activity:
-                logger.info(f"[scene] Objects: {objects[:5]} | Activity: {activity} | Stage: {stage}")
+                logger.info(f"[scene] Objects: {objects[:5]} | Activity: {activity} | Stage: {stage} (API call #{api_calls_this_session})")
 
             # --- Decision: should we speak? ---
             if not speak or speak == "null" or speak.upper() in ("NULL", "NONE", "QUIET", "NOTHING"):
@@ -1100,14 +1134,14 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if (now - agent._last_user_speech_time) < 5:
                 continue
 
-            # Pushback check
+            # Pushback check — user has explicitly told us to shut up
             if agent._user_pushback_count > 2 and (now - scene.last_spoken_time) < 60:
                 continue
 
             # --- Speak ---
-            # Determine severity for logging/spatial recording
             safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
-                               "kill the breaker", "shut off", "stop", "careful", "disconnect"}
+                               "kill the breaker", "shut off", "stop", "careful", "disconnect",
+                               "PPE", "goggles", "gloves", "harness"}
             is_safety = any(kw in speak.lower() for kw in safety_keywords)
 
             if is_safety:
@@ -1120,8 +1154,9 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             logger.info(f"[proactive] ★ {'SAFETY' if is_safety else 'SPEAK'}: {speak}")
             await session.generate_reply(instructions=instruction)
 
-            # Record in scene memory
+            # Record in scene memory + reset ignored tracking
             scene.record_speech(speak)
+            scene.user_responded_after_speak = False  # Will be set to True when user talks
 
             # Spatial recording
             if getattr(agent, '_spatial_recorder', None):
@@ -1130,6 +1165,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                     monitor_state='GUIDED' if agent._guidance_active else 'ACTIVE'))
 
         except asyncio.CancelledError:
+            logger.info(f"[proactive] Monitor stopped. Total API calls: {api_calls_this_session}")
             break
         except Exception as e:
             logger.warning(f"[proactive] Error: {e}")
