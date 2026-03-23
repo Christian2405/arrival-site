@@ -2784,6 +2784,90 @@ a { color: inherit; text-decoration: none; }
 </div>
 
 <!-- ============================================================ -->
+<!-- DELETE ACCOUNT PAGE -->
+<!-- ============================================================ -->
+<div class="page" id="page-delete-account">
+  <div class="legal-header">
+    <div class="legal-header-inner">
+      <h1>Delete Your Account</h1>
+      <span>Arrival — Account Deletion</span>
+    </div>
+  </div>
+  <div class="help-content">
+    <h3>How to delete your Arrival account</h3>
+    <p>You can delete your account in two ways:</p>
+
+    <h3>Option 1: From the app</h3>
+    <p>Open Arrival → Settings → scroll to the bottom → tap <strong>Delete Account</strong>. You'll be asked to confirm. Once confirmed, your account and all associated data will be permanently deleted within 30 days.</p>
+
+    <h3>Option 2: By email</h3>
+    <p>Send an email to <a href="mailto:privacy@arrivalcompany.com">privacy@arrivalcompany.com</a> from the email address associated with your account. Include "Delete my account" in the subject line. We will process your request within 30 days.</p>
+
+    <h3>What gets deleted</h3>
+    <p>When your account is deleted, the following data is permanently removed:</p>
+    <ul style="margin: 12px 0 12px 24px; color: #555; line-height: 1.8;">
+      <li>Your profile information (name, email, trade, experience level)</li>
+      <li>Your query history and saved answers</li>
+      <li>Your uploaded documents and manuals</li>
+      <li>Your video clips and spatial intelligence data (if recording was enabled)</li>
+      <li>Your subscription and billing relationship (active subscriptions are cancelled)</li>
+      <li>Your team membership (if applicable)</li>
+    </ul>
+
+    <h3>What is retained</h3>
+    <p>Anonymized, aggregated usage data that cannot be linked back to you may be retained for service improvement purposes. This data contains no personal information.</p>
+
+    <h3>Retention period</h3>
+    <p>All identifiable data is permanently deleted within 30 days of your request. Backups are purged within 90 days.</p>
+
+    <h3>Questions?</h3>
+    <p>Contact <a href="mailto:privacy@arrivalcompany.com">privacy@arrivalcompany.com</a>.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DELETE DATA PAGE -->
+<!-- ============================================================ -->
+<div class="page" id="page-delete-data">
+  <div class="legal-header">
+    <div class="legal-header-inner">
+      <h1>Delete Your Data</h1>
+      <span>Arrival — Data Deletion</span>
+    </div>
+  </div>
+  <div class="help-content">
+    <h3>Delete your data without deleting your account</h3>
+    <p>You can request deletion of specific data while keeping your Arrival account active.</p>
+
+    <h3>From the app</h3>
+    <ul style="margin: 12px 0 12px 24px; color: #555; line-height: 1.8;">
+      <li><strong>Video recordings:</strong> Settings → toggle off "AI training recordings". Future recordings stop immediately. To delete existing clips, email us.</li>
+      <li><strong>Documents:</strong> Go to your Document Library → swipe to delete individual documents.</li>
+      <li><strong>Query history:</strong> Contact us to clear your query history.</li>
+    </ul>
+
+    <h3>By email</h3>
+    <p>Send an email to <a href="mailto:privacy@arrivalcompany.com">privacy@arrivalcompany.com</a> from the email address associated with your account. Tell us which data you want deleted:</p>
+    <ul style="margin: 12px 0 12px 24px; color: #555; line-height: 1.8;">
+      <li>Query history and saved answers</li>
+      <li>Uploaded documents</li>
+      <li>Video clips and spatial data</li>
+      <li>All of the above</li>
+    </ul>
+    <p>We will process your request within 30 days.</p>
+
+    <h3>What stays</h3>
+    <p>Your account profile (name, email, trade) and active subscription remain intact. Anonymized, aggregated data that cannot identify you may be retained.</p>
+
+    <h3>Retention period</h3>
+    <p>Requested data is permanently deleted within 30 days. Backups are purged within 90 days.</p>
+
+    <h3>Questions?</h3>
+    <p>Contact <a href="mailto:privacy@arrivalcompany.com">privacy@arrivalcompany.com</a>.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- LOGIN PAGE -->
 <!-- ============================================================ -->
 <div class="page" id="page-login">
@@ -3296,7 +3380,7 @@ showPage = function(pageId) {
 // Auto-show page based on URL path
 (function() {
     var path = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-    if (path === 'privacy' || path === 'terms') {
+    if (['privacy', 'terms', 'delete-account', 'delete-data'].indexOf(path) !== -1) {
         showPage(path);
     }
 })();
