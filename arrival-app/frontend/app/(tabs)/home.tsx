@@ -182,7 +182,7 @@ export default function HomeScreen() {
         const dx = touches[0].pageX - touches[1].pageX;
         const dy = touches[0].pageY - touches[1].pageY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const scale = Math.min(Math.max(pinchBaseZoom.current * (dist / pinchBaseDistance.current), 0.5), 5);
+        const scale = Math.min(Math.max(pinchBaseZoom.current * (dist / pinchBaseDistance.current), 1), 5);
         cameraZoomRef.current = scale;
         cameraZoomAnim.setValue(scale);
       }
