@@ -129,12 +129,18 @@ When you use information from these documents, cite the filename as your source.
         system_prompt += "\n\nYou're answering from general trade knowledge without documentation. If the question is specific to a model or procedure, briefly note you're going from general experience, not their docs."
 
     # Bug #16: Use await with the async client
+    # Prompt caching: mark system prompt for caching to save ~90% on input tokens
+    # Cache has 5-min TTL — active voice sessions keep it warm
     use_model = model or config.ANTHROPIC_MODEL
     t0 = time.monotonic()
     response = await client.messages.create(
         model=use_model,
         max_tokens=max_tokens,
-        system=system_prompt,
+        system=[{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }],
         messages=messages,
     )
     elapsed = time.monotonic() - t0

@@ -979,11 +979,11 @@ export default function HomeScreen() {
       {permission?.granted && interactionMode !== 'job' && (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
       )}
-      {/* Job Mode: LiveKit VideoTrack with CSS scale fallback for zoom */}
+      {/* Job Mode: LiveKit VideoTrack — no CSS zoom (causes ugly box), fill screen */}
       {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
-        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoomAnim }] }]}>
+        <View style={StyleSheet.absoluteFill}>
           <LKVideoTrack trackRef={localVideoTrackRef} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
-        </Animated.View>
+        </View>
       )}
       {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />

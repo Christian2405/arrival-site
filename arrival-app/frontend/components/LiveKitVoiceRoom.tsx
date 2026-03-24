@@ -327,25 +327,15 @@ function RoomContent({
       const newFacing = cameraFacing === 'environment' ? 'user' : 'environment';
 
       try {
-        // Get the existing video track publication
-        const pub = room?.localParticipant?.getTrackPublication(Track.Source.Camera);
-        const track = pub?.track;
-        if (track && 'restartTrack' in track) {
-          // restartTrack changes the camera without unpublish/republish
-          await (track as any).restartTrack({
-            facingMode: newFacing,
-            resolution: { width: 1080, height: 1920, frameRate: 30 },
-          });
-          setCameraFacing(newFacing);
-          console.log(`[LiveKitVoice] ✓ Camera flipped to ${newFacing}`);
-        } else {
-          // Fallback: disable/enable
-          console.log('[LiveKitVoice] No track for restartTrack, using disable/enable');
-          setCameraFacing(newFacing);
-        }
+        // Full disable → wait → re-enable with new facing direction
+        // restartTrack is unreliable on React Native, so always do the full cycle
+        await room?.localParticipant?.setCameraEnabled(false);
+        await new Promise(r => setTimeout(r, 500));  // iOS needs time to release hardware
+        setCameraFacing(newFacing);
+        // The useEffect watching cameraFacing will re-enable with new direction
+        console.log(`[LiveKitVoice] ✓ Camera flip initiated to ${newFacing}`);
       } catch (e: any) {
         console.warn(`[LiveKitVoice] Camera flip failed: ${e?.message || e}`);
-        // Fallback
         setCameraFacing(newFacing);
       }
     };
