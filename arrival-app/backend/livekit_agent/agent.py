@@ -820,6 +820,11 @@ class ArrivalAgent(Agent):
         self._inferred_task = task_description
         self._inferred_task_updated_at = time.time()
 
+        # Start spatial sequence for this guided job
+        if getattr(self, '_spatial_recorder', None):
+            equip = {"type": self._equipment_type, "brand": self._equipment_brand, "model": self._equipment_model} if hasattr(self, '_equipment_type') else None
+            asyncio.ensure_future(self._spatial_recorder.start_sequence(task_description, equip))
+
         logger.info(f"[guidance] ✓ Knowledge brief generated for: {task_description}")
         logger.info(f"[guidance]   Brief: {brief[:200]}...")
 
@@ -849,6 +854,9 @@ class ArrivalAgent(Agent):
         self._guidance_task = ""
         self._guidance_brief = ""
         self._guidance_context = ""
+        # End spatial sequence
+        if getattr(self, '_spatial_recorder', None):
+            asyncio.ensure_future(self._spatial_recorder.end_sequence(outcome="completed"))
         logger.info(f"[guidance] ✓ Guidance stopped for: {task}")
         return (
             f"Guidance stopped for: {task}. "

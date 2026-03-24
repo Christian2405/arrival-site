@@ -36,6 +36,10 @@ class SpatialRecorder:
         self._consent: bool = False
         self._recording: bool = False
         self._clip_count: int = 0
+        # Sequence tracking — groups clips into workflows
+        self._current_sequence_id: str | None = None
+        self._sequence_order: int = 0
+        self._last_clip_id: str | None = None
 
     async def start_session(
         self,
@@ -106,6 +110,116 @@ class SpatialRecorder:
         except Exception as e:
             logger.error(f"Error ending spatial session: {e}")
 
+    async def start_sequence(self, task_description: str = "", equipment: dict | None = None):
+        """Start a new clip sequence (job/workflow). Called when guidance starts or new task inferred."""
+        if not self._session_id or not self._consent:
+            return
+        equip = equipment or {}
+        seq_id = str(uuid.uuid4())
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{SUPABASE_URL}/rest/v1/spatial_sequences",
+                    headers=_SERVICE_HEADERS,
+                    json={
+                        "id": seq_id,
+                        "session_id": self._session_id,
+                        "user_id": self._user_id,
+                        "task_description": task_description,
+                        "equipment_type": equip.get("type"),
+                        "equipment_brand": equip.get("brand"),
+                        "equipment_model": equip.get("model"),
+                    },
+                    timeout=10,
+                )
+                if resp.status_code in (200, 201):
+                    self._current_sequence_id = seq_id
+                    self._sequence_order = 0
+                    self._last_clip_id = None
+                    logger.info(f"Spatial sequence started: {seq_id} ({task_description[:60]})")
+        except Exception as e:
+            logger.error(f"Error creating spatial sequence: {e}")
+
+    async def end_sequence(self, outcome: str = "unknown"):
+        """End current sequence."""
+        if not self._current_sequence_id:
+            return
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.patch(
+                    f"{SUPABASE_URL}/rest/v1/spatial_sequences?id=eq.{self._current_sequence_id}",
+                    headers=_SERVICE_HEADERS,
+                    json={
+                        "ended_at": datetime.utcnow().isoformat(),
+                        "clip_count": self._sequence_order,
+                        "outcome": outcome,
+                    },
+                    timeout=10,
+                )
+            logger.info(f"Spatial sequence ended: {self._current_sequence_id} ({self._sequence_order} clips, outcome={outcome})")
+        except Exception as e:
+            logger.error(f"Error ending spatial sequence: {e}")
+        self._current_sequence_id = None
+        self._sequence_order = 0
+        self._last_clip_id = None
+
+    async def add_labels(self, clip_id: str, labels: list[dict]):
+        """Add labels to a clip. Each label: {label_type, label_value, confidence}"""
+        if not labels:
+            return
+        rows = []
+        for label in labels:
+            rows.append({
+                "clip_id": clip_id,
+                "label_type": label.get("label_type", ""),
+                "label_value": label.get("label_value", ""),
+                "confidence": label.get("confidence", 1.0),
+            })
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"{SUPABASE_URL}/rest/v1/spatial_labels",
+                    headers=_SERVICE_HEADERS,
+                    json=rows,
+                    timeout=10,
+                )
+        except Exception as e:
+            logger.error(f"Error adding labels: {e}")
+
+    def _extract_labels(self, trigger_type: str, trigger_text: str, agent) -> list[dict]:
+        """Auto-extract labels from trigger context."""
+        labels = []
+        # Semantic label — what did the user ask
+        if trigger_text:
+            labels.append({"label_type": "semantic", "label_value": trigger_text[:500], "confidence": 1.0})
+
+        # Equipment labels
+        if hasattr(agent, '_equipment_type') and agent._equipment_type:
+            labels.append({"label_type": "equipment", "label_value": agent._equipment_type, "confidence": 0.9})
+        if hasattr(agent, '_equipment_brand') and agent._equipment_brand:
+            labels.append({"label_type": "equipment", "label_value": f"brand:{agent._equipment_brand}", "confidence": 0.9})
+
+        # Workflow stage from scene memory
+        if hasattr(agent, '_scene') and agent._scene.stage:
+            labels.append({"label_type": "workflow", "label_value": agent._scene.stage, "confidence": 0.7})
+
+        # Activity from scene memory
+        if hasattr(agent, '_scene') and agent._scene.activity:
+            labels.append({"label_type": "action", "label_value": agent._scene.activity, "confidence": 0.6})
+
+        # Object labels from scene memory
+        if hasattr(agent, '_scene') and agent._scene.objects:
+            for obj in agent._scene.objects[:5]:
+                labels.append({"label_type": "object", "label_value": obj, "confidence": 0.6})
+
+        # Guidance context
+        if hasattr(agent, '_guidance_active') and agent._guidance_active:
+            labels.append({"label_type": "workflow", "label_value": "guided", "confidence": 1.0})
+            if hasattr(agent, '_guidance_task') and agent._guidance_task:
+                labels.append({"label_type": "semantic", "label_value": f"task:{agent._guidance_task}", "confidence": 1.0})
+
+        return labels
+
     async def trigger_recording(
         self,
         trigger_type: str,
@@ -144,16 +258,28 @@ class SpatialRecorder:
         self._recording = True
 
         try:
-            # 1. Create clip record in Supabase
+            # Track sequence
+            self._sequence_order += 1
+
+            # Determine workflow stage from scene memory
+            workflow_stage = None
+            if hasattr(agent, '_scene') and agent._scene.stage:
+                workflow_stage = agent._scene.stage
+
+            # 1. Create clip record in Supabase with sequence data
             clip_row = {
                 "id": clip_id,
                 "session_id": self._session_id,
                 "s3_key": s3_key,
                 "trigger_type": trigger_type,
-                "trigger_text": (trigger_text or "")[:2000],  # Truncate long text
+                "trigger_text": (trigger_text or "")[:2000],
                 "monitor_state": monitor_state,
                 "status": "recording",
                 "resolution": "720x1280",
+                "sequence_id": self._current_sequence_id,
+                "sequence_order": self._sequence_order,
+                "parent_clip_id": self._last_clip_id,
+                "workflow_stage": workflow_stage,
             }
             await self._insert_clip(clip_row)
             logger.info(f"Recording clip {clip_id} ({trigger_type}: {trigger_text[:80] if trigger_text else ''})")
@@ -201,7 +327,17 @@ class SpatialRecorder:
                 duration_seconds=len(frames) / 2.0,  # 2fps
             )
             self._clip_count += 1
+            self._last_clip_id = clip_id
             logger.info(f"Clip {clip_id} ready: s3://{s3_key} ({len(mp4_data)} bytes, {len(frames)} frames)")
+
+            # 6. Auto-generate labels from context
+            try:
+                labels = self._extract_labels(trigger_type, trigger_text, agent)
+                if labels:
+                    await self.add_labels(clip_id, labels)
+                    logger.info(f"Clip {clip_id}: {len(labels)} labels added")
+            except Exception as e:
+                logger.debug(f"Label generation failed for {clip_id}: {e}")
 
         except Exception as e:
             logger.error(f"Clip {clip_id} failed: {e}")
