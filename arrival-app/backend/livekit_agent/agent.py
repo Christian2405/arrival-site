@@ -148,7 +148,9 @@ FRAME_CHANGE_THRESHOLD = 8     # out of 100 sampled positions
 SCENE_POLL_INTERVAL = 15          # Base interval for checking frames (seconds)
 SCENE_STATIC_BACKOFF = 60         # Back off to this when nothing changes
 SCENE_ACTIVE_INTERVAL = 12        # Check more often when scene is changing
-SCENE_POST_SPEAK_COOLDOWN = 30    # Minimum gap between proactive interjections
+SCENE_POST_SPEAK_COOLDOWN = 30    # Minimum gap between proactive interjections (passive)
+GUIDANCE_CHECK_INTERVAL = 8       # Check more often during guidance — actively guiding
+GUIDANCE_SPEAK_COOLDOWN = 12      # Guidance can speak more often — user expects it
 TASK_CONTEXT_DECAY_SECONDS = 120  # Clear inferred task after 2 min of silence
 SCENE_IGNORED_BACKOFF = 45        # If user ignored our last comment, wait this long
 PROACTIVE_MUTE_DURATION = 300     # 5 min mute when user explicitly silences
@@ -976,35 +978,67 @@ async def _analyze_scene(frame_b64: str, agent: "ArrivalAgent") -> Optional[dict
     elif scene.ignored_count >= 1:
         confidence_note = "Your last comment was ignored. Be extra selective about speaking.\n"
 
-    prompt = (
-        "You're watching a trade worker through their phone camera. The phone may be propped up "
-        "far away or at an angle. Objects may be small, blurry, or partially hidden.\n\n"
-        f"{task_context}"
-        f"{scene_so_far}"
-        f"{already_said}"
-        f"{confidence_note}\n"
-        "Respond in JSON only:\n"
-        '{"objects": ["item1", "item2"], "activity": "what they are doing", "stage": "prep|execution|testing|cleanup", "speak": null}\n\n'
-        "ACCURACY IS EVERYTHING. You must be RIGHT or SILENT. Never guess.\n\n"
-        "For objects: only list what you can clearly identify. If you can see it's a wrench but not "
-        "what type, say 'wrench'. If you can see wire but not the gauge, say 'wire'. Don't guess specifics "
-        "you can't actually read or measure from the image.\n\n"
-        "SPEAK RULES (speak = null is the default — silence is almost always correct):\n"
-        "- SAFETY: you can CLEARLY see exposed live wires, gas leak, active fire, fall risk → speak\n"
-        "- WRONG PART: you can CLEARLY read or identify the wrong gauge, wrong fitting, wrong size → speak\n"
-        "- MISTAKE: you can CLEARLY see them about to connect wrong terminal, wrong pipe, reversed polarity → speak\n"
-        "- EVERYTHING ELSE → null. If you're 80% sure, that's not sure enough. Stay quiet.\n\n"
-        "NEVER speak about:\n"
-        "- What you see (no narrating the scene)\n"
-        "- Image quality, blur, angles, lighting\n"
-        "- Things you THINK you see but aren't certain\n"
-        "- General safety reminders they already know\n"
-        "- Anything you already said\n"
-        "- Recommendations or tips they didn't ask for\n\n"
-        "If you speak: under 12 words, like a coworker. One thing only.\n"
-        "Example: 'Hey — that's 14 gauge, you need 12 for 20 amp.'\n"
-        "JSON only, no other text."
-    )
+    if agent._guidance_active:
+        # GUIDANCE MODE — actively guide them through the job
+        prompt = (
+            "You're guiding a trade worker through a job. You're watching through their phone camera.\n\n"
+            f"{task_context}"
+            f"{scene_so_far}"
+            f"{already_said}"
+            f"{confidence_note}\n"
+            "Respond in JSON only:\n"
+            '{"objects": ["item1", "item2"], "activity": "what they are doing", "stage": "prep|execution|testing|cleanup", "speak": "what to tell them" or null}\n\n'
+            "You are ACTIVELY GUIDING. Your job is to:\n"
+            "1. Watch what they're doing and figure out where they are in the job\n"
+            "2. When they finish a step or pause, tell them what to do next\n"
+            "3. If they're doing something wrong or about to make a mistake, speak up immediately\n"
+            "4. If they're in the middle of doing something correctly, stay quiet and let them work\n\n"
+            "WHEN TO SPEAK:\n"
+            "- They just finished something → tell them what's next\n"
+            "- They paused or look stuck → tell them what to do\n"
+            "- They're about to make a mistake → warn them\n"
+            "- Safety issue → alert immediately\n\n"
+            "WHEN TO STAY QUIET (speak = null):\n"
+            "- They're actively working and doing it right → let them work\n"
+            "- You just told them something and they're doing it → wait\n"
+            "- You can't clearly see what's happening → don't guess\n"
+            "- You already said this exact thing\n\n"
+            "SPEAK STYLE: Short, direct, like a vet standing next to them. Under 20 words.\n"
+            "Examples: 'Good, now connect the black to the brass screw.' | 'Hold up — kill the breaker first.' | "
+            "'That's your neutral, white wire goes to silver.'\n"
+            "JSON only, no other text."
+        )
+    else:
+        # PASSIVE MODE — only speak for clear safety/error issues
+        prompt = (
+            "You're watching a trade worker through their phone camera. The phone may be propped up "
+            "far away or at an angle. Objects may be small, blurry, or partially hidden.\n\n"
+            f"{task_context}"
+            f"{scene_so_far}"
+            f"{already_said}"
+            f"{confidence_note}\n"
+            "Respond in JSON only:\n"
+            '{"objects": ["item1", "item2"], "activity": "what they are doing", "stage": "prep|execution|testing|cleanup", "speak": null}\n\n'
+            "ACCURACY IS EVERYTHING. You must be RIGHT or SILENT. Never guess.\n\n"
+            "For objects: only list what you can clearly identify. If you can see it's a wrench but not "
+            "what type, say 'wrench'. If you can see wire but not the gauge, say 'wire'. Don't guess specifics "
+            "you can't actually read or measure from the image.\n\n"
+            "SPEAK RULES (speak = null is the default — silence is almost always correct):\n"
+            "- SAFETY: you can CLEARLY see exposed live wires, gas leak, active fire, fall risk → speak\n"
+            "- WRONG PART: you can CLEARLY read or identify the wrong gauge, wrong fitting, wrong size → speak\n"
+            "- MISTAKE: you can CLEARLY see them about to connect wrong terminal, wrong pipe, reversed polarity → speak\n"
+            "- EVERYTHING ELSE → null. If you're 80% sure, that's not sure enough. Stay quiet.\n\n"
+            "NEVER speak about:\n"
+            "- What you see (no narrating the scene)\n"
+            "- Image quality, blur, angles, lighting\n"
+            "- Things you THINK you see but aren't certain\n"
+            "- General safety reminders they already know\n"
+            "- Anything you already said\n"
+            "- Recommendations or tips they didn't ask for\n\n"
+            "If you speak: under 12 words, like a coworker. One thing only.\n"
+            "Example: 'Hey — that's 14 gauge, you need 12 for 20 amp.'\n"
+            "JSON only, no other text."
+        )
 
     try:
         response = await asyncio.wait_for(
@@ -1059,8 +1093,14 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
     while True:
         try:
-            # Adaptive interval based on scene state
-            if consecutive_unchanged > 8:
+            # Adaptive interval based on mode and scene state
+            if agent._guidance_active:
+                # Guidance mode — check frequently, user expects active guiding
+                if consecutive_unchanged > 5:
+                    interval = 20  # Scene static during guidance — maybe they're working
+                else:
+                    interval = GUIDANCE_CHECK_INTERVAL  # 8s — actively watching
+            elif consecutive_unchanged > 8:
                 interval = SCENE_STATIC_BACKOFF  # 60s — camera is clearly static
             elif consecutive_unchanged > 3:
                 interval = 30  # Slowing down — not much happening
@@ -1151,7 +1191,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             is_guidance = agent._guidance_active
 
             # Gate 1: Too long = not confident (passive) or rambling (guidance)
-            max_len = 120 if is_guidance else 80
+            max_len = 200 if is_guidance else 80
             if len(speak) > max_len:
                 logger.debug(f"[proactive] GATE: too long ({len(speak)} chars), dropping: {speak[:50]}")
                 continue
@@ -1207,9 +1247,10 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                 logger.debug(f"[proactive] Skipping repeat: {speak[:50]}")
                 continue
 
-            # Cooldown — don't spam
-            if (now - scene.last_spoken_time) < SCENE_POST_SPEAK_COOLDOWN:
-                logger.debug(f"[proactive] Cooldown active, skipping: {speak[:50]}")
+            # Cooldown — don't spam (guidance gets shorter cooldown — user expects active guiding)
+            cooldown = GUIDANCE_SPEAK_COOLDOWN if is_guidance else SCENE_POST_SPEAK_COOLDOWN
+            if (now - scene.last_spoken_time) < cooldown:
+                logger.debug(f"[proactive] Cooldown active ({cooldown}s), skipping: {speak[:50]}")
                 continue
 
             # Don't interrupt active conversation
