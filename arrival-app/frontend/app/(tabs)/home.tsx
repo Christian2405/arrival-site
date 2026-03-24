@@ -159,10 +159,14 @@ export default function HomeScreen() {
   const [livekitActive, setLivekitActive] = useState(false);
   const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
   const flipCameraRef = useRef<(() => void) | null>(null);
-  const cameraZoomRef = useRef(1);
-  const cameraZoomAnim = useRef(new Animated.Value(1)).current;
+  // Zoom state — 0 = ultra-wide (0.5x), 0.5 = 1x, 1.0 = max telephoto
+  // expo-camera zoom prop uses 0-1 range
+  // For LiveKit VideoTrack (Job Mode), we use CSS scale 1x-3x as fallback
+  const [cameraZoom, setCameraZoom] = useState(0);  // expo-camera native zoom (0-1)
+  const cameraZoomRef = useRef(0);
+  const cameraZoomAnim = useRef(new Animated.Value(1)).current;  // CSS scale for LiveKit only
   const pinchBaseDistance = useRef(0);
-  const pinchBaseZoom = useRef(1);
+  const pinchBaseZoom = useRef(0);
 
   const pinchResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: (_, gestureState) => gestureState.numberActiveTouches === 2,
@@ -182,9 +186,14 @@ export default function HomeScreen() {
         const dx = touches[0].pageX - touches[1].pageX;
         const dy = touches[0].pageY - touches[1].pageY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const scale = Math.min(Math.max(pinchBaseZoom.current * (dist / pinchBaseDistance.current), 1), 5);
-        cameraZoomRef.current = scale;
-        cameraZoomAnim.setValue(scale);
+        const ratio = dist / pinchBaseDistance.current;
+        // Native camera zoom: 0 to 1 (maps to ~0.5x to ~10x on iPhone)
+        const newZoom = Math.min(Math.max(pinchBaseZoom.current + (ratio - 1) * 0.3, 0), 1);
+        cameraZoomRef.current = newZoom;
+        setCameraZoom(newZoom);
+        // CSS scale fallback for LiveKit VideoTrack: 1x to 3x
+        const cssScale = 1 + (newZoom * 2);
+        cameraZoomAnim.setValue(cssScale);
       }
     },
     onPanResponderRelease: () => {
@@ -966,19 +975,19 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoomAnim }] }]}
-      >
-        {permission?.granted && interactionMode !== 'job' && (
-          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-        )}
-        {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
+      {/* Voice/Text modes: native camera zoom via zoom prop (0-1 = 0.5x to max) */}
+      {permission?.granted && interactionMode !== 'job' && (
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
+      )}
+      {/* Job Mode: LiveKit VideoTrack with CSS scale fallback for zoom */}
+      {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: cameraZoomAnim }] }]}>
           <LKVideoTrack trackRef={localVideoTrackRef} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
-        )}
-        {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
-          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-        )}
-      </Animated.View>
+        </Animated.View>
+      )}
+      {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
+      )}
 
       {/* Dark overlay on camera feed — also handles pinch-to-zoom */}
       <View
