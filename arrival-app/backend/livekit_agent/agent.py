@@ -1132,6 +1132,53 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if not speak or speak == "null" or speak.upper() in ("NULL", "NONE", "QUIET", "NOTHING"):
                 continue
 
+            # ============================================================
+            # ENGINEERING GATES — model output must pass ALL of these
+            # These are hard rules, not prompts. Model can say whatever
+            # it wants — these gates decide if it actually reaches TTS.
+            # ============================================================
+
+            # Gate 1: Too long = not confident. Real observations are short.
+            if len(speak) > 80:
+                logger.debug(f"[proactive] GATE: too long ({len(speak)} chars), dropping: {speak[:50]}")
+                continue
+
+            # Gate 2: Contains hedging language = not sure = don't speak
+            _HEDGE_WORDS = {"might", "maybe", "possibly", "could be", "looks like it might",
+                            "i think", "it seems", "appears to", "not sure", "hard to tell",
+                            "it's possible", "potentially", "i believe", "seems like"}
+            speak_lower = speak.lower()
+            if any(hedge in speak_lower for hedge in _HEDGE_WORDS):
+                logger.debug(f"[proactive] GATE: hedging detected, dropping: {speak[:50]}")
+                continue
+
+            # Gate 3: Narrating/describing = useless. Only actionable statements pass.
+            _NARRATION = {"i can see", "i see", "you're looking at", "the camera shows",
+                          "in the frame", "in the image", "you have", "there is a",
+                          "there are", "i notice", "i can make out"}
+            if any(narr in speak_lower for narr in _NARRATION):
+                logger.debug(f"[proactive] GATE: narration detected, dropping: {speak[:50]}")
+                continue
+
+            # Gate 4: Generic advice that any tech already knows
+            _GENERIC = {"be careful", "stay safe", "make sure to", "don't forget to",
+                        "remember to", "always", "you should", "it's important to",
+                        "keep in mind", "just a reminder"}
+            if any(gen in speak_lower for gen in _GENERIC):
+                logger.debug(f"[proactive] GATE: generic advice, dropping: {speak[:50]}")
+                continue
+
+            # Gate 5: Must reference something specific from the scene
+            # If the speak text doesn't mention any detected object, it's hallucinated
+            if objects and not any(obj.lower() in speak_lower for obj in objects):
+                # Exception: safety keywords bypass this check
+                safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
+                                   "kill the breaker", "shut off", "stop", "disconnect",
+                                   "PPE", "goggles", "gloves", "harness"}
+                if not any(kw in speak_lower for kw in safety_keywords):
+                    logger.debug(f"[proactive] GATE: speak doesn't reference detected objects, dropping: {speak[:50]}")
+                    continue
+
             # Anti-repeat check
             if scene.already_said(speak):
                 logger.debug(f"[proactive] Skipping repeat: {speak[:50]}")
@@ -1150,11 +1197,11 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             if agent._user_pushback_count > 2 and (now - scene.last_spoken_time) < 60:
                 continue
 
-            # --- Speak ---
+            # --- All gates passed — speak ---
             safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
                                "kill the breaker", "shut off", "stop", "careful", "disconnect",
                                "PPE", "goggles", "gloves", "harness"}
-            is_safety = any(kw in speak.lower() for kw in safety_keywords)
+            is_safety = any(kw in speak_lower for kw in safety_keywords)
 
             if is_safety:
                 instruction = f"STOP — {speak}. Alert them immediately."
