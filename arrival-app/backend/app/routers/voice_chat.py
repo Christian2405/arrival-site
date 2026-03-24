@@ -26,6 +26,7 @@ from app.services.feedback_learning import get_feedback_context
 from app.services.job_context import get_job_context, format_job_context_prompt
 from app.middleware.auth import get_current_user
 from app.services.usage import check_query_limit
+from app.services.s3 import upload_clip, build_s3_key
 
 logger = logging.getLogger(__name__)
 
@@ -405,6 +406,69 @@ async def voice_chat(
                 response_time_ms=_voice_elapsed_ms,
             )
         asyncio.create_task(_safe_task(_log(), task_name="voice_chat_log_query"))
+
+        # 6. Fire-and-forget: spatial snapshot (frame + labels) when image present
+        if request.image_base64 and _wants_visual:
+            async def _spatial_snapshot():
+                try:
+                    import uuid
+                    from datetime import datetime
+                    from app.config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AWS_S3_BUCKET
+                    import httpx as _httpx
+
+                    _svc_headers = {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation",
+                    }
+
+                    clip_id = str(uuid.uuid4())
+                    now = datetime.utcnow()
+                    s3_key = f"snapshots/{now.year}/{now.month:02d}/{now.day:02d}/{user_id[:8]}/{clip_id}.jpg"
+
+                    # Upload JPEG to S3
+                    frame_bytes = b64_module.b64decode(request.image_base64)
+                    await upload_clip(s3_key, frame_bytes, content_type="image/jpeg")
+
+                    # Log to spatial_clips
+                    async with _httpx.AsyncClient() as client:
+                        await client.post(
+                            f"{SUPABASE_URL}/rest/v1/spatial_clips",
+                            headers=_svc_headers,
+                            json={
+                                "id": clip_id,
+                                "s3_key": s3_key,
+                                "s3_bucket": AWS_S3_BUCKET,
+                                "trigger_type": "voice_query",
+                                "trigger_text": transcript[:2000],
+                                "ai_response": chat_result.get("response", "")[:2000],
+                                "status": "ready",
+                                "resolution": "snapshot",
+                                "file_size_bytes": len(frame_bytes),
+                                "frame_count": 1,
+                                "duration_seconds": 0,
+                            },
+                            timeout=10,
+                        )
+
+                        # Auto-labels
+                        labels = [
+                            {"clip_id": clip_id, "label_type": "semantic", "label_value": transcript[:500], "confidence": 1.0},
+                        ]
+                        if error_code_result:
+                            labels.append({"clip_id": clip_id, "label_type": "equipment", "label_value": f"{error_code_result.get('brand', '')} {error_code_result.get('code', '')}", "confidence": 0.9})
+
+                        await client.post(
+                            f"{SUPABASE_URL}/rest/v1/spatial_labels",
+                            headers=_svc_headers,
+                            json=labels,
+                            timeout=10,
+                        )
+                    logger.info(f"[spatial] Voice snapshot saved: {s3_key} ({len(frame_bytes)} bytes)")
+                except Exception as e:
+                    logger.debug(f"[spatial] Voice snapshot failed (non-fatal): {e}")
+            asyncio.create_task(_safe_task(_spatial_snapshot(), task_name="voice_spatial_snapshot"))
 
         return VoiceChatResponse(
             transcript=transcript,
