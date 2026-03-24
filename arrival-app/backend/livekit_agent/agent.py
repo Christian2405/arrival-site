@@ -519,8 +519,14 @@ class ArrivalAgent(Agent):
 
         buffer = ""
         is_start = True
+        sentence_count = 0
+        MAX_VOICE_SENTENCES = 4  # Hard cap — never speak more than 4 sentences
 
         async for chunk in text:
+            # Stop generating after max sentences
+            if sentence_count >= MAX_VOICE_SENTENCES:
+                break
+
             buffer += chunk
 
             # Wait for enough text to process
@@ -537,10 +543,12 @@ class ArrivalAgent(Agent):
             buffer = re.sub(r"  +", " ", buffer)
 
             if buffer.strip():
+                # Count sentences in what we're about to yield
+                sentence_count += buffer.count('.') + buffer.count('!') + buffer.count('?')
                 yield buffer
                 buffer = ""
 
-        if buffer.strip():
+        if buffer.strip() and sentence_count < MAX_VOICE_SENTENCES:
             buffer = _ROBOTIC.sub("", buffer)
             buffer = _NUMBERED.sub("", buffer)
             buffer = re.sub(r"  +", " ", buffer).strip()
