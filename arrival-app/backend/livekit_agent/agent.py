@@ -656,7 +656,23 @@ class ArrivalAgent(Agent):
         else:
             logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
 
-        # 4. Trigger spatial recording if consent given
+        # 4. Inject guidance brief into conversation when guidance is active
+        # This ensures the LLM always has the knowledge brief when answering
+        # user questions during guided tasks — not just during proactive scans
+        if self._guidance_active and self._guidance_brief:
+            guidance_context = (
+                f"[ACTIVE GUIDANCE — Task: {self._guidance_task}]\n"
+                f"{self._guidance_brief}\n"
+                "Guide them naturally based on what you see. One thing at a time. "
+                "When they say 'done', 'what's next', 'ok', or 'yeah' — tell them the next thing to do. "
+                "Never use numbered steps or lists."
+            )
+            if isinstance(new_message.content, list):
+                new_message.content.append(guidance_context)
+            elif isinstance(new_message.content, str):
+                new_message.content = [new_message.content, guidance_context]
+
+        # 5. Trigger spatial recording if consent given
         if getattr(self, '_spatial_recorder', None):
             # Extract user text for trigger
             trigger_text = ""
@@ -938,8 +954,8 @@ async def _analyze_scene(frame_b64: str, agent: "ArrivalAgent") -> Optional[dict
     if agent._guidance_active:
         task_context = f"TASK: {agent._guidance_task}\n"
         if agent._guidance_brief:
-            # Include first 500 chars of brief to keep prompt lean
-            task_context += f"JOB KNOWLEDGE:\n{agent._guidance_brief[:500]}\n"
+            # Full brief — guidance needs all context to track task progression
+            task_context += f"JOB KNOWLEDGE:\n{agent._guidance_brief}\n"
     elif agent._inferred_task:
         task_context = f"TASK: {agent._inferred_task}\n"
 
@@ -1136,48 +1152,56 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             # ENGINEERING GATES — model output must pass ALL of these
             # These are hard rules, not prompts. Model can say whatever
             # it wants — these gates decide if it actually reaches TTS.
+            #
+            # GUIDANCE MODE: gates are relaxed because the user ASKED
+            # for help. Guidance interjections are expected and welcome.
+            # PASSIVE MODE: gates are strict — only speak when certain.
             # ============================================================
 
-            # Gate 1: Too long = not confident. Real observations are short.
-            if len(speak) > 80:
+            speak_lower = speak.lower()
+            is_guidance = agent._guidance_active
+
+            # Gate 1: Too long = not confident (passive) or rambling (guidance)
+            max_len = 120 if is_guidance else 80
+            if len(speak) > max_len:
                 logger.debug(f"[proactive] GATE: too long ({len(speak)} chars), dropping: {speak[:50]}")
                 continue
 
-            # Gate 2: Contains hedging language = not sure = don't speak
+            # Gate 2: Hedging = not sure = don't speak (both modes)
             _HEDGE_WORDS = {"might", "maybe", "possibly", "could be", "looks like it might",
-                            "i think", "it seems", "appears to", "not sure", "hard to tell",
-                            "it's possible", "potentially", "i believe", "seems like"}
-            speak_lower = speak.lower()
+                            "not sure", "hard to tell", "it's possible", "potentially"}
             if any(hedge in speak_lower for hedge in _HEDGE_WORDS):
                 logger.debug(f"[proactive] GATE: hedging detected, dropping: {speak[:50]}")
                 continue
 
-            # Gate 3: Narrating/describing = useless. Only actionable statements pass.
-            _NARRATION = {"i can see", "i see", "you're looking at", "the camera shows",
-                          "in the frame", "in the image", "you have", "there is a",
-                          "there are", "i notice", "i can make out"}
-            if any(narr in speak_lower for narr in _NARRATION):
-                logger.debug(f"[proactive] GATE: narration detected, dropping: {speak[:50]}")
-                continue
-
-            # Gate 4: Generic advice that any tech already knows
-            _GENERIC = {"be careful", "stay safe", "make sure to", "don't forget to",
-                        "remember to", "always", "you should", "it's important to",
-                        "keep in mind", "just a reminder"}
-            if any(gen in speak_lower for gen in _GENERIC):
-                logger.debug(f"[proactive] GATE: generic advice, dropping: {speak[:50]}")
-                continue
-
-            # Gate 5: Must reference something specific from the scene
-            # If the speak text doesn't mention any detected object, it's hallucinated
-            if objects and not any(obj.lower() in speak_lower for obj in objects):
-                # Exception: safety keywords bypass this check
-                safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
-                                   "kill the breaker", "shut off", "stop", "disconnect",
-                                   "PPE", "goggles", "gloves", "harness"}
-                if not any(kw in speak_lower for kw in safety_keywords):
-                    logger.debug(f"[proactive] GATE: speak doesn't reference detected objects, dropping: {speak[:50]}")
+            # Gate 3: Narrating = useless (passive only — guidance can reference what it sees)
+            if not is_guidance:
+                _NARRATION = {"i can see", "i see", "you're looking at", "the camera shows",
+                              "in the frame", "in the image", "there is a",
+                              "there are", "i notice", "i can make out"}
+                if any(narr in speak_lower for narr in _NARRATION):
+                    logger.debug(f"[proactive] GATE: narration detected, dropping: {speak[:50]}")
                     continue
+
+            # Gate 4: Generic advice (passive only — guidance can direct actions)
+            if not is_guidance:
+                _GENERIC = {"be careful", "stay safe", "make sure to", "don't forget to",
+                            "remember to", "you should", "it's important to",
+                            "keep in mind", "just a reminder"}
+                if any(gen in speak_lower for gen in _GENERIC):
+                    logger.debug(f"[proactive] GATE: generic advice, dropping: {speak[:50]}")
+                    continue
+
+            # Gate 5: Must reference detected objects (passive only)
+            # Guidance can talk about the task without naming visible objects
+            if not is_guidance:
+                if objects and not any(obj.lower() in speak_lower for obj in objects):
+                    safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
+                                       "kill the breaker", "shut off", "stop", "disconnect",
+                                       "PPE", "goggles", "gloves", "harness"}
+                    if not any(kw in speak_lower for kw in safety_keywords):
+                        logger.debug(f"[proactive] GATE: speak doesn't reference detected objects, dropping: {speak[:50]}")
+                        continue
 
             # Anti-repeat check
             if scene.already_said(speak):
