@@ -641,36 +641,25 @@ class ArrivalAgent(Agent):
             )
             is_vision_question = any(q in user_text for q in _VISION_QUESTIONS)
 
+            # Ensure content is a list (SDK may pass string or list)
+            if isinstance(new_message.content, str):
+                new_message.content = [new_message.content]
+            elif not isinstance(new_message.content, list):
+                new_message.content = [new_message.content]
+
             if is_vision_question:
                 # Vision question: image first so model focuses on describing
-                new_message.content = [
-                    image_content,
-                ] + list(new_message.content)
+                new_message.content = [image_content] + new_message.content
             else:
                 # Non-vision question: text first, image is just background context
-                eq_label = f" [Equipment: {eq_str}]" if eq_str else ""
-                new_message.content = list(new_message.content) + [
-                    image_content,
-                    eq_label,
-                ] if eq_label else list(new_message.content) + [image_content]
+                new_message.content = new_message.content + [image_content]
+                if eq_str:
+                    new_message.content.append(f" [Equipment: {eq_str}]")
         else:
             logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
 
-        # 4. Inject guidance brief into conversation when guidance is active
-        # This ensures the LLM always has the knowledge brief when answering
-        # user questions during guided tasks — not just during proactive scans
-        if self._guidance_active and self._guidance_brief:
-            guidance_context = (
-                f"[ACTIVE GUIDANCE — Task: {self._guidance_task}]\n"
-                f"{self._guidance_brief}\n"
-                "Guide them naturally based on what you see. One thing at a time. "
-                "When they say 'done', 'what's next', 'ok', or 'yeah' — tell them the next thing to do. "
-                "Never use numbered steps or lists."
-            )
-            if isinstance(new_message.content, list):
-                new_message.content.append(guidance_context)
-            elif isinstance(new_message.content, str):
-                new_message.content = [new_message.content, guidance_context]
+        # 4. Guidance brief is injected via system prompt in on_user_speech (line ~1676-1687)
+        # No need to also append it to every message — that wastes tokens/money.
 
         # 5. Trigger spatial recording if consent given
         if getattr(self, '_spatial_recorder', None):
@@ -1194,14 +1183,24 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             # Gate 5: Must reference detected objects (passive only)
             # Guidance can talk about the task without naming visible objects
+            # Uses word-level matching — "copper wire" matches if "wire" appears in speak
             if not is_guidance:
-                if objects and not any(obj.lower() in speak_lower for obj in objects):
-                    safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
-                                       "kill the breaker", "shut off", "stop", "disconnect",
-                                       "PPE", "goggles", "gloves", "harness"}
-                    if not any(kw in speak_lower for kw in safety_keywords):
-                        logger.debug(f"[proactive] GATE: speak doesn't reference detected objects, dropping: {speak[:50]}")
-                        continue
+                if objects:
+                    obj_words = set()
+                    for obj in objects:
+                        for word in obj.lower().split():
+                            if len(word) > 2:  # Skip tiny words like "a", "of"
+                                obj_words.add(word)
+                    speak_words = set(speak_lower.split())
+                    has_obj_ref = bool(obj_words & speak_words)  # intersection
+
+                    if not has_obj_ref:
+                        safety_keywords = {"danger", "exposed", "live", "wire", "gas", "leak", "fire", "shock",
+                                           "breaker", "shut", "stop", "disconnect",
+                                           "ppe", "goggles", "gloves", "harness"}
+                        if not (safety_keywords & speak_words):
+                            logger.debug(f"[proactive] GATE: speak doesn't reference detected objects, dropping: {speak[:50]}")
+                            continue
 
             # Anti-repeat check
             if scene.already_said(speak):
