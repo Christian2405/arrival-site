@@ -310,6 +310,7 @@ class SceneMemory:
         self.last_scene_hash: str = ""        # for frame diffing
         self.ignored_count: int = 0           # times user didn't respond after we spoke
         self.user_responded_after_speak: bool = True  # did user talk after our last interjection
+        self.last_updated: float = 0         # when scene was last analyzed (for freshness checks)
 
     def update_from_analysis(self, objects: list[str], activity: str, stage: str):
         """Update scene understanding from analysis result."""
@@ -319,6 +320,7 @@ class SceneMemory:
         if stage:
             self.stage = stage
         self.frames_since_change = 0
+        self.last_updated = time.time()
 
     def record_speech(self, text: str):
         """Record that we spoke — for anti-repeat and cooldown."""

@@ -13,7 +13,7 @@ from datetime import datetime
 
 import httpx
 
-from app.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+from app.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 from app.services.s3 import upload_clip, build_s3_key
 
 # Informal sequence detection: if same equipment + within this window, auto-link
@@ -53,6 +53,7 @@ class SpatialRecorder:
         self._last_query_time: float = 0
         # Outcome tracking
         self._pending_outcome_sequence_id: str | None = None
+        self._pending_outcome_clip_id: str | None = None
         self._pending_outcome_time: float = 0
         # Continuous recording task
         self._continuous_task: asyncio.Task | None = None
@@ -163,13 +164,11 @@ class SpatialRecorder:
         if not self._current_sequence_id:
             return
 
-        # Before/after state comparison — check if first and last frames differ
+        # Mark last clip as sequence boundary for before/after training
         if self._sequence_first_frame and self._last_clip_id:
-            state_changed = self._sequence_first_frame is not None  # We have a first frame
-            if state_changed:
-                await self.add_labels(self._last_clip_id, [
-                    {"label_type": "state", "label_value": "sequence_end", "confidence": 0.8},
-                ])
+            await self.add_labels(self._last_clip_id, [
+                {"label_type": "state", "label_value": "sequence_end", "confidence": 0.8},
+            ])
 
         try:
             async with httpx.AsyncClient() as client:
@@ -191,6 +190,7 @@ class SpatialRecorder:
         if outcome == "unknown":
             self._pending_outcome_sequence_id = self._current_sequence_id
             self._pending_outcome_time = time.time()
+            self._pending_outcome_clip_id = self._last_clip_id  # Save before clearing
 
         self._current_sequence_id = None
         self._sequence_order = 0
@@ -206,9 +206,11 @@ class SpatialRecorder:
             return
         # No follow-up for 10 minutes → infer success
         await self._update_sequence_outcome(self._pending_outcome_sequence_id, "inferred_fixed")
-        await self.add_labels(self._last_clip_id or "", [
-            {"label_type": "outcome", "label_value": "inferred_fixed", "confidence": 0.6}
-        ])
+        clip_id = getattr(self, '_pending_outcome_clip_id', None)
+        if clip_id:
+            await self.add_labels(clip_id, [
+                {"label_type": "outcome", "label_value": "inferred_fixed", "confidence": 0.6}
+            ])
         logger.info(f"Outcome inferred as fixed for sequence {self._pending_outcome_sequence_id}")
         self._pending_outcome_sequence_id = None
 
@@ -225,7 +227,7 @@ class SpatialRecorder:
         self._pending_outcome_sequence_id = None
         logger.info(f"Outcome set: {outcome} for sequence {seq_id}")
 
-    def _check_informal_sequence(self, agent) -> bool:
+    async def _check_informal_sequence(self, agent) -> bool:
         """Detect if we should auto-create a sequence from repeated equipment queries.
         Returns True if a new informal sequence was started."""
         if self._current_sequence_id:
@@ -242,10 +244,10 @@ class SpatialRecorder:
         now = time.time()
         # Same equipment within window → auto-create sequence
         if equip_key == self._last_equipment_key and (now - self._last_query_time) < _INFORMAL_SEQUENCE_WINDOW:
-            asyncio.ensure_future(self.start_sequence(
+            await self.start_sequence(
                 task_description=f"informal: repeated queries about {equip_type} {equip_brand}".strip(),
                 equipment={"type": equip_type, "brand": equip_brand}
-            ))
+            )
             logger.info(f"Informal sequence started: {equip_key}")
             return True
 
@@ -269,6 +271,7 @@ class SpatialRecorder:
                 if not frame:
                     continue
                 # Record a short clip
+                self._recording = True
                 await self._record_clip(
                     trigger_type="continuous",
                     trigger_text="",
@@ -369,7 +372,7 @@ class SpatialRecorder:
 
         # Check informal sequence (same equipment, within time window)
         if trigger_type == 'user_query':
-            self._check_informal_sequence(agent)
+            await self._check_informal_sequence(agent)
             self._last_query_time = time.time()
 
         # Save first frame of sequence for before/after comparison
@@ -379,7 +382,8 @@ class SpatialRecorder:
             except Exception:
                 pass
 
-        # Fire and forget
+        # Set recording flag BEFORE launching task to prevent concurrent clips
+        self._recording = True
         asyncio.ensure_future(
             self._record_clip(trigger_type, trigger_text, agent, monitor_state)
         )
@@ -395,7 +399,7 @@ class SpatialRecorder:
         """Record a clip: collect frames, encode MP4, upload to S3, log to Supabase."""
         clip_id = str(uuid.uuid4())
         s3_key = build_s3_key(self._session_id, clip_id)
-        self._recording = True
+        # _recording flag already set by trigger_recording before ensure_future
 
         try:
             # Track sequence
