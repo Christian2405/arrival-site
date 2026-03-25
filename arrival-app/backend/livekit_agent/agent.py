@@ -1402,6 +1402,7 @@ async def entrypoint(ctx: JobContext):
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
                 api_key=config.ANTHROPIC_API_KEY,
                 max_tokens=400,
+                caching="ephemeral",  # Cache system prompt — 90% cheaper on input tokens
             ),
             tts=elevenlabs.TTS(
                 voice_id=config.ELEVENLABS_JOB_VOICE_ID if mode == "job" else (config.ELEVENLABS_VOICE_ID or config.ELEVENLABS_JOB_VOICE_ID),

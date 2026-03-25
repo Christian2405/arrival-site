@@ -106,6 +106,8 @@ export default function HomeScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null); // Bug 1: ref to avoid stale closure
   const pttStartingRef = useRef(false); // Bug 1: mutex to prevent double-press
+  const pttFramesRef = useRef<string[]>([]); // Spatial: frames captured during PTT hold
+  const pttFrameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingPulse = useRef(new Animated.Value(1)).current;
 
   // Voice state machine (for Default Mode)
@@ -479,10 +481,35 @@ export default function HomeScreen() {
         const frameBase64 = pttFrameRef.current;
         pttFrameRef.current = undefined;
 
+        // Spatial: stop frame capture and collect frames
+        if (pttFrameIntervalRef.current) {
+          clearInterval(pttFrameIntervalRef.current);
+          pttFrameIntervalRef.current = null;
+        }
+        const spatialFrames = [...pttFramesRef.current];
+        pttFramesRef.current = [];
 
         const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
         const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
         const result = await aiAPI.voiceChat(audioBase64, frameBase64, history, false, 'default');
+
+        // Spatial: send captured frames to backend for video stitching (fire and forget)
+        if (spatialFrames.length > 2) {
+          const consent = useAuthStore.getState().profile?.spatial_capture_consent === true;
+          if (consent) {
+            const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+            const token = await useAuthStore.getState().getAccessToken();
+            fetch(`${BACKEND_URL}/api/spatial/voice-clip`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                frames: spatialFrames,
+                trigger_text: result.transcript,
+                ai_response: result.response,
+              }),
+            }).catch(() => {}); // Fire and forget
+          }
+        }
 
         if (SAVE_COMMANDS.test(result.transcript)) {
           handleVoiceSaveCommand();
@@ -546,6 +573,14 @@ export default function HomeScreen() {
     try {
       setVoiceState('listening');
       captureFrame().then(frame => { pttFrameRef.current = frame; });
+      // Spatial: start capturing frames at 2fps during PTT hold
+      pttFramesRef.current = [];
+      pttFrameIntervalRef.current = setInterval(async () => {
+        try {
+          const f = await captureFrame();
+          if (f) pttFramesRef.current.push(f);
+        } catch {}
+      }, 500);
       await startRecording();
       if (!recordingRef.current) {
         setVoiceState('idle');
