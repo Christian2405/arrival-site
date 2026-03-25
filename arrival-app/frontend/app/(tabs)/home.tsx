@@ -1460,7 +1460,10 @@ export default function HomeScreen() {
                     <Text style={styles.drawerConvText} numberOfLines={1}>{item.title}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => deleteConversation(item.id)}
+                    onPress={() => Alert.alert('Delete', 'Delete this conversation?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: () => deleteConversation(item.id) },
+                    ])}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="trash-outline" size={15} color={Colors.textFaint} />

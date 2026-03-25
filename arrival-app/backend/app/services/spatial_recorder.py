@@ -19,7 +19,7 @@ logger = logging.getLogger("arrival.spatial")
 
 # Supabase service role headers (same pattern as supabase.py)
 _SERVICE_HEADERS = {
-    "apikey": SUPABASE_ANON_KEY,
+    "apikey": SUPABASE_SERVICE_ROLE_KEY,
     "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
     "Content-Type": "application/json",
     "Prefer": "return=representation",

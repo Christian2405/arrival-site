@@ -119,12 +119,6 @@ export async function getLiveKitSession(
   mode: 'default' | 'job' = 'job',
   recordingConsent: boolean = false,
 ): Promise<LiveKitSession> {
-  if (cachedSession && (Date.now() - cacheTimestamp) < CACHE_TTL_MS) {
-    console.log('[LiveKitService] Using cached session');
-    const session = cachedSession;
-    cachedSession = null; // Use once, then pre-fetch a new one
-    prefetchLiveKitSession().catch(() => {}); // Refill cache in background
-    return session;
-  }
+  // Always create fresh — cached session may have wrong consent/mode
   return createLiveKitSession(mode, recordingConsent);
 }

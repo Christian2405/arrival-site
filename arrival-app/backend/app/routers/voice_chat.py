@@ -417,7 +417,7 @@ async def voice_chat(
                     import httpx as _httpx
 
                     _svc_headers = {
-                        "apikey": SUPABASE_ANON_KEY,
+                        "apikey": SUPABASE_SERVICE_ROLE_KEY,
                         "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
                         "Content-Type": "application/json",
                         "Prefer": "return=representation",

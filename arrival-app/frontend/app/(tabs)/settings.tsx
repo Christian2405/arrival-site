@@ -145,11 +145,20 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               const token = await useAuthStore.getState().getAccessToken();
+              if (!token) {
+                Alert.alert('Error', 'Not authenticated. Please sign in again.');
+                return;
+              }
               const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
-              await fetch(`${BASE_URL}/api/account`, {
+              const resp = await fetch(`${BASE_URL}/api/account`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
               });
+              if (!resp.ok) {
+                const msg = await resp.text().catch(() => 'Unknown error');
+                Alert.alert('Error', `Failed to delete account (${resp.status}). Please contact support@arrivalcompany.com`);
+                return;
+              }
               await signOut();
               Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
             } catch (e) {
