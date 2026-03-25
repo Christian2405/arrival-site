@@ -7,6 +7,7 @@ uploads to S3, and logs metadata to Supabase.
 import asyncio
 import base64
 import logging
+import time
 import uuid
 from datetime import datetime
 
@@ -14,6 +15,13 @@ import httpx
 
 from app.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
 from app.services.s3 import upload_clip, build_s3_key
+
+# Informal sequence detection: if same equipment + within this window, auto-link
+_INFORMAL_SEQUENCE_WINDOW = 300  # 5 minutes
+# Outcome inference: if no follow-up questions for this long, assume fixed
+_OUTCOME_INFER_SECONDS = 600  # 10 minutes
+# Activity freshness: if scene data older than this, mark as low confidence
+_ACTIVITY_STALE_SECONDS = 30
 
 logger = logging.getLogger("arrival.spatial")
 
@@ -40,6 +48,16 @@ class SpatialRecorder:
         self._current_sequence_id: str | None = None
         self._sequence_order: int = 0
         self._last_clip_id: str | None = None
+        # Informal sequence detection
+        self._last_equipment_key: str = ""
+        self._last_query_time: float = 0
+        # Outcome tracking
+        self._pending_outcome_sequence_id: str | None = None
+        self._pending_outcome_time: float = 0
+        # Continuous recording task
+        self._continuous_task: asyncio.Task | None = None
+        # First frame of sequence for before/after comparison
+        self._sequence_first_frame: bytes | None = None
 
     async def start_session(
         self,
@@ -141,9 +159,18 @@ class SpatialRecorder:
             logger.error(f"Error creating spatial sequence: {e}")
 
     async def end_sequence(self, outcome: str = "unknown"):
-        """End current sequence."""
+        """End current sequence. Adds state labels if first/last frames differ."""
         if not self._current_sequence_id:
             return
+
+        # Before/after state comparison — check if first and last frames differ
+        if self._sequence_first_frame and self._last_clip_id:
+            state_changed = self._sequence_first_frame is not None  # We have a first frame
+            if state_changed:
+                await self.add_labels(self._last_clip_id, [
+                    {"label_type": "state", "label_value": "sequence_end", "confidence": 0.8},
+                ])
+
         try:
             async with httpx.AsyncClient() as client:
                 await client.patch(
@@ -159,9 +186,106 @@ class SpatialRecorder:
             logger.info(f"Spatial sequence ended: {self._current_sequence_id} ({self._sequence_order} clips, outcome={outcome})")
         except Exception as e:
             logger.error(f"Error ending spatial sequence: {e}")
+
+        # Set up outcome inference — if no follow-up for 10 mins, assume fixed
+        if outcome == "unknown":
+            self._pending_outcome_sequence_id = self._current_sequence_id
+            self._pending_outcome_time = time.time()
+
         self._current_sequence_id = None
         self._sequence_order = 0
         self._last_clip_id = None
+        self._sequence_first_frame = None
+
+    async def check_outcome_inference(self):
+        """Check if we should infer outcome for a pending sequence.
+        Called periodically — if no queries for 10+ minutes after sequence ended, assume fixed."""
+        if not self._pending_outcome_sequence_id:
+            return
+        if time.time() - self._pending_outcome_time < _OUTCOME_INFER_SECONDS:
+            return
+        # No follow-up for 10 minutes → infer success
+        await self._update_sequence_outcome(self._pending_outcome_sequence_id, "inferred_fixed")
+        await self.add_labels(self._last_clip_id or "", [
+            {"label_type": "outcome", "label_value": "inferred_fixed", "confidence": 0.6}
+        ])
+        logger.info(f"Outcome inferred as fixed for sequence {self._pending_outcome_sequence_id}")
+        self._pending_outcome_sequence_id = None
+
+    async def set_outcome(self, outcome: str):
+        """Explicitly set outcome for current or pending sequence. Called when user confirms."""
+        seq_id = self._current_sequence_id or self._pending_outcome_sequence_id
+        if not seq_id:
+            return
+        await self._update_sequence_outcome(seq_id, outcome)
+        if self._last_clip_id:
+            await self.add_labels(self._last_clip_id, [
+                {"label_type": "outcome", "label_value": outcome, "confidence": 1.0}
+            ])
+        self._pending_outcome_sequence_id = None
+        logger.info(f"Outcome set: {outcome} for sequence {seq_id}")
+
+    def _check_informal_sequence(self, agent) -> bool:
+        """Detect if we should auto-create a sequence from repeated equipment queries.
+        Returns True if a new informal sequence was started."""
+        if self._current_sequence_id:
+            return False  # Already in a sequence
+
+        # Build equipment key from current agent state
+        equip_type = getattr(agent, '_equipment_type', '') or ''
+        equip_brand = getattr(agent, '_equipment_brand', '') or ''
+        equip_key = f"{equip_type}:{equip_brand}".lower().strip(":")
+
+        if not equip_key:
+            return False
+
+        now = time.time()
+        # Same equipment within window → auto-create sequence
+        if equip_key == self._last_equipment_key and (now - self._last_query_time) < _INFORMAL_SEQUENCE_WINDOW:
+            asyncio.ensure_future(self.start_sequence(
+                task_description=f"informal: repeated queries about {equip_type} {equip_brand}".strip(),
+                equipment={"type": equip_type, "brand": equip_brand}
+            ))
+            logger.info(f"Informal sequence started: {equip_key}")
+            return True
+
+        self._last_equipment_key = equip_key
+        self._last_query_time = now
+        return False
+
+    async def start_continuous_recording(self, agent, interval: int = 60):
+        """Start continuous background recording at intervals. For Voice Mode data collection."""
+        if self._continuous_task and not self._continuous_task.done():
+            return  # Already running
+
+        async def _continuous_loop():
+            while True:
+                await asyncio.sleep(interval)
+                if not self._consent or not self._session_id:
+                    continue
+                if self._recording:
+                    continue  # Don't overlap with triggered recordings
+                frame = getattr(agent, "_latest_frame", None)
+                if not frame:
+                    continue
+                # Record a short clip
+                await self._record_clip(
+                    trigger_type="continuous",
+                    trigger_text="",
+                    agent=agent,
+                    monitor_state="continuous",
+                    duration=15,
+                )
+
+        self._continuous_task = asyncio.create_task(_continuous_loop())
+        logger.info("Continuous recording started")
+
+    async def stop_continuous_recording(self):
+        """Stop continuous background recording."""
+        if self._continuous_task and not self._continuous_task.done():
+            self._continuous_task.cancel()
+            self._continuous_task = None
+            logger.info("Continuous recording stopped")
 
     async def add_labels(self, clip_id: str, labels: list[dict]):
         """Add labels to a clip. Each label: {label_type, label_value, confidence}"""
@@ -203,9 +327,13 @@ class SpatialRecorder:
         if hasattr(agent, '_scene') and agent._scene.stage:
             labels.append({"label_type": "workflow", "label_value": agent._scene.stage, "confidence": 0.7})
 
-        # Activity from scene memory
+        # Activity from scene memory — with freshness check
         if hasattr(agent, '_scene') and agent._scene.activity:
-            labels.append({"label_type": "action", "label_value": agent._scene.activity, "confidence": 0.6})
+            scene_age = time.time() - getattr(agent._scene, 'last_updated', 0)
+            activity_confidence = 0.6 if scene_age < _ACTIVITY_STALE_SECONDS else 0.2
+            labels.append({"label_type": "action", "label_value": agent._scene.activity, "confidence": activity_confidence})
+            if activity_confidence < 0.5:
+                labels.append({"label_type": "meta", "label_value": "stale_activity", "confidence": 1.0})
 
         # Object labels from scene memory
         if hasattr(agent, '_scene') and agent._scene.objects:
@@ -238,6 +366,18 @@ class SpatialRecorder:
         if not hasattr(agent, "_latest_frame") or not agent._latest_frame:
             logger.debug("Skipping recording trigger — no frame available")
             return
+
+        # Check informal sequence (same equipment, within time window)
+        if trigger_type == 'user_query':
+            self._check_informal_sequence(agent)
+            self._last_query_time = time.time()
+
+        # Save first frame of sequence for before/after comparison
+        if self._current_sequence_id and self._sequence_order == 0:
+            try:
+                self._sequence_first_frame = base64.b64decode(agent._latest_frame)
+            except Exception:
+                pass
 
         # Fire and forget
         asyncio.ensure_future(
@@ -415,6 +555,19 @@ class SpatialRecorder:
                 )
         except Exception as e:
             logger.error(f"Failed to update clip status: {e}")
+
+    async def _update_sequence_outcome(self, sequence_id: str, outcome: str):
+        """Update outcome on a sequence."""
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.patch(
+                    f"{SUPABASE_URL}/rest/v1/spatial_sequences?id=eq.{sequence_id}",
+                    headers=_SERVICE_HEADERS,
+                    json={"outcome": outcome},
+                    timeout=10,
+                )
+        except Exception as e:
+            logger.error(f"Failed to update sequence outcome: {e}")
 
     async def _update_clip_final(
         self, clip_id: str, status: str, file_size: int, frame_count: int, duration_seconds: float

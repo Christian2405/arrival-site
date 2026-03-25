@@ -1119,6 +1119,13 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             await asyncio.sleep(interval)
 
+            # Check outcome inference for spatial data
+            if getattr(agent, '_spatial_recorder', None):
+                try:
+                    await agent._spatial_recorder.check_outcome_inference()
+                except Exception:
+                    pass
+
             if not agent._proactive_enabled or not agent._room_name:
                 continue
 
@@ -1789,6 +1796,11 @@ async def entrypoint(ctx: JobContext):
         )
         logger.info("[arrival-agent] ✓ Greeting sent")
 
+        # Start continuous recording for Voice Mode (captures between queries)
+        if mode != "job" and getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._consent:
+            await agent._spatial_recorder.start_continuous_recording(agent, interval=60)
+            logger.info("[arrival-agent] ✓ Continuous recording started (Voice Mode)")
+
         # Wait for the session to end (room disconnect) then clean up tasks
         disconnect_event = asyncio.Event()
 
@@ -1807,6 +1819,7 @@ async def entrypoint(ctx: JobContext):
         # End spatial recording session
         if getattr(agent, '_spatial_recorder', None):
             try:
+                await agent._spatial_recorder.stop_continuous_recording()
                 await agent._spatial_recorder.end_session()
             except Exception as e:
                 logger.debug(f"[spatial] End session error: {e}")
