@@ -59,6 +59,8 @@ class SpatialRecorder:
         self._continuous_task: asyncio.Task | None = None
         # First frame of sequence for before/after comparison
         self._sequence_first_frame: bytes | None = None
+        # Outcome prompting
+        self._needs_outcome_prompt: bool = False
 
     async def start_session(
         self,
@@ -229,19 +231,35 @@ class SpatialRecorder:
 
     async def _check_informal_sequence(self, agent) -> bool:
         """Detect if we should auto-create a sequence from repeated equipment queries.
+        Also auto-closes stale informal sequences when equipment changes or timeout.
         Returns True if a new informal sequence was started."""
-        if self._current_sequence_id:
-            return False  # Already in a sequence
 
         # Build equipment key from current agent state
         equip_type = getattr(agent, '_equipment_type', '') or ''
         equip_brand = getattr(agent, '_equipment_brand', '') or ''
         equip_key = f"{equip_type}:{equip_brand}".lower().strip(":")
 
+        now = time.time()
+
+        # Auto-close stale informal sequences
+        if self._current_sequence_id and self._last_query_time > 0:
+            time_since_last = now - self._last_query_time
+            equipment_changed = equip_key and equip_key != self._last_equipment_key
+            timed_out = time_since_last > _INFORMAL_SEQUENCE_WINDOW
+
+            if equipment_changed or timed_out:
+                # Close the old informal sequence — compare frames for state label
+                await self._compare_sequence_frames(agent)
+                await self.end_sequence(outcome="unknown")
+                self._needs_outcome_prompt = True
+                logger.info(f"Informal sequence auto-closed (changed={equipment_changed}, timeout={timed_out})")
+
+        if self._current_sequence_id:
+            return False  # Already in a sequence (guided or still open)
+
         if not equip_key:
             return False
 
-        now = time.time()
         # Same equipment within window → auto-create sequence
         if equip_key == self._last_equipment_key and (now - self._last_query_time) < _INFORMAL_SEQUENCE_WINDOW:
             await self.start_sequence(
@@ -253,6 +271,55 @@ class SpatialRecorder:
 
         self._last_equipment_key = equip_key
         self._last_query_time = now
+        return False
+
+    async def _compare_sequence_frames(self, agent):
+        """Compare first frame of sequence to current frame using perceptual hash.
+        Adds state_change label if frames differ significantly."""
+        if not self._sequence_first_frame or not self._last_clip_id:
+            return
+
+        try:
+            current_b64 = getattr(agent, '_latest_frame', None)
+            if not current_b64:
+                return
+            current_frame = base64.b64decode(current_b64)
+
+            # Simple perceptual comparison: resize both to 8x8 grayscale, compare
+            from PIL import Image
+            import io
+            import hashlib
+
+            def _phash(jpeg_bytes: bytes) -> int:
+                """Simple perceptual hash: resize to 8x8 grayscale, compare to mean."""
+                img = Image.open(io.BytesIO(jpeg_bytes)).convert('L').resize((8, 8))
+                pixels = list(img.getdata())
+                mean = sum(pixels) / len(pixels)
+                return sum(1 << i for i, p in enumerate(pixels) if p > mean)
+
+            hash_first = _phash(self._sequence_first_frame)
+            hash_last = _phash(current_frame)
+
+            # Hamming distance: count differing bits
+            diff = bin(hash_first ^ hash_last).count('1')
+            # 64 total bits, threshold of 10 = ~15% difference = meaningful change
+            state_changed = diff > 10
+            confidence = min(diff / 32.0, 1.0)  # Scale diff to 0-1 confidence
+
+            await self.add_labels(self._last_clip_id, [
+                {"label_type": "state", "label_value": "changed" if state_changed else "unchanged", "confidence": confidence},
+            ])
+            logger.info(f"Frame comparison: hamming={diff}/64, changed={state_changed}")
+
+        except Exception as e:
+            logger.debug(f"Frame comparison failed: {e}")
+
+    def should_prompt_outcome(self) -> bool:
+        """Check if we should ask the user 'did that fix it?'
+        Returns True once after a sequence ends, then resets."""
+        if getattr(self, '_needs_outcome_prompt', False):
+            self._needs_outcome_prompt = False
+            return True
         return False
 
     async def start_continuous_recording(self, agent, interval: int = 60):

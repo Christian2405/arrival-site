@@ -856,8 +856,9 @@ class ArrivalAgent(Agent):
         self._guidance_task = ""
         self._guidance_brief = ""
         self._guidance_context = ""
-        # End spatial sequence
+        # End spatial sequence with frame comparison
         if getattr(self, '_spatial_recorder', None):
+            asyncio.ensure_future(self._spatial_recorder._compare_sequence_frames(self))
             asyncio.ensure_future(self._spatial_recorder.end_sequence(outcome="completed"))
         logger.info(f"[guidance] ✓ Guidance stopped for: {task}")
         return (
@@ -1121,10 +1122,15 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
 
             await asyncio.sleep(interval)
 
-            # Check outcome inference for spatial data
+            # Check outcome inference + outcome prompting for spatial data
             if getattr(agent, '_spatial_recorder', None):
                 try:
                     await agent._spatial_recorder.check_outcome_inference()
+                    # After a sequence ends, ask the user if it worked
+                    if agent._spatial_recorder.should_prompt_outcome():
+                        await session.generate_reply(
+                            instructions="Casually ask if that fixed it. One short sentence like 'That sort it out?' or 'All good?' — don't make it sound like a survey."
+                        )
                 except Exception:
                     pass
 
@@ -1679,6 +1685,15 @@ async def entrypoint(ctx: JobContext):
             agent._conversation_context.append({"role": "user", "content": transcript})
             if len(agent._conversation_context) > 10:
                 agent._conversation_context.pop(0)
+
+            # Outcome detection — if a sequence just ended and user responds
+            if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._pending_outcome_sequence_id:
+                _YES_WORDS = {"yes", "yeah", "yep", "yup", "fixed", "sorted", "all good", "works", "working", "that's it", "perfect"}
+                _NO_WORDS = {"no", "nope", "nah", "still broken", "didn't work", "not working", "same issue", "still"}
+                if any(w in text_lower for w in _YES_WORDS):
+                    asyncio.ensure_future(agent._spatial_recorder.set_outcome("fixed"))
+                elif any(w in text_lower for w in _NO_WORDS):
+                    asyncio.ensure_future(agent._spatial_recorder.set_outcome("not_fixed"))
 
             # Extract task context for proactive vision grounding
             task = _extract_task_from_speech(transcript)
