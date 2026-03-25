@@ -665,6 +665,38 @@ class ArrivalAgent(Agent):
         # 4. Guidance brief is injected via system prompt in on_user_speech (line ~1676-1687)
         # No need to also append it to every message — that wastes tokens/money.
 
+        # 4b. Auto-RAG: search company docs + knowledge base for EVERY query
+        # Don't rely on LLM deciding to call search_knowledge tool — inject automatically
+        # like text/chat mode does. This is the core "your company's docs first" feature.
+        try:
+            user_text_for_rag = ""
+            if isinstance(new_message.content, str):
+                user_text_for_rag = new_message.content
+            elif isinstance(new_message.content, list):
+                user_text_for_rag = " ".join(c for c in new_message.content if isinstance(c, str))
+
+            # Skip RAG for very short utterances (greetings, "yes", "ok", "thanks")
+            if len(user_text_for_rag.strip()) > 10:
+                rag_results = await retrieve_context(
+                    user_id=self._user_id,
+                    query=user_text_for_rag,
+                    top_k=3,
+                    team_id=self._team_id,
+                )
+                if rag_results:
+                    rag_text = "\n".join(
+                        f"[{r.get('filename', 'knowledge')}] {r.get('text', '')}"
+                        for r in rag_results
+                    )
+                    rag_inject = f"\n[Reference docs — cite if relevant]\n{rag_text}"
+                    if isinstance(new_message.content, list):
+                        new_message.content.append(rag_inject)
+                    else:
+                        new_message.content = [new_message.content, rag_inject]
+                    logger.info(f"[rag-auto] Injected {len(rag_results)} results for: {user_text_for_rag[:50]}")
+        except Exception as e:
+            logger.debug(f"[rag-auto] Failed: {e}")
+
         # 5. Trigger spatial recording if consent given
         if getattr(self, '_spatial_recorder', None):
             # Extract user text for trigger

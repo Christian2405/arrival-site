@@ -218,44 +218,34 @@ async def chat(
                         diagnostic_context = format_diagnostic_context(diag_result)
                         logger.info(f"[chat] Diagnostic flow hit: {diag_result['title']}")
 
-                # Run memory + team_id + RAG + feedback corrections ALL in parallel
-                parallel_results = await asyncio.gather(
+                # Run memory + team_id + feedback corrections in parallel first
+                # (need team_id before RAG so we can search team namespace in one call)
+                pre_results = await asyncio.gather(
                     retrieve_memories(user_id, request.message),
                     get_user_team_id(user_id),
-                    retrieve_context(user_id, request.message),  # user+global namespaces
-                    get_feedback_context(request.message),  # correction cache lookup
+                    get_feedback_context(request.message),
                     return_exceptions=True,
                 )
-                memories = parallel_results[0] if not isinstance(parallel_results[0], Exception) else []
-                team_id = parallel_results[1] if not isinstance(parallel_results[1], Exception) else None
-                rag_context = parallel_results[2] if not isinstance(parallel_results[2], Exception) else []
-                feedback_context = parallel_results[3] if not isinstance(parallel_results[3], Exception) else None
+                memories = pre_results[0] if not isinstance(pre_results[0], Exception) else []
+                team_id = pre_results[1] if not isinstance(pre_results[1], Exception) else None
+                feedback_context = pre_results[2] if not isinstance(pre_results[2], Exception) else None
 
-                if isinstance(parallel_results[0], Exception):
-                    logger.warning(f"[chat] Memory retrieval failed: {parallel_results[0]}")
-                if isinstance(parallel_results[1], Exception):
-                    logger.warning(f"[chat] Team ID retrieval failed: {parallel_results[1]}")
-                if isinstance(parallel_results[2], Exception):
-                    logger.warning(f"[chat] RAG retrieval failed: {parallel_results[2]}")
-                if isinstance(parallel_results[3], Exception):
-                    logger.warning(f"[chat] Feedback context failed: {parallel_results[3]}")
+                if isinstance(pre_results[0], Exception):
+                    logger.warning(f"[chat] Memory retrieval failed: {pre_results[0]}")
+                if isinstance(pre_results[1], Exception):
+                    logger.warning(f"[chat] Team ID retrieval failed: {pre_results[1]}")
+                if isinstance(pre_results[2], Exception):
+                    logger.warning(f"[chat] Feedback context failed: {pre_results[2]}")
 
-                # If team_id found, do a supplementary team RAG lookup
-                # (retrieve_context already handles team_id internally via parallel namespace search)
-                if team_id and rag_context is not None:
-                    try:
-                        team_rag = await asyncio.wait_for(
-                            retrieve_context(user_id, request.message, team_id=team_id),
-                            timeout=2.0,
-                        )
-                        existing_texts = {r["text"][:200] for r in rag_context}
-                        for item in team_rag:
-                            if item["text"][:200] not in existing_texts:
-                                rag_context.append(item)
-                        rag_context.sort(key=lambda x: x.get("score", 0), reverse=True)
-                        rag_context = rag_context[:5]
-                    except (asyncio.TimeoutError, Exception) as e:
-                        logger.debug(f"[chat] Team RAG skipped: {e}")
+                # Single RAG call with team_id — searches user + global + team namespaces
+                try:
+                    rag_context = await asyncio.wait_for(
+                        retrieve_context(user_id, request.message, team_id=team_id),
+                        timeout=4.0,
+                    )
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning(f"[chat] RAG retrieval failed: {e}")
+                    rag_context = []
 
                 # Strip auto-captured images unless the message contains visual keywords.
                 # Manually-attached images (user tapped camera/photo button) are always kept.
