@@ -38,6 +38,11 @@ async def delete_account(request: Request):
         async with httpx.AsyncClient(timeout=30) as client:
             # Delete in order: dependent data first
             tables = [
+                # Spatial data (CASCADE handles spatial_labels via spatial_clips FK)
+                ("spatial_sequences", {"user_id": f"eq.{user_id}"}),
+                ("spatial_clips", {"session_id": f"in.(select id from spatial_sessions where user_id=eq.{user_id})"}),
+                ("spatial_sessions", {"user_id": f"eq.{user_id}"}),
+                # Core user data
                 ("queries", {"user_id": f"eq.{user_id}"}),
                 ("saved_answers", {"user_id": f"eq.{user_id}"}),
                 ("team_members", {"user_id": f"eq.{user_id}"}),

@@ -325,19 +325,8 @@ function RoomContent({
     const flipFn = async () => {
       console.log('[LiveKitVoice] Flip camera triggered');
       const newFacing = cameraFacing === 'environment' ? 'user' : 'environment';
-
-      try {
-        // Full disable → wait → re-enable with new facing direction
-        // restartTrack is unreliable on React Native, so always do the full cycle
-        await room?.localParticipant?.setCameraEnabled(false);
-        await new Promise(r => setTimeout(r, 500));  // iOS needs time to release hardware
-        setCameraFacing(newFacing);
-        // The useEffect watching cameraFacing will re-enable with new direction
-        console.log(`[LiveKitVoice] ✓ Camera flip initiated to ${newFacing}`);
-      } catch (e: any) {
-        console.warn(`[LiveKitVoice] Camera flip failed: ${e?.message || e}`);
-        setCameraFacing(newFacing);
-      }
+      setCameraFacing(newFacing);
+      console.log(`[LiveKitVoice] ✓ Camera flip initiated to ${newFacing}`);
     };
     onFlipCameraReady?.(flipFn);
     return () => onFlipCameraReady?.(null);

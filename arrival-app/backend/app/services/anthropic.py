@@ -278,7 +278,7 @@ When you use information from these documents, cite the filename as your source.
     async with client.messages.stream(
         model=use_model,
         max_tokens=max_tokens,
-        system=system_prompt,
+        system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
         messages=messages,
     ) as stream:
         async for text in stream.text_stream:

@@ -613,7 +613,7 @@ class ArrivalAgent(Agent):
                 elif isinstance(msg.content, list):
                     text = " ".join(c for c in msg.content if isinstance(c, str))
                 if any(phrase in text.lower() for phrase in _VISION_PHRASES):
-                    msg.content = ""  # Gone — no residue, no anchoring
+                    msg.content = []  # Gone — no residue, no anchoring
 
         # 3. Inject current frame onto the new message
         #    Try data channel first, then HTTP fallback (data channel is broken in production)
@@ -935,7 +935,7 @@ def _has_task_context(agent: "ArrivalAgent") -> bool:
     """Check if we have any understanding of what the worker is doing."""
     if agent._guidance_active:
         return True
-    if agent._inferred_task and (time.time() - agent._last_user_speech_time) < TASK_CONTEXT_DECAY_SECONDS:
+    if agent._inferred_task and (time.time() - agent._inferred_task_updated_at) < TASK_CONTEXT_DECAY_SECONDS:
         return True
     if agent._equipment_type or agent._equipment_brand:
         return True
@@ -1144,7 +1144,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
                 continue
 
             # Task context decay
-            if agent._inferred_task and (now - agent._last_user_speech_time) > TASK_CONTEXT_DECAY_SECONDS:
+            if agent._inferred_task and (now - agent._inferred_task_updated_at) > TASK_CONTEXT_DECAY_SECONDS:
                 logger.info(f"[proactive] Task context expired: '{agent._inferred_task[:40]}'")
                 agent._inferred_task = ""
 
@@ -1287,7 +1287,7 @@ async def proactive_monitor(agent: ArrivalAgent, session: AgentSession):
             # --- All gates passed — speak ---
             safety_keywords = {"danger", "exposed", "live wire", "gas leak", "fire", "shock",
                                "kill the breaker", "shut off", "stop", "careful", "disconnect",
-                               "PPE", "goggles", "gloves", "harness"}
+                               "ppe", "goggles", "gloves", "harness"}
             is_safety = any(kw in speak_lower for kw in safety_keywords)
 
             if is_safety:
@@ -1536,6 +1536,10 @@ async def entrypoint(ctx: JobContext):
                         agent._guidance_task = ""
                         agent._guidance_brief = ""
                         agent._guidance_context = ""
+                        # Spatial recorder cleanup
+                        if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
+                            asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
+                            asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
                         # Reset prompt
                         asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
                         agent._has_injected_codes = False
@@ -1583,6 +1587,10 @@ async def entrypoint(ctx: JobContext):
                             agent._guidance_task = ""
                             agent._guidance_brief = ""
                             agent._guidance_context = ""
+                            # Spatial recorder cleanup
+                            if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
+                                asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
+                                asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
                             asyncio.ensure_future(agent.update_instructions(
                                 (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
                             ))
@@ -1679,6 +1687,8 @@ async def entrypoint(ctx: JobContext):
             transcript = getattr(ev, "text", "") or getattr(ev, "transcript", "") or ""
             if not transcript:
                 return
+            if not getattr(ev, 'is_final', True):
+                return
 
             text_lower = transcript.lower().strip()
 
@@ -1689,11 +1699,12 @@ async def entrypoint(ctx: JobContext):
 
             # Outcome detection — if a sequence just ended and user responds
             if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._pending_outcome_sequence_id:
-                _YES_WORDS = {"yes", "yeah", "yep", "yup", "fixed", "sorted", "all good", "works", "working", "that's it", "perfect"}
-                _NO_WORDS = {"no", "nope", "nah", "still broken", "didn't work", "not working", "same issue", "still"}
-                if any(w in text_lower for w in _YES_WORDS):
+                _YES_WORDS = {"yes", "yeah", "yep", "yup", "fixed", "sorted", "works", "working", "perfect"}
+                _NO_WORDS = {"no", "nope", "nah", "still"}
+                words = set(text_lower.split())
+                if words & _YES_WORDS or "all good" in text_lower or "that's it" in text_lower:
                     asyncio.ensure_future(agent._spatial_recorder.set_outcome("fixed"))
-                elif any(w in text_lower for w in _NO_WORDS):
+                elif words & _NO_WORDS or "still broken" in text_lower or "didn't work" in text_lower or "not working" in text_lower or "same issue" in text_lower:
                     asyncio.ensure_future(agent._spatial_recorder.set_outcome("not_fixed"))
 
             # Extract task context for proactive vision grounding
@@ -1724,6 +1735,10 @@ async def entrypoint(ctx: JobContext):
                 agent._guidance_task = ""
                 agent._guidance_brief = ""
                 agent._guidance_context = ""
+                # Spatial recorder cleanup
+                if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
+                    asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
+                    asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
                 # Reset prompt to clean state
                 asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
                 agent._has_injected_codes = False
@@ -1766,13 +1781,19 @@ async def entrypoint(ctx: JobContext):
                 return
 
         # Track assistant responses for conversation context
-        @session.on("agent_speech_committed")
-        def on_agent_speech(ev):
-            text = getattr(ev, "text", "") or getattr(ev, "content", "") or ""
-            if text:
-                agent._conversation_context.append({"role": "assistant", "content": text})
-                if len(agent._conversation_context) > 10:
-                    agent._conversation_context.pop(0)
+        @session.on("conversation_item_added")
+        def on_conversation_item(ev):
+            item = getattr(ev, 'item', None)
+            if item and getattr(item, 'role', '') == 'assistant':
+                text = ""
+                if hasattr(item, 'content') and isinstance(item.content, list):
+                    text = " ".join(c.text for c in item.content if hasattr(c, 'text'))
+                elif hasattr(item, 'text'):
+                    text = item.text
+                if text:
+                    agent._conversation_context.append({"role": "assistant", "content": text})
+                    if len(agent._conversation_context) > 10:
+                        agent._conversation_context.pop(0)
 
         # Background task: keep injecting latest frame into agent context
         _frame_injector_count = [0]  # mutable counter in closure

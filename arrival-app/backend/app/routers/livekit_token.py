@@ -42,8 +42,12 @@ async def agent_log(request: Request):
     import subprocess
     auth_header = request.headers.get("authorization", "")
     expected_secret = os.getenv("ADMIN_SECRET", "")
-    if expected_secret and not auth_header.startswith("Bearer "):
+    if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=403, detail="Forbidden")
+    if expected_secret:
+        token = auth_header.replace("Bearer ", "")
+        if token != expected_secret:
+            raise HTTPException(status_code=403, detail="Forbidden")
     try:
         result = subprocess.run(["tail", "-50", "/tmp/agent_output.log"], capture_output=True, text=True, timeout=5)
         pgrep = subprocess.run(["pgrep", "-fa", "livekit_agent"], capture_output=True, text=True, timeout=5)
@@ -77,8 +81,12 @@ async def livekit_debug(request: Request):
     import subprocess
     auth_header = request.headers.get("authorization", "")
     expected_secret = os.getenv("ADMIN_SECRET", "")
-    if expected_secret and not auth_header.startswith("Bearer "):
+    if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=403, detail="Forbidden")
+    if expected_secret:
+        token = auth_header.replace("Bearer ", "")
+        if token != expected_secret:
+            raise HTTPException(status_code=403, detail="Forbidden")
     if not config.LIVEKIT_URL or not config.LIVEKIT_API_KEY or not config.LIVEKIT_API_SECRET:
         return {"configured": False, "error": "LiveKit env vars not set"}
 

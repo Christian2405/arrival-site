@@ -385,6 +385,10 @@ export default function HomeScreen() {
   // Bug 18: Use ref instead of stale state closure
   useEffect(() => {
     return () => {
+      if (pttFrameIntervalRef.current) {
+        clearInterval(pttFrameIntervalRef.current);
+        pttFrameIntervalRef.current = null;
+      }
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch(() => {});
       }
@@ -499,6 +503,7 @@ export default function HomeScreen() {
           if (consent) {
             const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
             const token = await useAuthStore.getState().getAccessToken();
+            if (!token) return;
             fetch(`${BACKEND_URL}/api/spatial/voice-clip`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
