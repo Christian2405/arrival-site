@@ -161,6 +161,7 @@ export default function HomeScreen() {
   const [livekitActive, setLivekitActive] = useState(false);
   const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
   const flipCameraRef = useRef<(() => void) | null>(null);
+  const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
   // Zoom state — 0 = ultra-wide (0.5x), 0.5 = 1x, 1.0 = max telephoto
   // expo-camera zoom prop uses 0-1 range
   // For LiveKit VideoTrack (Job Mode), we use CSS scale 1x-3x as fallback
@@ -1014,19 +1015,16 @@ export default function HomeScreen() {
   // --- RENDER ---
   return (
     <View style={styles.container}>
-      {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
-      {/* Voice/Text modes: native camera zoom via zoom prop (0-1 = 0.5x to max) */}
-      {permission?.granted && interactionMode !== 'job' && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
+      {/* Camera background — always use native CameraView for clear preview */}
+      {/* LiveKit video track runs invisibly in background to send frames to agent */}
+      {permission?.granted && (
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={cameraFacing} zoom={cameraZoom} />
       )}
-      {/* Job Mode: LiveKit VideoTrack — no CSS zoom (causes ugly box), fill screen */}
+      {/* Hidden LiveKit VideoTrack — agent receives frames via WebRTC but user sees native camera */}
       {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
-        <View style={StyleSheet.absoluteFill}>
-          <LKVideoTrack trackRef={localVideoTrackRef} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
+        <View style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}>
+          <LKVideoTrack trackRef={localVideoTrackRef} style={{ width: 1, height: 1 }} objectFit="cover" zOrder={-1} />
         </View>
-      )}
-      {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
       )}
 
       {/* Dark overlay on camera feed — also handles pinch-to-zoom */}
@@ -1055,7 +1053,10 @@ export default function HomeScreen() {
 
             {interactionMode === 'job' ? (
               <TouchableOpacity
-                onPress={() => flipCameraRef.current?.()}
+                onPress={() => {
+                  setCameraFacing(f => f === 'back' ? 'front' : 'back');
+                  flipCameraRef.current?.();  // Also flip LiveKit track for agent
+                }}
                 style={styles.iconBtn}
               >
                 <Ionicons name="camera-reverse-outline" size={IconSize.lg} color="#FFF" />
