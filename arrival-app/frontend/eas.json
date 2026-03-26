@@ -31,7 +31,8 @@
         "EXPO_PUBLIC_SITE_URL": "https://arrivalcompany.com",
         "EXPO_PUBLIC_SUPABASE_URL": "https://nmmmrujtfrxrmajuggki.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://ff83b765a63e778291cc2602bd9dd7d8@o4510983187398656.ingest.us.sentry.io/4510983191068673"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://ff83b765a63e778291cc2602bd9dd7d8@o4510983187398656.ingest.us.sentry.io/4510983191068673",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },
