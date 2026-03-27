@@ -1498,6 +1498,21 @@ async def entrypoint(ctx: JobContext):
             logger.warning(f"[arrival-agent] Spatial recorder init failed (non-fatal): {e}")
             agent._spatial_recorder = None
 
+        # Fetch user's uploaded documents and inject into prompt so AI knows what's available
+        try:
+            from app.services.supabase import list_documents
+            docs = await list_documents(user_id, team_id=team_id)
+            if docs:
+                doc_names = [d.get("filename", "") for d in docs if d.get("filename")]
+                if doc_names:
+                    doc_list = ", ".join(doc_names[:20])
+                    doc_inject = f"\n\n## Your Documents\nThe user has uploaded these documents: {doc_list}. When they ask about any of these, search your knowledge and reference the relevant document."
+                    prompt = prompt + doc_inject
+                    asyncio.ensure_future(agent.update_instructions(prompt))
+                    logger.info(f"[arrival-agent] Injected {len(doc_names)} document names into prompt")
+        except Exception as e:
+            logger.debug(f"[arrival-agent] Doc list fetch failed (non-fatal): {e}")
+
         await session.start(agent=agent, room=ctx.room)
         logger.info("[arrival-agent] ✓ Session started — voice pipeline active")
 
