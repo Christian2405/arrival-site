@@ -320,13 +320,22 @@ function RoomContent({
     return () => onLocalVideoTrack?.(null);
   }, [localCameraTrack, onLocalVideoTrack]);
 
-  // Expose camera flip function to parent — uses restartTrack for reliable switching
+  // Expose camera flip function to parent
   useEffect(() => {
     const flipFn = async () => {
       console.log('[LiveKitVoice] Flip camera triggered');
       const newFacing = cameraFacing === 'environment' ? 'user' : 'environment';
-      setCameraFacing(newFacing);
-      console.log(`[LiveKitVoice] ✓ Camera flip initiated to ${newFacing}`);
+      try {
+        // Disable → wait → re-enable with new facing
+        await room?.localParticipant?.setCameraEnabled(false);
+        await new Promise(r => setTimeout(r, 500));
+        setCameraFacing(newFacing);
+        // The useEffect watching cameraFacing will re-enable with new direction
+        console.log(`[LiveKitVoice] ✓ Camera flip to ${newFacing}`);
+      } catch (e: any) {
+        console.warn(`[LiveKitVoice] Camera flip failed: ${e?.message}`);
+        setCameraFacing(newFacing);
+      }
     };
     onFlipCameraReady?.(flipFn);
     return () => onFlipCameraReady?.(null);
