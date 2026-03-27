@@ -334,34 +334,32 @@ export default function JobModeView({
   // ════════════════════════════════════════════════════
   if (!isStarted) {
     return (
-      <Pressable onPress={handleStartTap} style={{ flex: 1 }}>
-        <Animated.View style={[s.container, { opacity: startScreenOpacity }]} pointerEvents="box-none">
+      <Animated.View style={[s.container, { opacity: startScreenOpacity }]} pointerEvents="box-none">
+        <Pressable onPress={handleStartTap} style={s.startButton}>
           {/* Floating robot mascot */}
-          <View style={s.startButton}>
-            <Animated.View style={{
-              transform: [
-                { translateY: floatDriver.interpolate({
-                  inputRange:  [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
-                  outputRange: [-10, -7.07, 0, 7.07, 10, 7.07, 0, -7.07, -10],
-                  extrapolate: 'clamp',
-                }) },
-                { scale: robotScale },
-              ],
-            }}>
-              <Image
-                source={robotMascot}
-                style={s.robotImage}
-                resizeMode="contain"
-              />
-            </Animated.View>
-          </View>
-
-          {/* "Tap to start" hint */}
-          <Animated.View style={[s.startHint, { opacity: hintOpacity }]}>
-            <Text style={s.startHintText}>Tap to start</Text>
+          <Animated.View style={{
+            transform: [
+              { translateY: floatDriver.interpolate({
+                inputRange:  [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
+                outputRange: [-10, -7.07, 0, 7.07, 10, 7.07, 0, -7.07, -10],
+                extrapolate: 'clamp',
+              }) },
+              { scale: robotScale },
+            ],
+          }}>
+            <Image
+              source={robotMascot}
+              style={s.robotImage}
+              resizeMode="contain"
+            />
           </Animated.View>
+        </Pressable>
+
+        {/* "Tap to start" hint */}
+        <Animated.View style={[s.startHint, { opacity: hintOpacity }]}>
+          <Text style={s.startHintText}>Tap to start</Text>
         </Animated.View>
-      </Pressable>
+      </Animated.View>
     );
   }
 
