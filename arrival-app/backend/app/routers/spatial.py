@@ -171,9 +171,11 @@ async def _stitch_voice_clip(
         if len(jpeg_frames) < 2:
             return
 
-        # Encode to MP4 via ffmpeg
+        # Encode to MP4 via ffmpeg (uses imageio-ffmpeg bundled binary)
+        import imageio_ffmpeg
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg",
+            ffmpeg_path,
             "-f", "image2pipe",
             "-framerate", "2",
             "-i", "pipe:0",

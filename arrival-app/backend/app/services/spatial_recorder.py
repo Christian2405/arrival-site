@@ -560,10 +560,14 @@ class SpatialRecorder:
             self._recording = False
 
     async def _encode_mp4(self, frames: list[bytes], fps: int = 2) -> bytes | None:
-        """Encode JPEG frames to MP4 via ffmpeg subprocess."""
+        """Encode JPEG frames to MP4 via ffmpeg (uses imageio-ffmpeg bundled binary)."""
         try:
+            # Get ffmpeg binary path from imageio-ffmpeg (pip-installed, no system ffmpeg needed)
+            import imageio_ffmpeg
+            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+
             proc = await asyncio.create_subprocess_exec(
-                "ffmpeg",
+                ffmpeg_path,
                 "-f", "image2pipe",
                 "-framerate", str(fps),
                 "-i", "pipe:0",
@@ -579,7 +583,6 @@ class SpatialRecorder:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            # Write all JPEG frames to stdin
             input_data = b"".join(frames)
             stdout, stderr = await proc.communicate(input=input_data)
 
@@ -589,8 +592,8 @@ class SpatialRecorder:
 
             return stdout
 
-        except FileNotFoundError:
-            logger.error("ffmpeg not found — install ffmpeg to enable spatial recording")
+        except ImportError:
+            logger.error("imageio-ffmpeg not installed — pip install imageio-ffmpeg")
             return None
         except Exception as e:
             logger.error(f"ffmpeg error: {e}")

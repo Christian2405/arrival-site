@@ -15,3 +15,5 @@ livekit-agents[deepgram,anthropic,elevenlabs,silero,turn-detector]~=1.4
 livekit-api>=0.7.0
 Pillow
 aiobotocore>=2.9.0
+imageio>=2.34.0
+imageio-ffmpeg>=0.4.9
