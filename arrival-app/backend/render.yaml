@@ -1,8 +1,8 @@
 services:
   - type: web
     name: arrival-backend
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    runtime: python
+    buildCommand: pip install -r requirements.txt
     startCommand: bash start.sh
     envVars:
       - key: ANTHROPIC_API_KEY
