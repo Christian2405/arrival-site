@@ -11,6 +11,7 @@ import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
@@ -27,6 +28,7 @@ import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIn
 import JobModeView, { JobAIState } from '../../components/JobModeView';
 import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
+import OnboardingModal from '../../components/OnboardingModal';
 // LiveKit requires native WebRTC — lazy-load so Expo Go doesn't crash
 let LiveKitVoiceRoom: React.ComponentType<any> | null = null;
 let LKVideoTrack: React.ComponentType<any> | null = null;
@@ -144,6 +146,9 @@ export default function HomeScreen() {
   const currentSoundRef = useRef<Audio.Sound | null>(null);
   const currentAudioFileRef = useRef<string | null>(null); // Bug 2: track temp file for cleanup
 
+  // Onboarding
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [convsExpanded, setConvsExpanded] = useState(true);
@@ -240,6 +245,18 @@ export default function HomeScreen() {
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => {
     aiAPI.warmup();
+  }, []);
+
+  // Onboarding — auto-show first 3 opens
+  const ONBOARDING_KEY = '@arrival_onboarding_count';
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then(val => {
+      const count = parseInt(val || '0', 10);
+      if (count < 3) {
+        setShowOnboarding(true);
+        AsyncStorage.setItem(ONBOARDING_KEY, String(count + 1));
+      }
+    }).catch(() => {});
   }, []);
 
   // Prefill from codes screen (or any deep link)
@@ -1100,6 +1117,15 @@ export default function HomeScreen() {
                     color="#FFF"
                   />
                 </Pressable>
+                {/* How it Works — always accessible in voice mode */}
+                <TouchableOpacity
+                  onPress={() => setShowOnboarding(true)}
+                  style={styles.howItWorksBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.6)" />
+                  <Text style={styles.howItWorksText}>How it Works</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1552,6 +1578,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ONBOARDING MODAL */}
+      <OnboardingModal
+        visible={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+      />
     </View>
   );
 }
@@ -1623,6 +1655,21 @@ const styles = StyleSheet.create({
   },
   pttButtonDisabled: {
     opacity: 0.4,
+  },
+  howItWorksBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  howItWorksText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: FontSize.xs,
+    letterSpacing: 0.2,
   },
 
   // --- Text Mode: Chat area ---
