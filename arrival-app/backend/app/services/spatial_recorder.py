@@ -111,6 +111,42 @@ class SpatialRecorder:
             logger.error(f"Error creating spatial session: {e}")
             return None
 
+    async def update_environment(self, env_type: str, setting: str, space: str):
+        """Update environment classification on the session row."""
+        if not self._session_id:
+            return
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.patch(
+                    f"{SUPABASE_URL}/rest/v1/spatial_sessions?id=eq.{self._session_id}",
+                    headers=_SERVICE_HEADERS,
+                    json={
+                        "environment_type": env_type or None,
+                        "environment_setting": setting or None,
+                        "environment_space": space or None,
+                    },
+                    timeout=5,
+                )
+            logger.info(f"Session environment updated: {env_type}/{setting}/{space}")
+        except Exception as e:
+            logger.error(f"Error updating session environment: {e}")
+
+    async def update_task_type(self, task_type: str):
+        """Update task type on the session row."""
+        if not self._session_id or not task_type:
+            return
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.patch(
+                    f"{SUPABASE_URL}/rest/v1/spatial_sessions?id=eq.{self._session_id}",
+                    headers=_SERVICE_HEADERS,
+                    json={"task_type": task_type},
+                    timeout=5,
+                )
+            logger.info(f"Session task_type updated: {task_type}")
+        except Exception as e:
+            logger.error(f"Error updating session task_type: {e}")
+
     async def end_session(self):
         """Mark session as ended and update clip count."""
         if not self._session_id:
@@ -131,7 +167,7 @@ class SpatialRecorder:
         except Exception as e:
             logger.error(f"Error ending spatial session: {e}")
 
-    async def start_sequence(self, task_description: str = "", equipment: dict | None = None):
+    async def start_sequence(self, task_description: str = "", equipment: dict | None = None, task_type: str = ""):
         """Start a new clip sequence (job/workflow). Called when guidance starts or new task inferred."""
         if not self._session_id or not self._consent:
             return
@@ -147,6 +183,7 @@ class SpatialRecorder:
                         "session_id": self._session_id,
                         "user_id": self._user_id,
                         "task_description": task_description,
+                        "task_type": task_type or None,
                         "equipment_type": equip.get("type"),
                         "equipment_brand": equip.get("brand"),
                         "equipment_model": equip.get("model"),
@@ -262,9 +299,11 @@ class SpatialRecorder:
 
         # Same equipment within window → auto-create sequence
         if equip_key == self._last_equipment_key and (now - self._last_query_time) < _INFORMAL_SEQUENCE_WINDOW:
+            agent_task_type = getattr(agent, '_task_type', '')
             await self.start_sequence(
                 task_description=f"informal: repeated queries about {equip_type} {equip_brand}".strip(),
-                equipment={"type": equip_type, "brand": equip_brand}
+                equipment={"type": equip_type, "brand": equip_brand},
+                task_type=agent_task_type,
             )
             logger.info(f"Informal sequence started: {equip_key}")
             return True
@@ -416,7 +455,47 @@ class SpatialRecorder:
             if hasattr(agent, '_guidance_task') and agent._guidance_task:
                 labels.append({"label_type": "semantic", "label_value": f"task:{agent._guidance_task}", "confidence": 1.0})
 
+        # Task type — session-level classification (diagnostic/install/repair/inspect/maintenance)
+        if hasattr(agent, '_task_type') and agent._task_type:
+            labels.append({"label_type": "task_type", "label_value": agent._task_type, "confidence": 0.85})
+
+        # Environment — session-level classification
+        if hasattr(agent, '_environment_type') and agent._environment_type:
+            labels.append({"label_type": "environment", "label_value": agent._environment_type, "confidence": 0.9})
+        if hasattr(agent, '_environment_setting') and agent._environment_setting:
+            labels.append({"label_type": "environment", "label_value": agent._environment_setting, "confidence": 0.9})
+        if hasattr(agent, '_environment_space') and agent._environment_space:
+            labels.append({"label_type": "environment", "label_value": f"space:{agent._environment_space}", "confidence": 0.85})
+
+        # Action taken — structured extraction from trigger text
+        if trigger_text:
+            action = _extract_action_label(trigger_text)
+            if action:
+                labels.append({"label_type": "action_taken", "label_value": action, "confidence": 0.8})
+
         return labels
+
+
+def _extract_action_label(text: str) -> str:
+    """Extract a structured action label from the user's transcript.
+    Maps natural speech to a normalized action verb."""
+    t = text.lower()
+    action_map = [
+        (["replac", "swap", "change out", "changing out"], "replacing"),
+        (["install", "putting in", "hook up", "hooking up", "adding"], "installing"),
+        (["repair", "fix", "patch", "sealing"], "repairing"),
+        (["troubleshoot", "diagnos", "why is", "figure out"], "diagnosing"),
+        (["check", "inspect", "test", "look at", "verify"], "inspecting"),
+        (["wire", "wiring", "connect", "terminate"], "wiring"),
+        (["flush", "drain", "bleed"], "draining"),
+        (["clean", "service", "maintain"], "maintaining"),
+        (["cut", "cut in", "rough in"], "roughing_in"),
+        (["charge", "recharge", "add refrigerant"], "charging"),
+    ]
+    for keywords, action in action_map:
+        if any(kw in t for kw in keywords):
+            return action
+    return ""
 
     async def trigger_recording(
         self,

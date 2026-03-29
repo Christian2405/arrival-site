@@ -379,6 +379,13 @@ class ArrivalAgent(Agent):
         # Task context — inferred from conversation for context-grounded proactive vision
         self._inferred_task: str = ""
         self._inferred_task_updated_at: float = 0
+        # Session-level classification — runs once each
+        self._task_type: str = ""                 # diagnostic/install/repair/inspect/maintenance
+        self._task_type_classified: bool = False
+        self._environment_type: str = ""          # indoor/outdoor
+        self._environment_setting: str = ""       # residential/commercial/industrial
+        self._environment_space: str = ""         # attic/crawlspace/panel/rooftop/etc
+        self._environment_classified: bool = False
 
     def get_guidance_state(self) -> dict:
         """Serialize guidance state for persistence/data channel."""
@@ -854,10 +861,12 @@ class ArrivalAgent(Agent):
         self._inferred_task = task_description
         self._inferred_task_updated_at = time.time()
 
-        # Start spatial sequence for this guided job
+        # Start spatial sequence for this guided job — include equipment + task_type
         if getattr(self, '_spatial_recorder', None):
             equip = {"type": self._equipment_type, "brand": self._equipment_brand, "model": self._equipment_model} if hasattr(self, '_equipment_type') else None
-            asyncio.ensure_future(self._spatial_recorder.start_sequence(task_description, equip))
+            asyncio.ensure_future(self._spatial_recorder.start_sequence(
+                task_description, equip, task_type=self._task_type
+            ))
 
         logger.info(f"[guidance] ✓ Knowledge brief generated for: {task_description}")
         logger.info(f"[guidance]   Brief: {brief[:200]}...")
@@ -943,6 +952,111 @@ class ArrivalAgent(Agent):
 # ---------------------------------------------------------------------------
 # Proactive Vision — background analysis loop
 # ---------------------------------------------------------------------------
+
+def _classify_task_type(text: str) -> str:
+    """Classify the task type from user speech. Returns empty string if unclear.
+    Uses string matching — no LLM call, runs on every first meaningful turn."""
+    t = text.lower()
+    if any(w in t for w in ["replac", "install", "putting in", "swap", "hooking up", "hook up", "adding a", "add a"]):
+        return "install"
+    if any(w in t for w in ["troubleshoot", "diagnos", "not working", "won't work", "broken", "doesn't work", "why is", "won't start", "won't turn"]):
+        return "diagnostic"
+    if any(w in t for w in ["repair", "fixing", "fix ", "patch", "leak", "leaking"]):
+        return "repair"
+    if any(w in t for w in ["inspect", "check if", "test ", "is this", "does this look", "look at"]):
+        return "inspect"
+    if any(w in t for w in ["maintain", "service ", "clean ", "flush", "filter change"]):
+        return "maintenance"
+    return ""
+
+
+async def _classify_environment(frame_b64: str, agent: "ArrivalAgent"):
+    """One-time environment classification from the first good frame.
+    Runs once per session — result stored on agent and pushed to Supabase session row."""
+    if agent._environment_classified:
+        return
+    agent._environment_classified = True  # Prevent concurrent/duplicate calls
+    try:
+        client = _get_anthropic_client()
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model=config.ANTHROPIC_VISION_MODEL,
+                max_tokens=80,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/jpeg", "data": frame_b64},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                'Classify this work site. JSON only:\n'
+                                '{"indoor_outdoor":"indoor|outdoor","setting":"residential|commercial|industrial",'
+                                '"space":"attic|crawlspace|basement|electrical_panel|rooftop|mechanical_room|wall_cavity|outdoor_equipment|garage|utility_room|other"}'
+                            ),
+                        },
+                    ],
+                }],
+            ),
+            timeout=8.0,
+        )
+        result = response.content[0].text.strip()
+        if result.startswith("```"):
+            result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        if result.startswith("{"):
+            import json as _json
+            data = _json.loads(result)
+            agent._environment_type = data.get("indoor_outdoor", "")
+            agent._environment_setting = data.get("setting", "")
+            agent._environment_space = data.get("space", "")
+            logger.info(f"[label] Environment: {agent._environment_type}/{agent._environment_setting}/{agent._environment_space}")
+            # Push to Supabase session row
+            if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._session_id:
+                asyncio.ensure_future(
+                    agent._spatial_recorder.update_environment(
+                        agent._environment_type, agent._environment_setting, agent._environment_space
+                    )
+                )
+    except Exception as e:
+        logger.debug(f"[label] Environment classification failed: {e}")
+        agent._environment_classified = False  # Allow retry on next frame
+
+
+async def _run_video_track(track: rtc.Track, agent: "ArrivalAgent"):
+    """Process frames from a subscribed LiveKit video track.
+    Extracted to module level so it can be called from on_track_subscribed AND
+    the existing-track scan after session.start()."""
+    video_stream = rtc.VideoStream(track)
+    frame_count = 0
+    last_hash = ""
+    logger.info(f"[video] ★ Starting video stream processor for track {track.sid}")
+    async for frame_event in video_stream:
+        frame_count += 1
+        # Process every 10th frame (~1fps if source is 10fps, ~3fps at 30fps)
+        if frame_count % 10 != 0:
+            continue
+        try:
+            argb_frame = frame_event.frame.convert(rtc.VideoBufferType.RGBA)
+            jpg_bytes = _frame_to_jpeg(argb_frame)
+            if jpg_bytes:
+                import base64 as _b64
+                b64 = _b64.b64encode(jpg_bytes).decode('ascii')
+                new_hash = b64[-20:]
+                changed = new_hash != last_hash
+                last_hash = new_hash
+                agent._latest_frame = b64
+                agent._frame_received_at = time.time()
+                if frame_count <= 30 or frame_count % 100 == 0 or changed:
+                    logger.info(f"[video] Frame #{frame_count} ({len(b64)//1024}KB) changed={changed}")
+                # Trigger one-time environment classification on first frame
+                if not agent._environment_classified:
+                    asyncio.ensure_future(_classify_environment(b64, agent))
+        except Exception as e:
+            if frame_count <= 10:
+                logger.warning(f"[video] Frame conversion failed: {e}")
+
 
 def _extract_task_from_speech(text: str) -> str:
     """Extract a task description from user speech. Returns empty string if no task found."""
@@ -1668,42 +1782,29 @@ async def entrypoint(ctx: JobContext):
         # Video track subscriber — grab frames from LiveKit video track
         # This bypasses expo-camera entirely. The frontend publishes its
         # camera as a LiveKit video track, and we grab frames here.
+        #
+        # IMPORTANT: handler registered here so it catches future tracks.
+        # We also scan existing tracks below in case the client published
+        # before this handler was registered.
         # ---------------------------------------------------------------
         @ctx.room.on("track_subscribed")
         def on_track_subscribed(track, publication, participant):
             logger.info(f"[video] Track subscribed: kind={track.kind}, from={participant.identity}")
             if track.kind != rtc.TrackKind.KIND_VIDEO:
-                logger.info(f"[video] Skipping non-video track (kind={track.kind})")
                 return
-            logger.info(f"[video] ★★★ VIDEO TRACK SUBSCRIBED from {participant.identity} ★★★")
+            logger.info(f"[video] ★★★ VIDEO TRACK from {participant.identity} — starting processor ★★★")
+            asyncio.ensure_future(_run_video_track(track, agent))
 
-            async def process_video_frames():
-                video_stream = rtc.VideoStream(track)
-                frame_count = 0
-                last_hash = ""
-                async for frame_event in video_stream:
-                    frame_count += 1
-                    # Process every 10th frame (~1fps if source is 10fps)
-                    if frame_count % 10 != 0:
-                        continue
-                    try:
-                        argb_frame = frame_event.frame.convert(rtc.VideoBufferType.RGBA)
-                        jpg_bytes = _frame_to_jpeg(argb_frame)
-                        if jpg_bytes:
-                            import base64
-                            b64 = base64.b64encode(jpg_bytes).decode('ascii')
-                            new_hash = b64[-20:]
-                            changed = new_hash != last_hash
-                            last_hash = new_hash
-                            agent._latest_frame = b64
-                            agent._frame_received_at = time.time()
-                            if frame_count <= 30 or frame_count % 100 == 0 or changed:
-                                logger.info(f"[video] Frame #{frame_count} ({len(b64)//1024}KB) hash=...{new_hash[-8:]} changed={changed}")
-                    except Exception as e:
-                        if frame_count <= 10:
-                            logger.warning(f"[video] Frame conversion failed: {e}")
-
-            asyncio.ensure_future(process_video_frames())
+        # Scan existing subscribed tracks — event may have fired before handler registered
+        _existing_video = 0
+        for _p in ctx.room.remote_participants.values():
+            for _pub in _p.track_publications.values():
+                if _pub.track and _pub.track.kind == rtc.TrackKind.KIND_VIDEO:
+                    logger.info(f"[video] ★ Existing video track found from {_p.identity} — processing")
+                    asyncio.ensure_future(_run_video_track(_pub.track, agent))
+                    _existing_video += 1
+        if _existing_video == 0:
+            logger.info("[video] No existing video tracks — waiting for track_subscribed event")
 
         # Track user speech for proactive monitor + engagement + mute detection
         # Only match mute/pushback when the ENTIRE utterance matches exactly
@@ -1760,6 +1861,16 @@ async def entrypoint(ctx: JobContext):
                 agent._inferred_task = task
                 agent._inferred_task_updated_at = time.time()
                 logger.info(f"[proactive] Task inferred from speech: '{task}'")
+
+            # Task type classification — runs once on first meaningful turn (≥3 words)
+            if not agent._task_type_classified and len(text_lower.split()) >= 3:
+                task_type = _classify_task_type(transcript)
+                if task_type:
+                    agent._task_type = task_type
+                    agent._task_type_classified = True
+                    logger.info(f"[label] Task type classified: {task_type}")
+                    if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._session_id:
+                        asyncio.ensure_future(agent._spatial_recorder.update_task_type(task_type))
 
             # Pre-inject error code data so LLM has it without needing a tool call.
             # lookup_error_code is a fast dict lookup — no async/network needed.
