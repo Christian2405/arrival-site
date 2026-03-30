@@ -36,6 +36,9 @@ try {
 } catch (e) {
   console.warn('[Home] LiveKit native module not available (Expo Go?) — falling back to REST voice');
 }
+// OnboardingModal — lazy-load so its module-level code doesn't run at startup
+// (static import was disrupting the iOS camera session on app launch)
+let OnboardingModal: React.ComponentType<{ visible: boolean; onClose: () => void }> | null = null;
 // AgentVoiceState type defined inline to avoid importing the native module
 type AgentVoiceState = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 import FrameBatcher from '../../services/frameBatcher';
@@ -145,6 +148,15 @@ export default function HomeScreen() {
   const currentAudioFileRef = useRef<string | null>(null); // Bug 2: track temp file for cleanup
 
   // Drawer
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const openOnboarding = useCallback(() => {
+    // Load module on first use — NOT at startup so it can't disrupt camera
+    if (!OnboardingModal) {
+      OnboardingModal = require('../../components/OnboardingModal').default;
+    }
+    setShowOnboarding(true);
+  }, []);
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [convsExpanded, setConvsExpanded] = useState(true);
   const drawerAnim = useRef(new Animated.Value(0)).current;
@@ -1100,6 +1112,10 @@ export default function HomeScreen() {
                     color="#FFF"
                   />
                 </Pressable>
+                <TouchableOpacity onPress={openOnboarding} style={styles.howItWorksBtn} activeOpacity={0.7}>
+                  <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.6)" />
+                  <Text style={styles.howItWorksText}>How it Works</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1552,6 +1568,10 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {showOnboarding && OnboardingModal && (
+        <OnboardingModal visible={true} onClose={() => setShowOnboarding(false)} />
+      )}
     </View>
   );
 }
@@ -1623,6 +1643,20 @@ const styles = StyleSheet.create({
   },
   pttButtonDisabled: {
     opacity: 0.4,
+  },
+  howItWorksBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  howItWorksText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    marginLeft: 4,
   },
 
   // --- Text Mode: Chat area ---
