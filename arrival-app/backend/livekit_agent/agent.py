@@ -622,59 +622,59 @@ class ArrivalAgent(Agent):
                 if any(phrase in text.lower() for phrase in _VISION_PHRASES):
                     msg.content = []  # Gone — no residue, no anchoring
 
-        # 3. Inject current frame onto the new message
-        #    Try data channel first, then HTTP fallback (data channel is broken in production)
-        frame = self._latest_frame if (
-            self._latest_frame and (time.time() - self._frame_received_at) < 4
-        ) else None
-        if not frame:
-            # HTTP fallback — same path that look_at_camera uses successfully
-            frame = await self.get_current_frame()
+        # 3. Inject frame ONLY for explicit vision questions.
+        #    Injecting a frame on every query adds 5-15s vision processing cost
+        #    even for "can you hear me?" — kills latency for no benefit.
+        #    The proactive monitor handles ambient vision separately.
+        user_text = ""
+        if isinstance(new_message.content, str):
+            user_text = new_message.content.lower()
+        elif isinstance(new_message.content, list):
+            user_text = " ".join(c.lower() for c in new_message.content if isinstance(c, str))
+
+        _VISION_QUESTIONS = (
+            "what do you see", "what is this", "what is that", "what am i looking at",
+            "what's this", "what's that", "can you see", "do you see", "look at this",
+            "what are these", "what are those", "identify", "read this", "read that",
+            "what does this say", "what does that say", "what brand", "what model",
+            "what type", "what kind", "show me", "look at",
+        )
+        is_vision_question = any(q in user_text for q in _VISION_QUESTIONS)
+
+        if is_vision_question:
+            # Vision question — fetch the best available frame and inject
+            frame = self._latest_frame if (
+                self._latest_frame and (time.time() - self._frame_received_at) < 10
+            ) else None
+            if not frame:
+                frame = await self.get_current_frame()
             if frame:
-                logger.info(f"[vision-debug] Got frame via HTTP fallback ({len(frame)//1024}KB)")
-        if frame:
-            data_url = f"data:image/jpeg;base64,{frame}"
-            image_content = ImageContent(image=data_url)
-            eq_str = self._equipment_context_str()
-
-            # Check if user is asking a vision question
-            user_text = ""
-            if isinstance(new_message.content, str):
-                user_text = new_message.content.lower()
-            elif isinstance(new_message.content, list):
-                user_text = " ".join(c.lower() for c in new_message.content if isinstance(c, str))
-
-            _VISION_QUESTIONS = (
-                "what do you see", "what is this", "what is that", "what am i looking at",
-                "what's this", "what's that", "can you see", "do you see", "look at this",
-                "what are these", "what are those", "identify", "read this", "read that",
-                "what does this say", "what does that say", "what brand", "what model",
-            )
-            is_vision_question = any(q in user_text for q in _VISION_QUESTIONS)
-
-            # Ensure content is a list (SDK may pass string or list)
-            if isinstance(new_message.content, str):
-                new_message.content = [new_message.content]
-            elif not isinstance(new_message.content, list):
-                new_message.content = [new_message.content]
-
-            if is_vision_question:
-                # Vision question: image first so model focuses on describing
+                data_url = f"data:image/jpeg;base64,{frame}"
+                image_content = ImageContent(image=data_url)
+                # Ensure content is a list
+                if isinstance(new_message.content, str):
+                    new_message.content = [new_message.content]
+                elif not isinstance(new_message.content, list):
+                    new_message.content = [new_message.content]
+                # Image first so model focuses on what it sees
                 new_message.content = [image_content] + new_message.content
+                logger.info(f"[vision] Frame injected for vision question ({len(frame)//1024}KB)")
             else:
-                # Non-vision question: text first, image is just background context
-                new_message.content = new_message.content + [image_content]
-                if eq_str:
-                    new_message.content.append(f" [Equipment: {eq_str}]")
-        else:
-            logger.warning(f"[vision-debug] NO FRAME (age={time.time() - self._frame_received_at:.1f}s)")
+                logger.warning("[vision] No frame available for vision question")
 
         # 4. Guidance brief is injected via system prompt in on_user_speech (line ~1676-1687)
         # No need to also append it to every message — that wastes tokens/money.
 
-        # 4b. Auto-RAG: search company docs + knowledge base for EVERY query
-        # Don't rely on LLM deciding to call search_knowledge tool — inject automatically
-        # like text/chat mode does. This is the core "your company's docs first" feature.
+        # 4b. Auto-RAG: search company docs + knowledge base for technical queries only.
+        # Skip for conversational/vision/status questions — they don't need doc lookup
+        # and injecting irrelevant docs causes hallucinations.
+        _CONVERSATIONAL = (
+            "can you hear", "do you hear", "are you there", "hello", "hey",
+            "can you see", "what do you see", "what am i looking at", "what are you looking at",
+            "what is this", "what is that", "what's this", "what's that",
+            "how are you", "thank", "thanks", "ok", "okay", "yeah", "yes", "no",
+            "got it", "sounds good", "perfect", "great", "good", "nice",
+        )
         try:
             user_text_for_rag = ""
             if isinstance(new_message.content, str):
@@ -682,8 +682,14 @@ class ArrivalAgent(Agent):
             elif isinstance(new_message.content, list):
                 user_text_for_rag = " ".join(c for c in new_message.content if isinstance(c, str))
 
-            # Skip RAG for very short utterances (greetings, "yes", "ok", "thanks")
-            if len(user_text_for_rag.strip()) > 10:
+            user_text_lower = user_text_for_rag.lower().strip()
+            is_conversational = (
+                len(user_text_lower) < 15
+                or any(phrase in user_text_lower for phrase in _CONVERSATIONAL)
+            )
+
+            # Only run RAG for real technical questions (≥4 words, not conversational)
+            if not is_conversational and len(user_text_lower.split()) >= 4:
                 rag_results = await retrieve_context(
                     user_id=self._user_id,
                     query=user_text_for_rag,
