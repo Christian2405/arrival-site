@@ -232,11 +232,14 @@ JOB_MODE_PROMPT = (
     "- If they push back, back off. If they say stop, go silent.\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
     "- NEVER start by describing what you see unless they asked. Just answer the question.\n"
+    "- ALWAYS spell out units in full — never use abbreviations in your spoken response:\n"
+    "  W → watts, kW → kilowatts, A → amps, V → volts, mm → millimetres, cm → centimetres,\n"
+    "  m → metres, mm² → millimetre squared, MPa → megapascals, kPa → kilopascals, kg → kilograms\n"
     "- When answering from documents, TRANSLATE the spec into natural speech — never read raw notation.\n"
     "  BAD: 'Kitchen: 6 x LED downlights (10W each) on dimmer circuit'\n"
     "  GOOD: 'Six 10-watt LED downlights in the kitchen, on a dimmer.'\n"
     "  BAD: 'Oven: 32A circuit, 6mm² TPS, direct to sub-board'\n"
-    "  GOOD: 'The oven is on a 32-amp circuit with 6mm cable direct to the board.'\n\n"
+    "  GOOD: 'The oven is on a 32-amp circuit with 6-millimetre cable direct to the board.'\n\n"
 
     # ── EXAMPLES — mirror these patterns ──
     "EXAMPLES of how to respond:\n"
@@ -359,20 +362,24 @@ def _clean_for_tts(text: str) -> str:
     text = text.replace("²", " squared").replace("³", " cubed")
     # Degree symbols
     text = text.replace("°C", " degrees C").replace("°F", " degrees F").replace("°", " degrees ")
-    # Electrical/mechanical units — expand so TTS says them properly
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Ww]\b(?!att)', r'\1 watt', text)       # 10W → 10 watt
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Kk][Ww]\b', r'\1 kilowatt', text)      # 5kW → 5 kilowatt
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Aa]\b(?!mp)', r'\1 amp', text)          # 32A → 32 amp
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Vv]\b(?!olt)', r'\1 volt', text)        # 240V → 240 volt
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*mm\b', r'\1 millimetre', text)           # 6mm → 6 millimetre
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*mm²\b', r'\1 millimetre squared', text)
-    text = _re_tts.sub(r'\bm²\b', 'square metres', text)
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*m²\b', r'\1 square metres', text)
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Mm]Pa\b', r'\1 megapascal', text)       # 17.5 MPa
-    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Kk]Pa\b', r'\1 kilopascal', text)
-    text = _re_tts.sub(r'\bTPS\b', 'TPS cable', text)                                # TPS → TPS cable
-    text = _re_tts.sub(r'\bGPO\b', 'power outlet', text)                             # GPO → power outlet
-    text = _re_tts.sub(r'\bRCD\b', 'RCD', text)                                      # leave RCD as-is
+    # Electrical/mechanical units — order matters: longest match first
+    # kW before W, mm before m, etc.
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*mm²', r'\1 millimetre squared', text)    # 6mm² first
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*mm', r'\1 millimetre', text)             # 6mm
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*cm', r'\1 centimetre', text)             # 10cm
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*m²', r'\1 square metres', text)          # 48m²
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*m\b', r'\1 metres', text)               # 6m
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*kW\b', r'\1 kilowatts', text)           # 5kW before W
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Ww]\b', r'\1 watts', text)             # 10W
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*kVA\b', r'\1 kilovolt-amps', text)
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Vv]\b', r'\1 volts', text)             # 240V
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Aa]\b', r'\1 amps', text)              # 32A
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*MPa\b', r'\1 megapascals', text)
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*kPa\b', r'\1 kilopascals', text)
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*kg\b', r'\1 kilograms', text)
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*psi\b', r'\1 PSI', text)
+    text = _re_tts.sub(r'\bTPS\b', 'TPS cable', text)
+    text = _re_tts.sub(r'\bGPO\b', 'power outlet', text)
     # Markdown bold/italic — strip asterisks and underscores
     text = _re_tts.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
     text = _re_tts.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', text)
