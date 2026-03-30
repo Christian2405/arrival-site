@@ -148,6 +148,9 @@ export default function HomeScreen() {
 
   // Onboarding
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Camera recovery key — increment to force CameraView remount
+  // ONLY safe when LiveKit is not active (livekitActive = false)
+  const [cameraKey, setCameraKey] = useState(0);
 
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -232,15 +235,19 @@ export default function HomeScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Re-check camera permission when app returns to foreground
+  // Re-check camera permission when app returns to foreground.
+  // Also reset cameraKey to force CameraView remount — recovers black screen
+  // after interruptions (phone calls, modals, background). Only safe when
+  // LiveKit is NOT active (remounting crashes iOS with an active audio session).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && !permission?.granted) {
-        requestPermission();
+      if (state === 'active') {
+        if (!permission?.granted) requestPermission();
+        if (!livekitActive) setCameraKey(k => k + 1);
       }
     });
     return () => sub.remove();
-  }, [permission?.granted]);
+  }, [permission?.granted, livekitActive]);
 
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => {
@@ -1035,7 +1042,7 @@ export default function HomeScreen() {
       {/* Camera background — expo-camera for Voice/Text, LiveKit VideoTrack for Job */}
       {/* Voice/Text modes: native camera zoom via zoom prop (0-1 = 0.5x to max) */}
       {permission?.granted && interactionMode !== 'job' && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
+        <CameraView key={cameraKey} ref={cameraRef} style={StyleSheet.absoluteFill} facing={cameraFacing} zoom={cameraZoom} />
       )}
       {/* Job Mode: LiveKit VideoTrack — no CSS zoom (causes ugly box), fill screen */}
       {interactionMode === 'job' && localVideoTrackRef && LKVideoTrack && (
@@ -1044,7 +1051,7 @@ export default function HomeScreen() {
         </View>
       )}
       {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={cameraFacing} zoom={cameraZoom} />
       )}
 
       {/* Dark overlay on camera feed — also handles pinch-to-zoom */}
@@ -1583,7 +1590,12 @@ export default function HomeScreen() {
       {/* ONBOARDING MODAL */}
       <OnboardingModal
         visible={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
+        onClose={() => {
+          setShowOnboarding(false);
+          // Reset camera after modal — safe because modal only appears in Voice/Text
+          // mode where LiveKit is not active
+          if (!livekitActive) setCameraKey(k => k + 1);
+        }}
       />
     </View>
   );
