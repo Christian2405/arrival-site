@@ -22,7 +22,6 @@ import {
   LiveKitRoom,
   AudioSession,
   useConnectionState,
-  useIOSAudioManagement,
   useParticipants,
   useRoomContext,
   useTracks,
@@ -133,8 +132,17 @@ export default function LiveKitVoiceRoom({
       if (cancelled) return;
 
       try {
-        // Start audio session if not already started
+        // Configure and start audio session if not already started.
+        // Must use playAndRecord + videoChat BEFORE connecting so iOS routes
+        // agent audio to the speaker and keeps mic capture active throughout.
+        // Do NOT use useIOSAudioManagement — it fires immediately with zero tracks,
+        // sets soloAmbient, and kills mic capture before the room even connects.
         if (!audioSessionStarted.current) {
+          await AudioSession.configureAudio({
+            audioCategory: 'playAndRecord',
+            audioCategoryOptions: ['allowBluetooth', 'mixWithOthers'],
+            audioMode: 'videoChat',  // routes to speaker (hands-free)
+          });
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;
         }
@@ -301,9 +309,6 @@ function RoomContent({
   const connectionState = useConnectionState();
   const participants = useParticipants();
   const room = useRoomContext();
-  // Reconfigures iOS AVAudioSession for speaker output when agent audio track arrives.
-  // Without this, iOS stays in recording-only mode and agent audio is never heard.
-  useIOSAudioManagement(room, true);
   const tracks = useTracks([Track.Source.Camera]);
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const hasStartedConnecting = useRef(false);
