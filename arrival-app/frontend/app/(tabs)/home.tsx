@@ -557,9 +557,13 @@ export default function HomeScreen() {
         console.error('Voice chat error:', error);
         const isNet = !error?.response && (error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK' || error?.message?.includes('Network'));
         const is429 = error?.response?.status === 429;
+        const is401 = error?.response?.status === 401;
         let voiceErrorMsg = 'Voice processing failed. Please try again.';
         if (isNet) voiceErrorMsg = 'Server is starting up — please try again in a moment.';
         else if (is429) voiceErrorMsg = 'Daily query limit reached. Resets at midnight UTC.';
+        else if (is401) voiceErrorMsg = 'Session expired — please log out and back in.';
+        // Show Alert in voice mode since errors are invisible otherwise
+        Alert.alert('Voice Error', voiceErrorMsg);
         addMessage({
           id: generateId(), role: 'assistant',
           content: voiceErrorMsg,
