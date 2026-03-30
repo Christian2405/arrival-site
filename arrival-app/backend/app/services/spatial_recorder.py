@@ -475,28 +475,6 @@ class SpatialRecorder:
 
         return labels
 
-
-def _extract_action_label(text: str) -> str:
-    """Extract a structured action label from the user's transcript.
-    Maps natural speech to a normalized action verb."""
-    t = text.lower()
-    action_map = [
-        (["replac", "swap", "change out", "changing out"], "replacing"),
-        (["install", "putting in", "hook up", "hooking up", "adding"], "installing"),
-        (["repair", "fix", "patch", "sealing"], "repairing"),
-        (["troubleshoot", "diagnos", "why is", "figure out"], "diagnosing"),
-        (["check", "inspect", "test", "look at", "verify"], "inspecting"),
-        (["wire", "wiring", "connect", "terminate"], "wiring"),
-        (["flush", "drain", "bleed"], "draining"),
-        (["clean", "service", "maintain"], "maintaining"),
-        (["cut", "cut in", "rough in"], "roughing_in"),
-        (["charge", "recharge", "add refrigerant"], "charging"),
-    ]
-    for keywords, action in action_map:
-        if any(kw in t for kw in keywords):
-            return action
-    return ""
-
     async def trigger_recording(
         self,
         trigger_type: str,
@@ -741,3 +719,25 @@ def _extract_action_label(text: str) -> str:
                 )
         except Exception as e:
             logger.error(f"Failed to update clip final: {e}")
+
+
+def _extract_action_label(text: str) -> str:
+    """Extract a structured action label from the user's transcript.
+    Maps natural speech to a normalized action verb."""
+    t = text.lower()
+    action_map = [
+        (["replac", "swap", "change out", "changing out"], "replacing"),
+        (["install", "putting in", "hook up", "hooking up", "adding"], "installing"),
+        (["repair", "fix", "patch", "sealing"], "repairing"),
+        (["troubleshoot", "diagnos", "why is", "figure out"], "diagnosing"),
+        (["check", "inspect", "test", "look at", "verify"], "inspecting"),
+        (["wire", "wiring", "connect", "terminate"], "wiring"),
+        (["flush", "drain", "bleed"], "draining"),
+        (["clean", "service", "maintain"], "maintaining"),
+        (["cut", "cut in", "rough in"], "roughing_in"),
+        (["charge", "recharge", "add refrigerant"], "charging"),
+    ]
+    for keywords, action in action_map:
+        if any(kw in t for kw in keywords):
+            return action
+    return ""
