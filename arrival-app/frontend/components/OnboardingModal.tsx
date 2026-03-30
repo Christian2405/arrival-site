@@ -232,7 +232,7 @@ export default function OnboardingModal({ visible, onClose }: Props) {
   return (
     <Modal
       visible={visible}
-      transparent={false}
+      transparent={true}
       animationType="slide"
       statusBarTranslucent
       onRequestClose={handleClose}

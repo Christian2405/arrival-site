@@ -247,13 +247,14 @@ export default function HomeScreen() {
     aiAPI.warmup();
   }, []);
 
-  // Onboarding — auto-show first 3 opens
+  // Onboarding — auto-show first 3 opens, delayed so camera initialises first
   const ONBOARDING_KEY = '@arrival_onboarding_count';
   useEffect(() => {
     AsyncStorage.getItem(ONBOARDING_KEY).then(val => {
       const count = parseInt(val || '0', 10);
       if (count < 3) {
-        setShowOnboarding(true);
+        // Delay so the camera view fully mounts before the modal covers it
+        setTimeout(() => setShowOnboarding(true), 800);
         AsyncStorage.setItem(ONBOARDING_KEY, String(count + 1));
       }
     }).catch(() => {});
