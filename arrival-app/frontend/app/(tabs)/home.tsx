@@ -27,7 +27,6 @@ import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIn
 import JobModeView, { JobAIState } from '../../components/JobModeView';
 import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
-import OnboardingModal from '../../components/OnboardingModal';
 // LiveKit requires native WebRTC — lazy-load so Expo Go doesn't crash
 let LiveKitVoiceRoom: React.ComponentType<any> | null = null;
 let LKVideoTrack: React.ComponentType<any> | null = null;
@@ -145,9 +144,6 @@ export default function HomeScreen() {
   const currentSoundRef = useRef<Audio.Sound | null>(null);
   const currentAudioFileRef = useRef<string | null>(null); // Bug 2: track temp file for cleanup
 
-  // Onboarding
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [convsExpanded, setConvsExpanded] = useState(true);
@@ -245,10 +241,6 @@ export default function HomeScreen() {
   useEffect(() => {
     aiAPI.warmup();
   }, []);
-
-  // Onboarding — manual only via "How it Works" button
-  // Auto-show was removed: the modal's solid background was covering the camera
-  // on startup making it look black. Use the button instead.
 
   // Prefill from codes screen (or any deep link)
   useEffect(() => {
@@ -1108,15 +1100,6 @@ export default function HomeScreen() {
                     color="#FFF"
                   />
                 </Pressable>
-                {/* How it Works — always accessible in voice mode */}
-                <TouchableOpacity
-                  onPress={() => setShowOnboarding(true)}
-                  style={styles.howItWorksBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.6)" />
-                  <Text style={styles.howItWorksText}>How it Works</Text>
-                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1569,12 +1552,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* ONBOARDING MODAL */}
-      <OnboardingModal
-        visible={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
-      />
     </View>
   );
 }
@@ -1646,21 +1623,6 @@ const styles = StyleSheet.create({
   },
   pttButtonDisabled: {
     opacity: 0.4,
-  },
-  howItWorksBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-  },
-  howItWorksText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: FontSize.xs,
-    letterSpacing: 0.2,
   },
 
   // --- Text Mode: Chat area ---
