@@ -27,7 +27,6 @@ import VoiceStatusIndicator, { VoiceState } from '../../components/VoiceStatusIn
 import JobModeView, { JobAIState } from '../../components/JobModeView';
 import JobModeController from '../../services/jobModeController';
 import StreamingJobModeController from '../../services/streamingJobModeController';
-import OnboardingModal from '../../components/OnboardingModal';
 // LiveKit requires native WebRTC — lazy-load so Expo Go doesn't crash
 let LiveKitVoiceRoom: React.ComponentType<any> | null = null;
 let LKVideoTrack: React.ComponentType<any> | null = null;
@@ -146,7 +145,6 @@ export default function HomeScreen() {
   const currentAudioFileRef = useRef<string | null>(null); // Bug 2: track temp file for cleanup
 
   // Drawer
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [convsExpanded, setConvsExpanded] = useState(true);
   const drawerAnim = useRef(new Animated.Value(0)).current;
@@ -1102,10 +1100,6 @@ export default function HomeScreen() {
                     color="#FFF"
                   />
                 </Pressable>
-                <TouchableOpacity onPress={() => setShowOnboarding(true)} style={styles.howItWorksBtn} activeOpacity={0.7}>
-                  <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.6)" />
-                  <Text style={styles.howItWorksText}>How it Works</Text>
-                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1558,8 +1552,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      <OnboardingModal visible={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </View>
   );
 }
@@ -1631,20 +1623,6 @@ const styles = StyleSheet.create({
   },
   pttButtonDisabled: {
     opacity: 0.4,
-  },
-  howItWorksBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-  },
-  howItWorksText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    marginLeft: 4,
   },
 
   // --- Text Mode: Chat area ---
