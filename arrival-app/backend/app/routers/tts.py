@@ -31,6 +31,7 @@ _ONBOARDING_SCRIPT = (
 )
 
 # Cache the generated audio in memory — only generate once per server restart
+# (invalidated on each Render deploy — fresh audio on every version update)
 _narration_cache: str | None = None
 
 MAX_TTS_TEXT = 5000  # max characters for TTS input
