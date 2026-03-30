@@ -217,7 +217,10 @@ export default function OnboardingModal({ visible, onClose }: Props) {
     if (visible) {
       setSlideIdx(0);
       setFinished(false);
-      playNarration();
+      setLoading(false);
+      setError(null);
+      // Do NOT auto-play audio — playing audio on startup disrupts the iOS
+      // camera session and causes a black screen. User taps Play to hear narration.
     } else {
       stopAudio();
     }
@@ -305,17 +308,23 @@ export default function OnboardingModal({ visible, onClose }: Props) {
             ))}
           </View>
 
-          {/* Audio status */}
+          {/* Audio controls */}
           {loading && (
             <View style={styles.audioStatus}>
               <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
               <Text style={styles.audioStatusText}>Loading audio...</Text>
             </View>
           )}
-          {error && (
+          {!loading && error && (
             <TouchableOpacity onPress={playNarration} style={styles.audioStatus}>
               <Ionicons name="refresh" size={14} color="rgba(255,255,255,0.5)" />
               <Text style={styles.audioStatusText}>Retry audio</Text>
+            </TouchableOpacity>
+          )}
+          {!loading && !error && !finished && soundRef.current === null && (
+            <TouchableOpacity onPress={playNarration} style={styles.audioStatus}>
+              <Ionicons name="volume-medium-outline" size={15} color="rgba(255,255,255,0.45)" />
+              <Text style={styles.audioStatusText}>Tap to hear narration</Text>
             </TouchableOpacity>
           )}
 
