@@ -1044,7 +1044,7 @@ export default function HomeScreen() {
         </View>
       )}
       {interactionMode === 'job' && !localVideoTrackRef && permission?.granted && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={cameraFacing} zoom={cameraZoom} />
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" zoom={cameraZoom} />
       )}
 
       {/* Dark overlay on camera feed — also handles pinch-to-zoom */}
