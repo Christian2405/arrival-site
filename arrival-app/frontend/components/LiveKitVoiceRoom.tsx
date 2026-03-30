@@ -22,6 +22,7 @@ import {
   LiveKitRoom,
   AudioSession,
   useConnectionState,
+  useIOSAudioManagement,
   useParticipants,
   useRoomContext,
   useTracks,
@@ -300,6 +301,9 @@ function RoomContent({
   const connectionState = useConnectionState();
   const participants = useParticipants();
   const room = useRoomContext();
+  // Reconfigures iOS AVAudioSession for speaker output when agent audio track arrives.
+  // Without this, iOS stays in recording-only mode and agent audio is never heard.
+  useIOSAudioManagement(room, true);
   const tracks = useTracks([Track.Source.Camera]);
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const hasStartedConnecting = useRef(false);
