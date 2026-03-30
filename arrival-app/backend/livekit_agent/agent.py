@@ -231,7 +231,12 @@ JOB_MODE_PROMPT = (
     "- Lead with the answer. Give specific numbers. Use contractions.\n"
     "- If they push back, back off. If they say stop, go silent.\n"
     "- Never say 'consult a professional' — they ARE the professional.\n"
-    "- NEVER start by describing what you see unless they asked. Just answer the question.\n\n"
+    "- NEVER start by describing what you see unless they asked. Just answer the question.\n"
+    "- When answering from documents, TRANSLATE the spec into natural speech — never read raw notation.\n"
+    "  BAD: 'Kitchen: 6 x LED downlights (10W each) on dimmer circuit'\n"
+    "  GOOD: 'Six 10-watt LED downlights in the kitchen, on a dimmer.'\n"
+    "  BAD: 'Oven: 32A circuit, 6mm² TPS, direct to sub-board'\n"
+    "  GOOD: 'The oven is on a 32-amp circuit with 6mm cable direct to the board.'\n\n"
 
     # ── EXAMPLES — mirror these patterns ──
     "EXAMPLES of how to respond:\n"
@@ -342,6 +347,49 @@ class SceneMemory:
 # ---------------------------------------------------------------------------
 # Agent with tools + always-on vision
 # ---------------------------------------------------------------------------
+
+import re as _re_tts
+
+def _clean_for_tts(text: str) -> str:
+    """
+    Convert technical notation and markdown into clean speakable text.
+    ElevenLabs chokes on symbols, superscripts, and markdown formatting.
+    """
+    # Superscript characters (m², mm², cm³)
+    text = text.replace("²", " squared").replace("³", " cubed")
+    # Degree symbols
+    text = text.replace("°C", " degrees C").replace("°F", " degrees F").replace("°", " degrees ")
+    # Electrical/mechanical units — expand so TTS says them properly
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Ww]\b(?!att)', r'\1 watt', text)       # 10W → 10 watt
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Kk][Ww]\b', r'\1 kilowatt', text)      # 5kW → 5 kilowatt
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Aa]\b(?!mp)', r'\1 amp', text)          # 32A → 32 amp
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Vv]\b(?!olt)', r'\1 volt', text)        # 240V → 240 volt
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*mm\b', r'\1 millimetre', text)           # 6mm → 6 millimetre
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*mm²\b', r'\1 millimetre squared', text)
+    text = _re_tts.sub(r'\bm²\b', 'square metres', text)
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*m²\b', r'\1 square metres', text)
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Mm]Pa\b', r'\1 megapascal', text)       # 17.5 MPa
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[Kk]Pa\b', r'\1 kilopascal', text)
+    text = _re_tts.sub(r'\bTPS\b', 'TPS cable', text)                                # TPS → TPS cable
+    text = _re_tts.sub(r'\bGPO\b', 'power outlet', text)                             # GPO → power outlet
+    text = _re_tts.sub(r'\bRCD\b', 'RCD', text)                                      # leave RCD as-is
+    # Markdown bold/italic — strip asterisks and underscores
+    text = _re_tts.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
+    text = _re_tts.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', text)
+    # Markdown bullet points and hashes
+    text = _re_tts.sub(r'^#+\s+', '', text, flags=_re_tts.MULTILINE)
+    text = _re_tts.sub(r'^\s*[-•*]\s+', '', text, flags=_re_tts.MULTILINE)
+    # Inline code backticks
+    text = _re_tts.sub(r'`([^`]+)`', r'\1', text)
+    # Fraction-style specs like "4/12/4" — leave as-is, TTS handles numbers fine
+    # Strip leftover brackets from doc references like [Source: ...]
+    text = _re_tts.sub(r'\[Source:[^\]]*\]', '', text)
+    text = _re_tts.sub(r'\[Reference docs[^\]]*\]', '', text)
+    # Collapse multiple spaces/newlines
+    text = _re_tts.sub(r'\n+', ' ', text)
+    text = _re_tts.sub(r'  +', ' ', text)
+    return text.strip()
+
 
 class ArrivalAgent(Agent):
     """Trade worker voice agent with error code lookup, always-on vision, and proactive monitoring."""
@@ -477,7 +525,7 @@ class ArrivalAgent(Agent):
         return ", ".join(parts) if parts else ""
 
     def tts_node(self, text, model_settings):
-        """Strip robotic filler from LLM output before TTS speaks it."""
+        """Strip robotic filler and clean technical symbols before TTS speaks it."""
         filtered = self._filter_robotic_text(text)
         return Agent.default.tts_node(self, filtered, model_settings)
 
@@ -531,7 +579,7 @@ class ArrivalAgent(Agent):
         buffer = ""
         is_start = True
         sentence_count = 0
-        MAX_VOICE_SENTENCES = 4  # Hard cap — never speak more than 4 sentences
+        MAX_VOICE_SENTENCES = 2  # Hard cap — keep answers tight for voice
 
         async for chunk in text:
             # Stop generating after max sentences
@@ -551,6 +599,7 @@ class ArrivalAgent(Agent):
 
             buffer = _ROBOTIC.sub("", buffer)
             buffer = _NUMBERED.sub("", buffer)
+            buffer = _clean_for_tts(buffer)
             buffer = re.sub(r"  +", " ", buffer)
 
             if buffer.strip():
@@ -562,6 +611,7 @@ class ArrivalAgent(Agent):
         if buffer.strip() and sentence_count < MAX_VOICE_SENTENCES:
             buffer = _ROBOTIC.sub("", buffer)
             buffer = _NUMBERED.sub("", buffer)
+            buffer = _clean_for_tts(buffer)
             buffer = re.sub(r"  +", " ", buffer).strip()
             if buffer:
                 yield buffer
