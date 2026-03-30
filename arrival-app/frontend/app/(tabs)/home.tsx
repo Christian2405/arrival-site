@@ -11,7 +11,6 @@ import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, EncodingType, readAsStringAsync, writeAsStringAsync, deleteAsync } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from '../../constants/Colors';
 import { getTierLimits } from '../../constants/Tiers';
@@ -247,18 +246,9 @@ export default function HomeScreen() {
     aiAPI.warmup();
   }, []);
 
-  // Onboarding — auto-show first 3 opens, delayed so camera initialises first
-  const ONBOARDING_KEY = '@arrival_onboarding_count';
-  useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then(val => {
-      const count = parseInt(val || '0', 10);
-      if (count < 3) {
-        // Delay so the camera view fully mounts before the modal covers it
-        setTimeout(() => setShowOnboarding(true), 800);
-        AsyncStorage.setItem(ONBOARDING_KEY, String(count + 1));
-      }
-    }).catch(() => {});
-  }, []);
+  // Onboarding — manual only via "How it Works" button
+  // Auto-show was removed: the modal's solid background was covering the camera
+  // on startup making it look black. Use the button instead.
 
   // Prefill from codes screen (or any deep link)
   useEffect(() => {
