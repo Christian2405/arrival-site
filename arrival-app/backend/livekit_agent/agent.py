@@ -679,11 +679,8 @@ class ArrivalAgent(Agent):
             elif isinstance(new_message.content, list):
                 user_text_for_rag = " ".join(c for c in new_message.content if isinstance(c, str))
 
-            # Skip RAG for short utterances AND vision questions.
-            # Vision questions need the model to describe what it ACTUALLY sees —
-            # injecting HVAC/plumbing manuals makes it describe equipment from docs
-            # instead of what's in the frame. That's the hallucination.
-            if len(user_text_for_rag.strip()) > 10 and not is_vision_question:
+            # Skip RAG for very short utterances (greetings, "yes", "ok", "thanks")
+            if len(user_text_for_rag.strip()) > 10:
                 rag_results = await retrieve_context(
                     user_id=self._user_id,
                     query=user_text_for_rag,
