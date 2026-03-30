@@ -26,6 +26,11 @@ class DocumentTooShortError(Exception):
     pass
 
 
+class PineconeQuotaError(Exception):
+    """Raised when Pinecone rejects the upsert due to embedding token quota exhaustion."""
+    pass
+
+
 def _get_pinecone_index():
     """Lazy-init Pinecone index. Returns None if no API key."""
     global _pc_index
@@ -326,6 +331,12 @@ async def index_document(
                     else:
                         logger.warning(f"[rag] Pinecone upsert failed after retry: {conn_err}")
                 except Exception as e:
+                    # Quota exhaustion (429) — raise immediately, no point retrying
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "embedding token limit" in str(e).lower():
+                        raise PineconeQuotaError(
+                            "Document indexing failed: Pinecone embedding quota exhausted for this month. "
+                            "Upgrade your Pinecone plan at app.pinecone.io to continue indexing documents."
+                        )
                     # Bug #7: Also reset on generic Pinecone errors that may be transient
                     if "connect" in str(e).lower() or "timeout" in str(e).lower():
                         _reset_pinecone_index()

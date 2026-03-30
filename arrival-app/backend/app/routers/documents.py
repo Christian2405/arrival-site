@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.middleware.auth import get_current_user
 from app.services.supabase import upload_document, list_documents, delete_document
-from app.services.rag import index_document, DocumentTooShortError
+from app.services.rag import index_document, DocumentTooShortError, PineconeQuotaError
 from app.services.usage import check_document_limit
 from app import config
 
@@ -258,10 +258,12 @@ async def index_doc(body: IndexRequest, request: Request):
         raise
     except DocumentTooShortError as e:
         return IndexResponse(success=False, chunks_indexed=0, message=str(e))
+    except PineconeQuotaError as e:
+        logger.error(f"[index-document] Pinecone quota exhausted: {e}")
+        raise HTTPException(status_code=507, detail=str(e))
     except Exception as e:
         logger.error(f"[index-document] Error: {e}")
-        # Return success=False but don't error — indexing is best-effort
-        return IndexResponse(success=False, chunks_indexed=0, message=str(e))
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
 
 async def _lookup_document(document_id: str, user_token: str) -> dict | None:
