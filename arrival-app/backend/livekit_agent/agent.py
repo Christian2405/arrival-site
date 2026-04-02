@@ -234,7 +234,8 @@ JOB_MODE_PROMPT = (
     "- NEVER start by describing what you see unless they asked. Just answer the question.\n"
     "- ALWAYS spell out units in full — never use abbreviations in your spoken response:\n"
     "  W → watts, kW → kilowatts, A → amps, V → volts, mm → millimetres, cm → centimetres,\n"
-    "  m → metres, mm² → millimetre squared, MPa → megapascals, kPa → kilopascals, kg → kilograms\n"
+    "  m → metres, mm² → millimetre squared, MPa → megapascals, kPa → kilopascals, kg → kilograms,\n"
+    "  AWG → gauge (say '6 gauge' not '6 AWG'), GFCI → GFI\n"
     "- When answering from documents, TRANSLATE the spec into natural speech — never read raw notation.\n"
     "  BAD: 'Kitchen: 6 x LED downlights (10W each) on dimmer circuit'\n"
     "  GOOD: 'Six 10-watt LED downlights in the kitchen, on a dimmer.'\n"
@@ -378,8 +379,13 @@ def _clean_for_tts(text: str) -> str:
     text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*kPa\b', r'\1 kilopascals', text)
     text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*kg\b', r'\1 kilograms', text)
     text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*psi\b', r'\1 PSI', text)
+    text = _re_tts.sub(r'\bAWG\b', 'gauge', text)                                    # 6 AWG → 6 gauge
     text = _re_tts.sub(r'\bTPS\b', 'TPS cable', text)
     text = _re_tts.sub(r'\bGPO\b', 'power outlet', text)
+    text = _re_tts.sub(r'\bGFCI\b', 'GFI', text)                                     # easier to say
+    text = _re_tts.sub(r'\bHVAC\b', 'HVAC', text)                                    # fine as-is
+    text = _re_tts.sub(r'\bLVL\b', 'LVL beam', text)
+    text = _re_tts.sub(r'\bRCD\b', 'RCD', text)
     # Markdown bold/italic — strip asterisks and underscores
     text = _re_tts.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
     text = _re_tts.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', text)
