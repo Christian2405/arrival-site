@@ -70,6 +70,8 @@ interface LiveKitVoiceRoomProps {
   onLocalVideoTrack?: (trackRef: any | null) => void;
   /** Exposes a function to flip between front/back camera */
   onFlipCameraReady?: (flipFn: (() => void) | null) => void;
+  /** Active job/residence name — agent references these docs first */
+  activeJob?: string | null;
 }
 
 const MAX_RETRIES = 3;
@@ -88,6 +90,7 @@ export default function LiveKitVoiceRoom({
   onSendMessageReady,
   onLocalVideoTrack,
   onFlipCameraReady,
+  activeJob,
 }: LiveKitVoiceRoomProps) {
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
@@ -158,7 +161,7 @@ export default function LiveKitVoiceRoom({
         // Get token from backend
         console.log(`[LiveKitVoice] Getting token (attempt ${attempt + 1})...`);
         const consent = useAuthStore.getState().profile?.spatial_capture_consent === true;
-        const lkSession = await createLiveKitSession(mode, consent);
+        const lkSession = await createLiveKitSession(mode, consent, activeJob ?? null);
         console.log(`[LiveKitVoice] Token received. Room: ${lkSession.roomName}, URL: ${lkSession.wsUrl}`);
 
         if (!cancelled) {

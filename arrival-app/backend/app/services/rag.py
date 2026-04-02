@@ -483,10 +483,13 @@ async def retrieve_context(
             if isinstance(result, Exception):
                 logger.warning(f"[rag] {task_labels[i]} namespace search failed: {result}")
                 continue
+            is_personal = task_labels[i] in ("user", "team")
             for item in result:
-                text_key = item["text"][:200]  # Use first 200 chars as dedup key
+                text_key = item["text"][:200]
                 if text_key not in seen_texts:
                     seen_texts.add(text_key)
+                    # Tag so agent knows which source to cite
+                    item = {**item, "is_personal": is_personal}
                     merged.append(item)
 
         # Sort by relevance score descending

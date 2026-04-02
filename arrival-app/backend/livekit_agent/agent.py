@@ -406,6 +406,7 @@ class ArrivalAgent(Agent):
         # User context — populated from participant metadata at session start
         self._user_id: str = "unknown"
         self._team_id: Optional[str] = None
+        self._active_job: Optional[str] = None  # e.g. "Fladgate residence"
         # Camera state — frames come from data channel OR HTTP frame store
         self._latest_frame: Optional[str] = None
         self._frame_received_at: float = 0
@@ -738,18 +739,32 @@ class ArrivalAgent(Agent):
 
             # Skip RAG for very short utterances (greetings, "yes", "ok", "thanks")
             if len(user_text_for_rag.strip()) > 10:
+                # Prefix query with active job name so it surfaces job-specific docs
+                rag_query = user_text_for_rag
+                if self._active_job:
+                    rag_query = f"{self._active_job}: {user_text_for_rag}"
                 rag_results = await retrieve_context(
                     user_id=self._user_id,
-                    query=user_text_for_rag,
+                    query=rag_query,
                     top_k=3,
                     team_id=self._team_id,
                 )
                 if rag_results:
-                    rag_text = "\n".join(
-                        f"[{r.get('filename', 'knowledge')}] {r.get('text', '')}"
-                        for r in rag_results
-                    )
-                    rag_inject = f"\n[Reference docs — cite if relevant]\n{rag_text}"
+                    job_lines = []
+                    knowledge_lines = []
+                    for r in rag_results:
+                        label = f"[{r.get('filename', 'doc')}]"
+                        entry = f"{label} {r.get('text', '')}"
+                        if r.get("is_personal"):
+                            job_lines.append(entry)
+                        else:
+                            knowledge_lines.append(entry)
+                    parts = []
+                    if job_lines:
+                        parts.append("[UPLOADED JOB DOCS — use for job-specific specs, plans, measurements]\n" + "\n".join(job_lines))
+                    if knowledge_lines:
+                        parts.append("[TRADE KNOWLEDGE — use for codes, procedures, general specs]\n" + "\n".join(knowledge_lines))
+                    rag_inject = "\n\n".join(parts)
                     if isinstance(new_message.content, list):
                         new_message.content.append(rag_inject)
                     else:
@@ -1564,6 +1579,7 @@ async def entrypoint(ctx: JobContext):
         mode = "job"
         user_id = "unknown"
         team_id = None
+        active_job = None
 
         for participant in ctx.room.remote_participants.values():
             if participant.metadata:
@@ -1571,15 +1587,25 @@ async def entrypoint(ctx: JobContext):
                     meta = json.loads(participant.metadata)
                     user_id = meta.get("user_id", user_id)
                     mode = meta.get("mode", mode)
-                    team_id = meta.get("team_id")  # None if user has no team
+                    team_id = meta.get("team_id")
+                    active_job = meta.get("active_job")  # job/residence name
                 except (json.JSONDecodeError, TypeError):
                     pass
                 break
 
-        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode} team={team_id or 'none'}")
+        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode} team={team_id or 'none'} job={active_job or 'none'}")
 
         # Select prompt based on mode — append VOICE_KNOWLEDGE for brand/diagnostic depth
         prompt = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+
+        # Inject active job context so agent always knows which job/residence it's on
+        if active_job:
+            prompt += (
+                f"\n\nACTIVE JOB: {active_job}\n"
+                f"You are currently on the {active_job} job. When answering questions about specs, "
+                f"measurements, plans, or materials — reference the {active_job} documents first. "
+                f"The user does not need to tell you which job they're on — you already know."
+            )
 
         # Load ML models with fallback
         vad = None
@@ -1643,6 +1669,7 @@ async def entrypoint(ctx: JobContext):
         agent._room = ctx.room
         agent._user_id = user_id
         agent._team_id = team_id
+        agent._active_job = active_job
 
         # --- Spatial Intelligence Recorder ---
         recording_consent = False

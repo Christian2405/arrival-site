@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Pressable,
   Animated, Keyboard, Platform, Alert, Dimensions, PanResponder,
-  TouchableWithoutFeedback, AppState, Linking,
+  TouchableWithoutFeedback, AppState, Linking, Modal, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -18,7 +18,7 @@ import { useConversationStore, Message } from '../../store/conversationStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useSavedAnswersStore } from '../../store/savedAnswersStore';
 import { useAuthStore } from '../../store/authStore';
-import { aiAPI, feedbackAPI } from '../../services/api';
+import api, { aiAPI, feedbackAPI } from '../../services/api';
 import { useUsageStore, isQueryLimitReached } from '../../store/usageStore';
 import ChatBubble from '../../components/ChatBubble';
 import ArrivalLogo from '../../components/ArrivalLogo';
@@ -172,6 +172,9 @@ export default function HomeScreen() {
   const livekitFrameBatcherRef = useRef<FrameBatcher | null>(null);
   const [livekitActive, setLivekitActive] = useState(false);
   const [localVideoTrackRef, setLocalVideoTrackRef] = useState<any>(null);
+  const [activeJob, setActiveJob] = useState<string | null>(null);
+  const [userDocs, setUserDocs] = useState<string[]>([]);
+  const [showJobPicker, setShowJobPicker] = useState(false);
   const flipCameraRef = useRef<(() => void) | null>(null);
   // Zoom state — 0 = ultra-wide (0.5x), 0.5 = 1x, 1.0 = max telephoto
   // expo-camera zoom prop uses 0-1 range
@@ -395,6 +398,18 @@ export default function HomeScreen() {
 
   // --- Recording cleanup on unmount ---
   // Bug 18: Use ref instead of stale state closure
+  // Load user's uploaded document names for the job picker
+  useEffect(() => {
+    api.get('/documents')
+      .then(res => {
+        const names: string[] = (res.data.documents || [])
+          .map((d: any) => d.filename as string)
+          .filter(Boolean);
+        setUserDocs([...new Set(names)]);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     return () => {
       if (pttFrameIntervalRef.current) {
@@ -1345,8 +1360,56 @@ export default function HomeScreen() {
                   }}
                   onLocalVideoTrack={setLocalVideoTrackRef}
                   onFlipCameraReady={(fn: (() => void) | null) => { flipCameraRef.current = fn; }}
+                  activeJob={activeJob}
                 />
               )}
+
+              {/* ── Job Picker — easily removable block ── */}
+              {interactionMode === 'job' && userDocs.length > 0 && (
+                <View style={{ position: 'absolute', top: 16, left: 16, zIndex: 20, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {activeJob ? (
+                    <TouchableOpacity
+                      onPress={() => setActiveJob(null)}
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(99,102,241,0.85)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, gap: 6 }}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{activeJob.replace(/\.[^.]+$/, '')}</Text>
+                      <Ionicons name="close-circle" size={15} color="rgba(255,255,255,0.8)" />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setShowJobPicker(true)}
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, gap: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
+                    >
+                      <Ionicons name="folder-outline" size={14} color="rgba(255,255,255,0.7)" />
+                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Set Job</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* Job picker modal */}
+              <Modal visible={showJobPicker} transparent animationType="fade" onRequestClose={() => setShowJobPicker(false)}>
+                <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} activeOpacity={1} onPress={() => setShowJobPicker(false)}>
+                  <View style={{ backgroundColor: '#1a1a2e', borderRadius: 16, padding: 20, width: '80%', maxHeight: '60%' }}>
+                    <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700', marginBottom: 16 }}>Select Job</Text>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      {userDocs.map((doc, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          onPress={() => { setActiveJob(doc); setShowJobPicker(false); }}
+                          style={{ paddingVertical: 14, borderBottomWidth: i < userDocs.length - 1 ? 1 : 0, borderBottomColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                        >
+                          <Ionicons name="document-text-outline" size={18} color="#6366f1" />
+                          <Text style={{ color: '#fff', fontSize: 15 }}>{doc.replace(/\.[^.]+$/, '').replace(/^\d+_/, '')}</Text>
+                          {activeJob === doc && <Ionicons name="checkmark-circle" size={18} color="#6366f1" style={{ marginLeft: 'auto' }} />}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </TouchableOpacity>
+              </Modal>
+              {/* ── End Job Picker ── */}
+
               <JobModeView
                 aiState={jobAIState}
                 voiceConnected={voiceConnected}

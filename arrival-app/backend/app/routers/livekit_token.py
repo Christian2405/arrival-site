@@ -27,6 +27,7 @@ router = APIRouter()
 class TokenRequest(BaseModel):
     mode: str = "job"  # "job" or "default"
     recording_consent: bool = False  # spatial intelligence consent
+    active_job: str | None = None  # e.g. "Fladgate residence" — agent references this job's docs
 
 
 class TokenResponse(BaseModel):
@@ -215,8 +216,9 @@ async def create_livekit_token(req: TokenRequest, request: Request):
     participant_metadata = json.dumps({
         "user_id": user_id,
         "mode": req.mode,
-        "team_id": team_id,  # None if user has no team
+        "team_id": team_id,
         "recording_consent": req.recording_consent,
+        "active_job": req.active_job,  # job/residence name for doc context
     })
 
     # --- Generate token ---
