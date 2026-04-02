@@ -587,7 +587,7 @@ class ArrivalAgent(Agent):
         buffer = ""
         is_start = True
         sentence_count = 0
-        MAX_VOICE_SENTENCES = 2  # Hard cap — keep answers tight for voice
+        MAX_VOICE_SENTENCES = 3  # Hard cap — keep answers tight for voice
 
         async for chunk in text:
             # Stop generating after max sentences
@@ -611,8 +611,9 @@ class ArrivalAgent(Agent):
             buffer = re.sub(r"  +", " ", buffer)
 
             if buffer.strip():
-                # Count sentences in what we're about to yield
-                sentence_count += buffer.count('.') + buffer.count('!') + buffer.count('?')
+                # Count sentences — only terminal punctuation (not decimals like 17.5)
+                import re as _re_s
+                sentence_count += len(_re_s.findall(r'(?<!\d)\.(?!\d)|[!?]', buffer))
                 yield buffer
                 buffer = ""
 
