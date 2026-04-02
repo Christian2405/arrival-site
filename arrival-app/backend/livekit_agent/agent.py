@@ -1707,7 +1707,13 @@ async def entrypoint(ctx: JobContext):
                 doc_names = [d.get("filename", "") for d in docs if d.get("filename")]
                 if doc_names:
                     doc_list = ", ".join(doc_names[:20])
-                    doc_inject = f"\n\n## Your Documents\nThe user has uploaded these documents: {doc_list}. When they ask about any of these, search your knowledge and reference the relevant document."
+                    doc_inject = (
+                        f"\n\nUPLOADED DOCUMENTS: The user has these documents stored in the system: {doc_list}. "
+                        f"These are TEXT documents (PDFs, plans, manuals) — NOT things on the camera. "
+                        f"When asked about any of them, their content is automatically injected as [UPLOADED JOB DOCS] context in your messages. "
+                        f"NEVER say you can't see the plans or ask the user to show them on screen — "
+                        f"just read the [UPLOADED JOB DOCS] context and answer from it."
+                    )
                     prompt = prompt + doc_inject
                     asyncio.ensure_future(agent.update_instructions(prompt))
                     logger.info(f"[arrival-agent] Injected {len(doc_names)} document names into prompt")
