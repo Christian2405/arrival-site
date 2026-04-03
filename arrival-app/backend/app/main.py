@@ -78,7 +78,7 @@ async def _seed_knowledge_base():
         doc_id = f"global_{filename.replace(' ', '_').replace('.', '_')}"
 
         file_bytes = filepath.read_bytes()
-        text = extract_text_from_file(file_bytes, "text/markdown", filename)
+        text, _ = extract_text_from_file(file_bytes, "text/markdown", filename)
         if not text:
             continue
 
@@ -109,15 +109,133 @@ async def _seed_knowledge_base():
     logger.info(f"[seed] Done — {total} total chunks indexed")
 
 
+async def _reindex_stuck_documents():
+    """
+    On startup: find any documents stuck in 'processing' or 'index_failed' and re-index them.
+    This means users never need to retry manually — the backend handles it automatically.
+    Waits 30s after startup so the server is fully ready before hitting Pinecone/Supabase.
+    """
+    from app import config
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY or not config.PINECONE_API_KEY:
+        return
+
+    await asyncio.sleep(30)  # Let the server finish booting
+
+    logger.info("[reindex] Checking for stuck documents...")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{config.SUPABASE_URL}/rest/v1/documents",
+                headers={
+                    "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                },
+                params={
+                    "status": "in.(processing,index_failed)",
+                    "select": "id,storage_path,uploaded_by,team_id,file_name",
+                    "order": "created_at.asc",
+                    "limit": "50",
+                },
+            )
+            resp.raise_for_status()
+            stuck_docs = resp.json()
+
+        if not stuck_docs:
+            logger.info("[reindex] No stuck documents found")
+            return
+
+        logger.info(f"[reindex] Found {len(stuck_docs)} stuck document(s) — re-indexing...")
+        from app.services.rag import index_document
+
+        for doc in stuck_docs:
+            doc_id = doc["id"]
+            storage_path = doc["storage_path"]
+            user_id = doc["uploaded_by"]
+            team_id = doc.get("team_id")
+            filename = storage_path.split("/")[-1]
+            if "_" in filename:
+                filename = filename.split("_", 1)[1]
+
+            try:
+                # Download file from Supabase Storage
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    dl = await client.get(
+                        f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_STORAGE_BUCKET}/{storage_path}",
+                        headers={
+                            "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                            "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                        },
+                    )
+                    dl.raise_for_status()
+                    file_bytes = dl.content
+
+                # Guess content type
+                lower = filename.lower()
+                if lower.endswith(".pdf"):
+                    content_type = "application/pdf"
+                elif lower.endswith(".docx"):
+                    content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                else:
+                    content_type = "text/plain"
+
+                chunks = await index_document(
+                    document_id=doc_id,
+                    user_id=user_id,
+                    filename=filename,
+                    file_bytes=file_bytes,
+                    content_type=content_type,
+                    team_id=team_id,
+                )
+
+                # Mark as indexed
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.patch(
+                        f"{config.SUPABASE_URL}/rest/v1/documents",
+                        headers={
+                            "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                            "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                            "Content-Type": "application/json",
+                            "Prefer": "return=minimal",
+                        },
+                        params={"id": f"eq.{doc_id}"},
+                        json={"status": "indexed"},
+                    )
+                logger.info(f"[reindex] ✓ {filename} — {chunks} chunks")
+
+            except Exception as e:
+                logger.warning(f"[reindex] ✗ {filename}: {e}")
+                # Mark as failed so the Retry button shows in the dashboard
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        await client.patch(
+                            f"{config.SUPABASE_URL}/rest/v1/documents",
+                            headers={
+                                "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                                "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                                "Content-Type": "application/json",
+                                "Prefer": "return=minimal",
+                            },
+                            params={"id": f"eq.{doc_id}"},
+                            json={"status": "index_failed"},
+                        )
+                except Exception:
+                    pass
+
+    except Exception as e:
+        logger.warning(f"[reindex] Startup reindex failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle — launches keep-alive + seeds knowledge base."""
     keep_alive_task = asyncio.create_task(_keep_alive())
     seed_task = asyncio.create_task(_seed_knowledge_base())
+    reindex_task = asyncio.create_task(_reindex_stuck_documents())
     yield
     keep_alive_task.cancel()
     seed_task.cancel()
-    for t in (keep_alive_task, seed_task):
+    reindex_task.cancel()
+    for t in (keep_alive_task, seed_task, reindex_task):
         try:
             await t
         except asyncio.CancelledError:

@@ -114,7 +114,7 @@ async def extract_text_from_pdf_via_vision(file_bytes: bytes, filename: str) -> 
 
             try:
                 response = await client.messages.create(
-                    model="claude-haiku-4-5-20251001",
+                    model="claude-sonnet-4-6",
                     max_tokens=2000,
                     messages=[{
                         "role": "user",
