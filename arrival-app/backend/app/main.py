@@ -122,6 +122,8 @@ async def _reindex_stuck_documents():
     await asyncio.sleep(30)  # Let the server finish booting
 
     logger.info("[reindex] Checking for stuck documents...")
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
@@ -133,6 +135,7 @@ async def _reindex_stuck_documents():
                 params={
                     "status": "in.(processing,index_failed)",
                     "select": "id,storage_path,uploaded_by,team_id,file_name",
+                    "created_at": f"lt.{cutoff}",
                     "order": "created_at.asc",
                     "limit": "50",
                 },
