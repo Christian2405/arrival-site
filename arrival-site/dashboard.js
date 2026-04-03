@@ -238,47 +238,51 @@ function searchDocs(query) {
     });
 }
 
-// Trigger /index-document with a 65s timeout. Returns true if indexed, false if failed.
-// Retries once after 5s if the first attempt fails (handles Render cold starts).
-async function _indexWithRetry(authToken, docId, storagePath) {
-    async function attempt() {
+// Fire /index-document and return immediately — backend indexes in background.
+// Polls Supabase every 8s until status flips to 'indexed' or 'index_failed' (max 10 min).
+async function _triggerIndexing(authToken, docId, storagePath) {
+    // Fire the request — backend returns immediately, indexing happens in background
+    try {
         var ctrl = new AbortController();
-        var timer = setTimeout(function() { ctrl.abort(); }, 65000);
-        try {
-            var r = await fetch(BACKEND_URL + '/index-document', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
-                signal: ctrl.signal,
-            });
-            clearTimeout(timer);
-            if (!r.ok) return false;
-            var data = await r.json();
-            return data.success === true;
-        } catch (_) {
-            clearTimeout(timer);
-            return false;
-        }
+        var timer = setTimeout(function() { ctrl.abort(); }, 30000); // 30s just to wake Render
+        var r = await fetch(BACKEND_URL + '/index-document', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
+            signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (!r.ok) return false; // Failed to even start
+    } catch (_) {
+        return false;
     }
-    var ok = await attempt();
-    if (!ok) {
-        // Wait 5s then retry once (Render may still be waking up)
-        await new Promise(function(res) { setTimeout(res, 5000); });
-        ok = await attempt();
+
+    // Poll Supabase for status change (backend updates it when done)
+    var deadline = Date.now() + 10 * 60 * 1000; // 10 minute max
+    while (Date.now() < deadline) {
+        await new Promise(function(res) { setTimeout(res, 8000); });
+        var result = await sb.from('documents').select('status').eq('id', docId).single();
+        var status = result.data && result.data.status;
+        if (status === 'indexed') return true;
+        if (status === 'index_failed') return false;
+        // Still 'processing' — keep polling
+        await loadDocuments(); // Refresh the table so user sees the spinner is still going
     }
-    return ok;
+    return false; // Timed out
 }
 
 async function retryIndexDocument(docId, storagePath) {
     var session = (await sb.auth.getSession()).data.session;
     if (!session) { showToast('Not logged in.', 'error'); return; }
-    showToast('Retrying indexing…');
-    var ok = await _indexWithRetry(session.access_token, docId, storagePath);
+    // Reset to processing so spinner shows
+    await sb.from('documents').update({ status: 'processing' }).eq('id', docId);
+    await loadDocuments();
+    showToast('Re-indexing document…');
+    var ok = await _triggerIndexing(session.access_token, docId, storagePath);
     if (ok) {
-        showToast('Indexed successfully — AI can now use this document.');
+        showToast('Ready — AI can now use this document.');
     } else {
-        showToast('Indexing failed again. Check the backend logs.', 'error');
-        await sb.from('documents').update({ status: 'index_failed' }).eq('id', docId);
+        showToast('Indexing failed. Check your document or try again.', 'error');
     }
     await loadDocuments();
 }
@@ -339,20 +343,19 @@ async function handleDocUpload() {
 
             uploaded++;
 
-            // Trigger RAG indexing — await with timeout + 1 retry so we know if it fails
+            // Trigger RAG indexing — fires background task, polls until done
             try {
                 var session = (await sb.auth.getSession()).data.session;
                 if (session) {
                     var docId = insertResult.data && insertResult.data[0] ? insertResult.data[0].id : null;
-                    var indexed = await _indexWithRetry(session.access_token, docId, storagePath);
+                    var indexed = await _triggerIndexing(session.access_token, docId, storagePath);
                     if (!indexed) {
-                        // Mark as failed so user sees it and can retry
                         await sb.from('documents').update({ status: 'index_failed' })
                             .eq('storage_path', storagePath);
                         showToast(file.name + ' uploaded but AI indexing failed — click Retry in the doc list.', 'error');
                     }
                 }
-            } catch (_) { /* ignore — doc is still uploaded, status column shows state */ }
+            } catch (_) { /* ignore — status column shows state */ }
         } catch (err) {
             console.error('Upload error:', err);
             failed++;

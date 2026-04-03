@@ -167,9 +167,13 @@ async def delete_doc(document_id: str, request: Request):
 async def index_doc(body: IndexRequest, request: Request):
     """
     Trigger RAG indexing for a document already uploaded to Supabase Storage.
-    Called by the website dashboards after direct-to-Supabase uploads.
-    Downloads the file from Storage, extracts text, chunks, and upserts to Pinecone.
+    Verifies ownership synchronously, then kicks off indexing as a background task
+    and returns immediately — so large PDFs (building plans, etc.) don't time out.
+    The dashboard polls Supabase status to know when indexing completes.
     """
+    import asyncio
+    import httpx
+
     try:
         user = await get_current_user(request)
         user_id = user["user_id"]
@@ -181,74 +185,64 @@ async def index_doc(body: IndexRequest, request: Request):
         if not config.PINECONE_API_KEY:
             return IndexResponse(success=False, chunks_indexed=0, message="Pinecone not configured")
 
-        # Look up the document from the DB to verify ownership
-        import httpx
+        # Verify ownership synchronously before returning
         doc_resp = None
         if body.document_id:
             doc_resp = await _lookup_document(body.document_id, user_token)
         if doc_resp is None:
-            # Fallback: look up by storage_path (handles null document_id from RLS issues)
             doc_resp = await _lookup_document_by_path(body.storage_path, user_token)
         if doc_resp is None:
-            raise HTTPException(
-                status_code=403,
-                detail="Document not found or you don't have access to it"
-            )
+            raise HTTPException(status_code=403, detail="Document not found or you don't have access to it")
 
-        # Use the DB-sourced values as source of truth
         trusted_storage_path = doc_resp["storage_path"]
         document_id = doc_resp["id"]
         doc_team_id = doc_resp.get("team_id") or body.team_id
-        if doc_resp.get("team_id"):
-            doc_team_id = doc_resp["team_id"]
 
-        # Validation — storage_path must not contain path traversal
         if ".." in trusted_storage_path:
             raise HTTPException(status_code=400, detail="Invalid storage path")
 
-        # Download the file from Supabase Storage
-        storage_url = (
-            f"{config.SUPABASE_URL}/storage/v1/object/"
-            f"{config.SUPABASE_STORAGE_BUCKET}/{trusted_storage_path}"
-        )
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.get(
-                storage_url,
-                headers={
-                    "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
-                    "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
-                },
-            )
-            resp.raise_for_status()
-            file_bytes = resp.content
-
-        # Guess content type from filename
-        filename = trusted_storage_path.split("/")[-1]
-        # Strip the timestamp prefix (e.g., "1700000000000_manual.pdf" -> "manual.pdf")
-        if "_" in filename:
-            filename = filename.split("_", 1)[1]
-
-        content_type = "application/octet-stream"
-        lower = filename.lower()
-        if lower.endswith(".pdf"):
-            content_type = "application/pdf"
-        elif lower.endswith((".txt", ".md", ".csv")):
-            content_type = "text/plain"
-        elif lower.endswith(".docx"):
-            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-        # Index via RAG pipeline
-        chunks = await index_document(
+        # Fire background task and return immediately — no timeout risk
+        asyncio.create_task(_run_indexing_background(
             document_id=document_id,
             user_id=user_id,
-            filename=filename,
-            file_bytes=file_bytes,
-            content_type=content_type,
+            storage_path=trusted_storage_path,
             team_id=doc_team_id,
-        )
+        ))
 
-        # Mark document as indexed in Supabase
+        return IndexResponse(success=True, chunks_indexed=0, message="Indexing started in background")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[index-document] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start indexing: {str(e)}")
+
+
+async def _run_indexing_background(
+    document_id: str,
+    user_id: str,
+    storage_path: str,
+    team_id: str | None,
+) -> None:
+    """
+    Background task: download file, run RAG indexing, update Supabase status.
+    Handles arbitrarily large PDFs without any HTTP timeout pressure.
+    """
+    import httpx
+
+    filename = storage_path.split("/")[-1]
+    if "_" in filename:
+        filename = filename.split("_", 1)[1]
+
+    lower = filename.lower()
+    if lower.endswith(".pdf"):
+        content_type = "application/pdf"
+    elif lower.endswith(".docx"):
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    else:
+        content_type = "text/plain"
+
+    async def _update_status(status: str) -> None:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 await client.patch(
@@ -260,27 +254,51 @@ async def index_doc(body: IndexRequest, request: Request):
                         "Prefer": "return=minimal",
                     },
                     params={"id": f"eq.{document_id}"},
-                    json={"status": "indexed"},
+                    json={"status": status},
                 )
         except Exception as e:
-            logger.warning(f"[index-document] Failed to update status to indexed: {e}")
+            logger.warning(f"[index-bg] Failed to update status to {status}: {e}")
 
-        return IndexResponse(
-            success=True,
-            chunks_indexed=chunks,
-            message=f"Indexed {chunks} chunks from {filename}",
+    try:
+        # Download file — no timeout pressure here
+        storage_url = (
+            f"{config.SUPABASE_URL}/storage/v1/object/"
+            f"{config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
+        )
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.get(
+                storage_url,
+                headers={
+                    "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                },
+            )
+            resp.raise_for_status()
+            file_bytes = resp.content
+
+        logger.info(f"[index-bg] Indexing {filename} ({len(file_bytes) // 1024}KB) for user {user_id}")
+
+        chunks = await index_document(
+            document_id=document_id,
+            user_id=user_id,
+            filename=filename,
+            file_bytes=file_bytes,
+            content_type=content_type,
+            team_id=team_id,
         )
 
-    except HTTPException:
-        raise
+        await _update_status("indexed")
+        logger.info(f"[index-bg] ✓ {filename} — {chunks} chunks")
+
     except DocumentTooShortError as e:
-        return IndexResponse(success=False, chunks_indexed=0, message=str(e))
+        logger.warning(f"[index-bg] {filename}: {e}")
+        await _update_status("index_failed")
     except PineconeQuotaError as e:
-        logger.error(f"[index-document] Pinecone quota exhausted: {e}")
-        raise HTTPException(status_code=507, detail=str(e))
+        logger.error(f"[index-bg] Pinecone quota: {e}")
+        await _update_status("index_failed")
     except Exception as e:
-        logger.error(f"[index-document] Error: {e}")
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+        logger.error(f"[index-bg] ✗ {filename}: {e}")
+        await _update_status("index_failed")
 
 
 async def _lookup_document(document_id: str, user_token: str) -> dict | None:

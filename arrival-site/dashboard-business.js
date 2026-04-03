@@ -428,44 +428,45 @@ function searchDocs(query) {
     renderDocTable(filtered);
 }
 
-async function _indexWithRetry(authToken, docId, storagePath) {
-    async function attempt() {
+async function _triggerIndexing(authToken, docId, storagePath) {
+    try {
         var ctrl = new AbortController();
-        var timer = setTimeout(function() { ctrl.abort(); }, 65000);
-        try {
-            var r = await fetch(BACKEND_URL + '/index-document', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
-                signal: ctrl.signal,
-            });
-            clearTimeout(timer);
-            if (!r.ok) return false;
-            var data = await r.json();
-            return data.success === true;
-        } catch (_) {
-            clearTimeout(timer);
-            return false;
-        }
+        var timer = setTimeout(function() { ctrl.abort(); }, 30000);
+        var r = await fetch(BACKEND_URL + '/index-document', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
+            signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (!r.ok) return false;
+    } catch (_) {
+        return false;
     }
-    var ok = await attempt();
-    if (!ok) {
-        await new Promise(function(res) { setTimeout(res, 5000); });
-        ok = await attempt();
+
+    var deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+        await new Promise(function(res) { setTimeout(res, 8000); });
+        var result = await sb.from('documents').select('status').eq('id', docId).single();
+        var status = result.data && result.data.status;
+        if (status === 'indexed') return true;
+        if (status === 'index_failed') return false;
+        await loadDocuments();
     }
-    return ok;
+    return false;
 }
 
 async function retryIndexDocument(docId, storagePath) {
     var session = (await sb.auth.getSession()).data.session;
     if (!session) { showToast('Not logged in.', 'error'); return; }
-    showToast('Retrying indexing…');
-    var ok = await _indexWithRetry(session.access_token, docId, storagePath);
+    await sb.from('documents').update({ status: 'processing' }).eq('id', docId);
+    await loadDocuments();
+    showToast('Re-indexing document…');
+    var ok = await _triggerIndexing(session.access_token, docId, storagePath);
     if (ok) {
-        showToast('Indexed successfully — AI can now use this document.');
+        showToast('Ready — AI can now use this document.');
     } else {
-        showToast('Indexing failed again. Check the backend logs.', 'error');
-        await sb.from('documents').update({ status: 'index_failed' }).eq('id', docId);
+        showToast('Indexing failed. Check your document or try again.', 'error');
     }
     await loadDocuments();
 }
@@ -533,12 +534,12 @@ async function handleDocUpload() {
         await loadDocuments();
         loadHome();
 
-        // Trigger RAG indexing — await with timeout + retry
+        // Trigger RAG indexing — fires background task, polls until done
         try {
             var session = (await sb.auth.getSession()).data.session;
             if (session) {
                 var docId = insertResult.data && insertResult.data[0] ? insertResult.data[0].id : null;
-                var indexed = await _indexWithRetry(session.access_token, docId, storagePath);
+                var indexed = await _triggerIndexing(session.access_token, docId, storagePath);
                 if (indexed) {
                     showToast(file.name + ' is ready — AI can now use it.');
                 } else {
