@@ -248,6 +248,23 @@ async def index_doc(body: IndexRequest, request: Request):
             team_id=doc_team_id,
         )
 
+        # Mark document as indexed in Supabase
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.patch(
+                    f"{config.SUPABASE_URL}/rest/v1/documents",
+                    headers={
+                        "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+                        "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal",
+                    },
+                    params={"id": f"eq.{document_id}"},
+                    json={"status": "indexed"},
+                )
+        except Exception as e:
+            logger.warning(f"[index-document] Failed to update status to indexed: {e}")
+
         return IndexResponse(
             success=True,
             chunks_indexed=chunks,
