@@ -14,6 +14,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // --- DEV MODE ---
 const IS_DEV = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
+// Cached session — set by DOMContentLoaded and onAuthStateChange
+let _cachedSession = null;
+
 // Store reference to original showPage
 const _originalShowPage = window.showPage;
 
@@ -418,15 +421,17 @@ async function ensureProfileExists(user) {
 // ============================================
 
 async function navigateToDashboard() {
-    // Verify session is still valid before navigating
-    try {
-        var result = await sb.auth.getSession();
-        if (!result.data.session) {
-            updateNavForAuth(null);
-            showPage('login');
-            return;
-        }
-    } catch(e) {
+    // Use cached session first (avoids race on first click while Supabase is still initializing)
+    var session = _cachedSession;
+    if (!session) {
+        // Fallback: try a fresh getSession() — covers edge cases like token expiry
+        try {
+            var result = await sb.auth.getSession();
+            session = result.data.session;
+        } catch(e) { /* ignore */ }
+    }
+    if (!session) {
+        updateNavForAuth(null);
         showPage('login');
         return;
     }
@@ -666,10 +671,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Auth state listener
     sb.auth.onAuthStateChange(async function(event, session) {
         if (event === 'SIGNED_IN' && session) {
+            _cachedSession = session;
             updateNavForAuth(session.user);
             // Ensure profile exists for OAuth users
             await ensureProfileExists(session.user);
         } else if (event === 'SIGNED_OUT') {
+            _cachedSession = null;
             updateNavForAuth(null);
         } else if (event === 'PASSWORD_RECOVERY') {
             var _showReset2 = typeof _originalShowPage === 'function' ? _originalShowPage : showPage;
@@ -682,6 +689,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Check existing session on page load
     var sessionResult = await sb.auth.getSession();
     if (sessionResult.data.session) {
+        _cachedSession = sessionResult.data.session;
         updateNavForAuth(sessionResult.data.session.user);
     }
 });
