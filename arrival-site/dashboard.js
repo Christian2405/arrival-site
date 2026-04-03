@@ -320,12 +320,14 @@ async function handleDocUpload() {
 }
 
 async function viewDocument(docId, storagePath) {
+    // Open window synchronously BEFORE the await — Safari blocks window.open() after async calls
+    var win = window.open('', '_blank');
     try {
-        // Since bucket is private, we need a signed URL
         var signedResult = await sb.storage.from('documents').createSignedUrl(storagePath, 3600);
         if (signedResult.error) throw signedResult.error;
-        window.open(signedResult.data.signedUrl, '_blank');
+        win.location.href = signedResult.data.signedUrl;
     } catch (err) {
+        if (win) win.close();
         console.error('View error:', err);
         showToast('Failed to open document.', 'error');
     }
