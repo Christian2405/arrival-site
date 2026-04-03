@@ -53,8 +53,11 @@ def _reset_pinecone_index():
     _pc_index = None
 
 
-def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
-    """Extract text from PDF bytes using PyMuPDF via a temp file (Bug #21)."""
+def extract_text_from_pdf_bytes(file_bytes: bytes) -> tuple[str, int]:
+    """
+    Extract text from PDF bytes using PyMuPDF.
+    Returns (text, page_count).
+    """
     import fitz  # pymupdf
     tmp_path = None
     try:
@@ -63,10 +66,93 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
             tmp_path = tmp.name
         doc = fitz.open(filename=tmp_path)
         text = ""
+        page_count = len(doc)
         for page in doc:
             text += page.get_text() + "\n"
         doc.close()
-        return text.strip()
+        return text.strip(), page_count
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+async def extract_text_from_pdf_via_vision(file_bytes: bytes, filename: str) -> str:
+    """
+    Vision-based text extraction for drawing-heavy PDFs (building plans, CAD exports).
+    Renders each page as an image and asks Claude to extract all readable information.
+    Used as fallback when regular text extraction yields < 150 chars/page on average.
+    """
+    import fitz
+    import base64
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+
+        doc = fitz.open(filename=tmp_path)
+        all_text = []
+
+        for page_num, page in enumerate(doc):
+            # Render at 120 DPI — enough to read plan text without oversized images
+            mat = fitz.Matrix(120 / 72, 120 / 72)
+            pix = page.get_pixmap(matrix=mat)
+
+            # Scale down if too large (Claude accepts up to ~8000px but we want < 4MB)
+            if pix.width > 3000 or pix.height > 3000:
+                scale = 3000 / max(pix.width, pix.height)
+                mat2 = fitz.Matrix(scale * 120 / 72, scale * 120 / 72)
+                pix = page.get_pixmap(matrix=mat2)
+
+            img_bytes = pix.tobytes("jpeg", jpg_quality=82)
+            img_b64 = base64.standard_b64encode(img_bytes).decode()
+
+            logger.info(f"[rag] Vision extracting page {page_num + 1} of {len(doc)} from {filename} ({len(img_bytes) // 1024}KB)")
+
+            try:
+                response = await client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=2000,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": img_b64,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": (
+                                    f"This is page {page_num + 1} of a building plan / architectural drawing called '{filename}'.\n"
+                                    "Extract ALL readable information from this drawing. Be thorough. Include:\n"
+                                    "- Room names and labels with their dimensions (width × length × height)\n"
+                                    "- Material specifications and callouts\n"
+                                    "- Structural details (beam sizes, foundation, wall framing, roof pitch)\n"
+                                    "- Electrical: GPO/outlet locations, circuit labels, switchboard details, cable sizes\n"
+                                    "- Plumbing: pipe sizes, fixture labels, drain sizes\n"
+                                    "- Any written notes, dimensions, legends, or schedules\n"
+                                    "- Title block: project name, address, drawing number, revision\n\n"
+                                    "Output as structured plain text. Skip pages with no useful content."
+                                ),
+                            },
+                        ],
+                    }],
+                )
+                page_text = response.content[0].text.strip()
+                if page_text and "no useful content" not in page_text.lower():
+                    all_text.append(f"=== Page {page_num + 1} ===\n{page_text}")
+            except Exception as e:
+                logger.warning(f"[rag] Vision extraction failed for page {page_num + 1}: {e}")
+
+        doc.close()
+        return "\n\n".join(all_text)
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -89,23 +175,23 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         return ""
 
 
-def extract_text_from_file(file_bytes: bytes, content_type: str, filename: str) -> str:
-    """Extract text from supported file types. Returns empty string for unsupported."""
+def extract_text_from_file(file_bytes: bytes, content_type: str, filename: str) -> tuple[str, int]:
+    """
+    Extract text from supported file types.
+    Returns (text, page_count) — page_count is 0 for non-PDFs.
+    """
     if content_type == "application/pdf" or filename.lower().endswith(".pdf"):
         return extract_text_from_pdf_bytes(file_bytes)
     elif (content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           or filename.lower().endswith(".docx")):
-        # Bug #22: .docx support
-        return extract_text_from_docx(file_bytes)
+        return extract_text_from_docx(file_bytes), 0
     elif content_type.startswith("text/") or filename.lower().endswith((".txt", ".md", ".csv")):
-        # Bug #43: Non-UTF-8 text decode — try utf-8 first, then latin-1 as fallback
         try:
-            return file_bytes.decode("utf-8")
+            return file_bytes.decode("utf-8"), 0
         except UnicodeDecodeError:
-            return file_bytes.decode("latin-1")
+            return file_bytes.decode("latin-1"), 0
     else:
-        # Images, videos, and other binary files — skip
-        return ""
+        return "", 0
 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -264,12 +350,31 @@ async def index_document(
         return 0
 
     # Extract text
-    text = extract_text_from_file(file_bytes, content_type, filename)
+    text, page_count = extract_text_from_file(file_bytes, content_type, filename)
+
+    # Vision fallback for drawing-heavy PDFs (building plans, CAD exports).
+    # If we got fewer than 150 chars per page on average, the PDF is mostly drawings
+    # with embedded text — use Claude Vision to read the actual drawings.
+    is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
+    if is_pdf and page_count > 0:
+        chars_per_page = len(text) / page_count if page_count else 0
+        if chars_per_page < 150:
+            logger.info(
+                f"[rag] Sparse PDF detected ({chars_per_page:.0f} chars/page) — "
+                f"using vision extraction for {filename}"
+            )
+            try:
+                vision_text = await extract_text_from_pdf_via_vision(file_bytes, filename)
+                if vision_text and len(vision_text) > len(text):
+                    text = vision_text
+                    logger.info(f"[rag] Vision extracted {len(text)} chars from {filename}")
+            except Exception as e:
+                logger.warning(f"[rag] Vision extraction failed, using sparse text: {e}")
+
     if not text:
         logger.warning(f"[rag] No text extracted from {filename} ({content_type})")
         return 0
 
-    # Bug #19: Raise a meaningful error if text is too short
     if len(text) < 20:
         raise DocumentTooShortError(
             f"Document '{filename}' has only {len(text)} characters of text. "
