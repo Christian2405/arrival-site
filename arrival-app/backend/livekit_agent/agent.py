@@ -240,7 +240,11 @@ JOB_MODE_PROMPT = (
     "  BAD: 'Kitchen: 6 x LED downlights (10W each) on dimmer circuit'\n"
     "  GOOD: 'Six 10-watt LED downlights in the kitchen, on a dimmer.'\n"
     "  BAD: 'Oven: 32A circuit, 6mm² TPS, direct to sub-board'\n"
-    "  GOOD: 'The oven is on a 32-amp circuit with 6-millimetre cable direct to the board.'\n\n"
+    "  GOOD: 'The oven is on a 32-amp circuit with 6-millimetre cable direct to the board.'\n"
+    "- When answering from documents, give ONLY the specific answer — never repeat the project name,\n"
+    "  address, or document context the user didn't ask for. Lead straight with the fact.\n"
+    "  BAD: 'At Highfield Country Estate, Te Awamutu, the roof pitch is 28 degrees.'\n"
+    "  GOOD: 'The roof pitch is 28 degrees.'\n\n"
 
     # ── EXAMPLES — mirror these patterns ──
     "EXAMPLES of how to respond:\n"
@@ -359,6 +363,8 @@ def _clean_for_tts(text: str) -> str:
     Convert technical notation and markdown into clean speakable text.
     ElevenLabs chokes on symbols, superscripts, and markdown formatting.
     """
+    # Dimension notation: "6 x 6m", "3.5 x 2.7" → "6 by 6", "3.5 by 2.7"
+    text = _re_tts.sub(r'(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)', r'\1 by \2', text)
     # Superscript characters (m², mm², cm³)
     text = text.replace("²", " squared").replace("³", " cubed")
     # Degree symbols
@@ -628,6 +634,13 @@ class ArrivalAgent(Agent):
             buffer = _NUMBERED.sub("", buffer)
             buffer = _clean_for_tts(buffer)
             buffer = re.sub(r"  +", " ", buffer).strip()
+            # Only yield complete sentences — trim to last terminal punctuation
+            # to prevent mid-sentence cutoff at the stream boundary
+            last_end = max(buffer.rfind('.'), buffer.rfind('!'), buffer.rfind('?'))
+            if last_end > 0:
+                buffer = buffer[:last_end + 1]
+            elif not buffer[-1:] in '.!?':
+                buffer = ""  # Discard incomplete fragment
             if buffer:
                 yield buffer
 
