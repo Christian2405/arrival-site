@@ -353,12 +353,14 @@ async def index_document(
     text, page_count = extract_text_from_file(file_bytes, content_type, filename)
 
     # Vision fallback for drawing-heavy PDFs (building plans, CAD exports).
-    # If we got fewer than 150 chars per page on average, the PDF is mostly drawings
+    # If we got fewer than 500 chars per page on average, the PDF is mostly drawings
     # with embedded text — use Claude Vision to read the actual drawings.
+    # 500 chars/page requires real text content (manuals, specs); building plans
+    # with sparse annotations typically yield 50-300 chars/page from PyMuPDF.
     is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
     if is_pdf and page_count > 0:
         chars_per_page = len(text) / page_count if page_count else 0
-        if chars_per_page < 150:
+        if chars_per_page < 500:
             logger.info(
                 f"[rag] Sparse PDF detected ({chars_per_page:.0f} chars/page) — "
                 f"using vision extraction for {filename}"
