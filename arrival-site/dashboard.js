@@ -238,53 +238,45 @@ function searchDocs(query) {
     });
 }
 
-// Fire /index-document and return immediately — backend indexes in background.
-// Polls Supabase every 8s until status flips to 'indexed' or 'index_failed' (max 10 min).
-async function _triggerIndexing(authToken, docId, storagePath) {
-    // Fire the request — backend returns immediately, indexing happens in background
-    try {
-        var ctrl = new AbortController();
-        var timer = setTimeout(function() { ctrl.abort(); }, 30000); // 30s just to wake Render
-        var r = await fetch(BACKEND_URL + '/index-document', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
-            signal: ctrl.signal,
+// Poll Supabase every 8s until doc status flips from 'processing' — then refresh the table.
+function _pollUntilIndexed(docId) {
+    var deadline = Date.now() + 10 * 60 * 1000;
+    function check() {
+        if (Date.now() > deadline) return;
+        sb.from('documents').select('status').eq('id', docId).single().then(function(result) {
+            var status = result.data && result.data.status;
+            if (status === 'indexed' || status === 'index_failed') {
+                loadDocuments();
+                if (status === 'indexed') showToast('Document ready — AI can now use it.');
+                if (status === 'index_failed') showToast('Indexing failed — click Retry in the doc list.', 'error');
+            } else {
+                setTimeout(check, 8000);
+            }
         });
-        clearTimeout(timer);
-        if (!r.ok) return false; // Failed to even start
-    } catch (_) {
-        return false;
     }
-
-    // Poll Supabase for status change (backend updates it when done)
-    var deadline = Date.now() + 10 * 60 * 1000; // 10 minute max
-    while (Date.now() < deadline) {
-        await new Promise(function(res) { setTimeout(res, 8000); });
-        var result = await sb.from('documents').select('status').eq('id', docId).single();
-        var status = result.data && result.data.status;
-        if (status === 'indexed') return true;
-        if (status === 'index_failed') return false;
-        // Still 'processing' — keep polling
-        await loadDocuments(); // Refresh the table so user sees the spinner is still going
-    }
-    return false; // Timed out
+    setTimeout(check, 8000);
 }
 
 async function retryIndexDocument(docId, storagePath) {
     var session = (await sb.auth.getSession()).data.session;
     if (!session) { showToast('Not logged in.', 'error'); return; }
-    // Reset to processing so spinner shows
     await sb.from('documents').update({ status: 'processing' }).eq('id', docId);
     await loadDocuments();
-    showToast('Re-indexing document…');
-    var ok = await _triggerIndexing(session.access_token, docId, storagePath);
-    if (ok) {
-        showToast('Ready — AI can now use this document.');
-    } else {
-        showToast('Indexing failed. Check your document or try again.', 'error');
+    showToast('Re-indexing…');
+    try {
+        var r = await fetch(BACKEND_URL + '/index-document', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
+        });
+        if (r.ok) {
+            _pollUntilIndexed(docId);
+        } else {
+            showToast('Failed to start indexing.', 'error');
+        }
+    } catch (_) {
+        showToast('Failed to reach backend.', 'error');
     }
-    await loadDocuments();
 }
 
 async function handleDocUpload() {
@@ -322,40 +314,33 @@ async function handleDocUpload() {
         showUploadOverlay('Uploading' + (total > 1 ? ' ' + (i + 1) + ' of ' + total : ' ' + file.name) + '...');
 
         try {
-            // Upload directly to Supabase storage (bypasses slow backend cold starts)
-            var storagePath = currentUser.id + '/' + Date.now() + '_' + file.name;
-            var uploadResult = await sb.storage.from('documents').upload(storagePath, file);
-            if (uploadResult.error) throw uploadResult.error;
+            // Upload via backend — it stores the file AND kicks off indexing automatically
+            var session = (await sb.auth.getSession()).data.session;
+            if (!session) throw new Error('Not authenticated');
 
-            var ext = file.name.split('.').pop().toLowerCase();
-            var insertResult = await sb.from('documents').insert({
-                uploaded_by: currentUser.id,
-                file_name: file.name,
-                file_type: file.type || 'application/' + ext,
-                file_size: file.size,
-                storage_path: storagePath,
-                category: category,
-                project_tag: projectInput.value.trim() || null,
-                notes: notesInput.value.trim() || null,
-                status: 'processing'
-            }).select();
-            if (insertResult.error) throw insertResult.error;
+            var formData = new FormData();
+            formData.append('file', file);
+            formData.append('category', category);
+            if (projectInput.value.trim()) formData.append('project_tag', projectInput.value.trim());
+            if (notesInput.value.trim()) formData.append('notes', notesInput.value.trim());
 
+            var uploadResp = await fetch(BACKEND_URL + '/upload', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + session.access_token },
+                body: formData,
+            });
+            if (!uploadResp.ok) {
+                var errText = await uploadResp.text();
+                throw new Error(errText || 'Upload failed');
+            }
+            var uploadData = await uploadResp.json();
             uploaded++;
 
-            // Trigger RAG indexing — fires background task, polls until done
-            try {
-                var session = (await sb.auth.getSession()).data.session;
-                if (session) {
-                    var docId = insertResult.data && insertResult.data[0] ? insertResult.data[0].id : null;
-                    var indexed = await _triggerIndexing(session.access_token, docId, storagePath);
-                    if (!indexed) {
-                        await sb.from('documents').update({ status: 'index_failed' })
-                            .eq('storage_path', storagePath);
-                        showToast(file.name + ' uploaded but AI indexing failed — click Retry in the doc list.', 'error');
-                    }
-                }
-            } catch (_) { /* ignore — status column shows state */ }
+            // Poll until indexed (backend fires background task automatically)
+            var docId = uploadData.id;
+            var storagePath = uploadData.storage_path;
+            _pollUntilIndexed(docId, storagePath);
+
         } catch (err) {
             console.error('Upload error:', err);
             failed++;
@@ -365,8 +350,8 @@ async function handleDocUpload() {
 
     hideUploadOverlay();
 
-    if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded successfully.');
-    if (failed > 0 && uploaded > 0) showToast(failed + ' failed.', 'error');
+    if (uploaded > 0) showToast(uploaded + ' document' + (uploaded > 1 ? 's' : '') + ' uploaded — indexing in background.');
+    if (failed > 0) showToast(failed + ' failed.', 'error');
 
     // Reset modal fields
     fileInput.value = '';

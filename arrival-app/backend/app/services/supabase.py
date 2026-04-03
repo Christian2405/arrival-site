@@ -85,7 +85,7 @@ async def upload_document(
         "file_size": len(file_bytes),
         "storage_path": storage_path,
         "category": category,
-        "status": "ready",
+        "status": "processing",
     }
     if team_id:
         doc_row["team_id"] = team_id
@@ -115,19 +115,15 @@ async def upload_document(
     # Return the first (and only) inserted row
     row = inserted[0] if isinstance(inserted, list) else inserted
 
-    # Index for RAG (non-blocking — upload succeeds even if indexing fails)
-    try:
-        from app.services.rag import index_document
-        await index_document(
-            document_id=row.get("id", ""),
-            user_id=user_id,
-            filename=filename,
-            file_bytes=file_bytes,
-            content_type=content_type,
-            team_id=team_id,
-        )
-    except Exception as e:
-        logger.warning(f"[supabase] RAG indexing failed (non-blocking): {e}")
+    # Kick off indexing as a background task — upload response returns immediately
+    import asyncio
+    from app.routers.documents import _run_indexing_background
+    asyncio.create_task(_run_indexing_background(
+        document_id=row.get("id", ""),
+        user_id=user_id,
+        storage_path=storage_path,
+        team_id=team_id,
+    ))
 
     return {
         "id": row.get("id", storage_path),
