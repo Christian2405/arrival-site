@@ -912,6 +912,20 @@ p { line-height: 1.7; color: var(--text-dark); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.status-failed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #dc2626;
+}
+
+.status-failed::before {
+    content: '✕';
+    font-size: 10px;
+}
+
 .status-invited {
     display: inline-flex;
     align-items: center;

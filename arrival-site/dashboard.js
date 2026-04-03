@@ -178,8 +178,14 @@ async function loadDocuments() {
             var ext = d.file_name.split('.').pop().toLowerCase();
             var extUpper = ext.toUpperCase();
             var date = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            var statusClass = d.status === 'ready' ? 'status-ready' : 'status-processing';
-            var statusLabel = d.status.charAt(0).toUpperCase() + d.status.slice(1);
+            var statusClass, statusLabel;
+            if (d.status === 'indexed' || d.status === 'ready') {
+                statusClass = 'status-ready'; statusLabel = 'Ready';
+            } else if (d.status === 'index_failed') {
+                statusClass = 'status-failed'; statusLabel = 'Index failed';
+            } else {
+                statusClass = 'status-processing'; statusLabel = 'Indexing…';
+            }
             var catLabel = CATEGORY_LABELS[d.category] || d.category || '—';
             var catFilter = CATEGORY_FILTERS[d.category] || 'other';
             var project = d.project || d.notes || '—';
@@ -202,6 +208,7 @@ async function loadDocuments() {
                 '<td>' + date + '</td>' +
                 '<td><a href="#" class="table-action" onclick="viewDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">View</a> ' +
                 '<a href="#" class="table-action" onclick="openEditDocument(\'' + escapeAttr(d.id) + '\'); return false;">Edit</a> ' +
+                (d.status === 'index_failed' ? '<a href="#" class="table-action" onclick="retryIndexDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Retry</a> ' : '') +
                 '<a href="#" class="table-action table-action-danger" onclick="deleteDocument(\'' + escapeAttr(d.id) + '\',\'' + escapeAttr(d.storage_path) + '\'); return false;">Delete</a></td>' +
                 '</tr>';
         }).join('');
@@ -229,6 +236,51 @@ function searchDocs(query) {
         var text = row.textContent.toLowerCase();
         row.style.display = (!q || text.includes(q)) ? '' : 'none';
     });
+}
+
+// Trigger /index-document with a 65s timeout. Returns true if indexed, false if failed.
+// Retries once after 5s if the first attempt fails (handles Render cold starts).
+async function _indexWithRetry(authToken, docId, storagePath) {
+    async function attempt() {
+        var ctrl = new AbortController();
+        var timer = setTimeout(function() { ctrl.abort(); }, 65000);
+        try {
+            var r = await fetch(BACKEND_URL + '/index-document', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ document_id: docId, storage_path: storagePath }),
+                signal: ctrl.signal,
+            });
+            clearTimeout(timer);
+            if (!r.ok) return false;
+            var data = await r.json();
+            return data.success === true;
+        } catch (_) {
+            clearTimeout(timer);
+            return false;
+        }
+    }
+    var ok = await attempt();
+    if (!ok) {
+        // Wait 5s then retry once (Render may still be waking up)
+        await new Promise(function(res) { setTimeout(res, 5000); });
+        ok = await attempt();
+    }
+    return ok;
+}
+
+async function retryIndexDocument(docId, storagePath) {
+    var session = (await sb.auth.getSession()).data.session;
+    if (!session) { showToast('Not logged in.', 'error'); return; }
+    showToast('Retrying indexing…');
+    var ok = await _indexWithRetry(session.access_token, docId, storagePath);
+    if (ok) {
+        showToast('Indexed successfully — AI can now use this document.');
+    } else {
+        showToast('Indexing failed again. Check the backend logs.', 'error');
+        await sb.from('documents').update({ status: 'index_failed' }).eq('id', docId);
+    }
+    await loadDocuments();
 }
 
 async function handleDocUpload() {
@@ -281,23 +333,26 @@ async function handleDocUpload() {
                 category: category,
                 project_tag: projectInput.value.trim() || null,
                 notes: notesInput.value.trim() || null,
-                status: 'ready'
+                status: 'processing'
             }).select();
             if (insertResult.error) throw insertResult.error;
 
             uploaded++;
 
-            // Trigger RAG indexing in background (non-blocking, best-effort)
+            // Trigger RAG indexing — await with timeout + 1 retry so we know if it fails
             try {
                 var session = (await sb.auth.getSession()).data.session;
-                if (session && insertResult.data) {
-                    fetch(BACKEND_URL + '/index-document', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ document_id: insertResult.data[0].id, storage_path: storagePath })
-                    }).catch(function() { /* RAG indexing is best-effort */ });
+                if (session) {
+                    var docId = insertResult.data && insertResult.data[0] ? insertResult.data[0].id : null;
+                    var indexed = await _indexWithRetry(session.access_token, docId, storagePath);
+                    if (!indexed) {
+                        // Mark as failed so user sees it and can retry
+                        await sb.from('documents').update({ status: 'index_failed' })
+                            .eq('storage_path', storagePath);
+                        showToast(file.name + ' uploaded but AI indexing failed — click Retry in the doc list.', 'error');
+                    }
                 }
-            } catch (_) { /* ignore RAG errors */ }
+            } catch (_) { /* ignore — doc is still uploaded, status column shows state */ }
         } catch (err) {
             console.error('Upload error:', err);
             failed++;
