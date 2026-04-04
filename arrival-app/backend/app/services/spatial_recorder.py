@@ -252,7 +252,7 @@ class SpatialRecorder:
         clip_id = getattr(self, '_pending_outcome_clip_id', None)
         if clip_id:
             await self.add_labels(clip_id, [
-                {"label_type": "outcome", "label_value": "inferred_fixed", "confidence": 0.6}
+                {"label_type": "outcome", "label_value": "inferred_fixed", "confidence": 0.4}  # low confidence — no IMU to confirm
             ])
         logger.info(f"Outcome inferred as fixed for sequence {self._pending_outcome_sequence_id}")
         self._pending_outcome_sequence_id = None

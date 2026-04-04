@@ -124,9 +124,10 @@ async def get_stats(request: Request):
 
 
 class VoiceClipRequest(BaseModel):
-    frames: list[str]  # base64 JPEG frames
+    frames: list[str]           # base64 JPEG frames
     trigger_text: str = ""
     ai_response: str = ""
+    frame_timestamps_ms: list[int] | None = None  # device monotonic ms timestamp per frame
 
 
 @router.post("/voice-clip")
@@ -144,6 +145,7 @@ async def create_voice_clip(request: Request, body: VoiceClipRequest):
         frames=body.frames,
         trigger_text=body.trigger_text,
         ai_response=body.ai_response,
+        frame_timestamps_ms=body.frame_timestamps_ms,
     ))
     return {"status": "processing"}
 
@@ -153,6 +155,7 @@ async def _stitch_voice_clip(
     frames: list[str],
     trigger_text: str,
     ai_response: str,
+    frame_timestamps_ms: list[int] | None = None,
 ):
     """Background: decode frames, encode MP4 via ffmpeg, upload to S3, log to Supabase."""
     clip_id = str(uuid.uuid4())
@@ -182,6 +185,8 @@ async def _stitch_voice_clip(
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
+            "-r", "2",           # Force constant frame rate output (CFR) — required for IMU sync
+            "-vsync", "1",       # CFR mode: duplicate/drop frames to maintain exact 2fps
             "-movflags", "+faststart",
             "-f", "mp4",
             "-y", "pipe:1",
@@ -217,6 +222,7 @@ async def _stitch_voice_clip(
                     "file_size_bytes": len(stdout),
                     "frame_count": len(jpeg_frames),
                     "duration_seconds": len(jpeg_frames) / 2.0,
+                    "frame_timestamps_ms": frame_timestamps_ms,  # raw device timestamps for IMU sync
                 },
                 timeout=10,
             )

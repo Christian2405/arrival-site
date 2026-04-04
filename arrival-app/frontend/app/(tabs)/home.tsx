@@ -110,6 +110,7 @@ export default function HomeScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null); // Bug 1: ref to avoid stale closure
   const pttStartingRef = useRef(false); // Bug 1: mutex to prevent double-press
   const pttFramesRef = useRef<string[]>([]); // Spatial: frames captured during PTT hold
+  const pttFrameTimestampsRef = useRef<number[]>([]); // Spatial: device ms timestamp per frame
   const pttFrameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingPulse = useRef(new Animated.Value(1)).current;
 
@@ -518,7 +519,9 @@ export default function HomeScreen() {
           pttFrameIntervalRef.current = null;
         }
         const spatialFrames = [...pttFramesRef.current];
+        const spatialTimestamps = [...pttFrameTimestampsRef.current];
         pttFramesRef.current = [];
+        pttFrameTimestampsRef.current = [];
 
         const currentMessages = useConversationStore.getState().currentConversation?.messages || [];
         const history = currentMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
@@ -538,6 +541,7 @@ export default function HomeScreen() {
                 frames: spatialFrames,
                 trigger_text: result.transcript,
                 ai_response: result.response,
+                frame_timestamps_ms: spatialTimestamps,
               }),
             }).catch(() => {}); // Fire and forget
           }
@@ -611,10 +615,14 @@ export default function HomeScreen() {
       captureFrame().then(frame => { pttFrameRef.current = frame; });
       // Spatial: start capturing frames at 2fps during PTT hold
       pttFramesRef.current = [];
+      pttFrameTimestampsRef.current = [];
       pttFrameIntervalRef.current = setInterval(async () => {
         try {
           const f = await captureFrame();
-          if (f) pttFramesRef.current.push(f);
+          if (f) {
+            pttFramesRef.current.push(f);
+            pttFrameTimestampsRef.current.push(Date.now());
+          }
         } catch {}
       }, 500);
       await startRecording();
