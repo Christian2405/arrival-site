@@ -11,6 +11,7 @@
  */
 
 import { supabase } from './supabase';
+import { Platform } from 'react-native';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -65,7 +66,12 @@ export async function createLiveKitSession(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ mode, recording_consent: recordingConsent, active_job: activeJob }),
+      body: JSON.stringify({
+        mode,
+        recording_consent: recordingConsent,
+        active_job: activeJob,
+        ios_version: Platform.OS === 'ios' ? String(Platform.Version) : null,
+      }),
       signal: controller.signal,
     });
 

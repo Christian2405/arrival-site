@@ -1693,11 +1693,15 @@ async def entrypoint(ctx: JobContext):
 
         # --- Spatial Intelligence Recorder ---
         recording_consent = False
+        camera_intrinsics = None
+        ios_version = None
         for participant in ctx.room.remote_participants.values():
             if participant.metadata:
                 try:
                     meta = json.loads(participant.metadata)
                     recording_consent = meta.get("recording_consent", False)
+                    camera_intrinsics = meta.get("camera_intrinsics")
+                    ios_version = meta.get("ios_version")
                 except (json.JSONDecodeError, TypeError):
                     pass
                 break
@@ -1712,6 +1716,8 @@ async def entrypoint(ctx: JobContext):
                 trade=None,  # TODO: pass trade from profile when available in metadata
                 equipment=None,  # Updated later via data channel equipment_context
                 consent=recording_consent,
+                camera_intrinsics=camera_intrinsics,
+                ios_version=ios_version,
             )
             agent._spatial_recorder = spatial_recorder
             logger.info(f"[arrival-agent] Spatial recorder initialized (consent={recording_consent})")

@@ -70,6 +70,8 @@ class SpatialRecorder:
         trade: str | None,
         equipment: dict | None,
         consent: bool = False,
+        camera_intrinsics: dict | None = None,
+        ios_version: str | None = None,
     ) -> str | None:
         """Create a spatial session in Supabase. Returns session ID."""
         self._room_name = room_name
@@ -89,6 +91,8 @@ class SpatialRecorder:
             "equipment_type": equip.get("type"),
             "equipment_brand": equip.get("brand"),
             "equipment_model": equip.get("model"),
+            "camera_intrinsics": camera_intrinsics,
+            "ios_version": ios_version,
         }
 
         try:

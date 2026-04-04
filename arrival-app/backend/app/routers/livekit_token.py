@@ -24,10 +24,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ---------------------------------------------------------------------------
+# Camera intrinsics lookup — keyed by iOS major version → likely iPhone model.
+# Focal length in mm (35mm equiv), horizontal FOV in degrees, sensor diagonal in mm.
+# Modern iPhones (12+) all use very similar main camera specs so version is a
+# reasonable proxy when we don't have exact model ID.
+# ---------------------------------------------------------------------------
+_IOS_INTRINSICS = {
+    "18": {"model": "iPhone 16 series",  "focal_length_mm": 26.0, "fov_deg": 77.0, "sensor_diag_mm": 7.81},
+    "17": {"model": "iPhone 15 series",  "focal_length_mm": 26.0, "fov_deg": 77.0, "sensor_diag_mm": 7.81},
+    "16": {"model": "iPhone 14 series",  "focal_length_mm": 26.0, "fov_deg": 77.0, "sensor_diag_mm": 7.81},
+    "15": {"model": "iPhone 13 series",  "focal_length_mm": 26.0, "fov_deg": 77.0, "sensor_diag_mm": 7.81},
+    "14": {"model": "iPhone 12 series",  "focal_length_mm": 26.0, "fov_deg": 77.0, "sensor_diag_mm": 7.76},
+}
+_IOS_INTRINSICS_DEFAULT = {"model": "iPhone (unknown)", "focal_length_mm": 26.0, "fov_deg": 77.0, "sensor_diag_mm": 7.81}
+
+
+def _get_intrinsics(ios_version: str | None) -> dict:
+    if not ios_version:
+        return _IOS_INTRINSICS_DEFAULT
+    major = ios_version.split(".")[0]
+    return _IOS_INTRINSICS.get(major, _IOS_INTRINSICS_DEFAULT)
+
+
 class TokenRequest(BaseModel):
     mode: str = "job"  # "job" or "default"
     recording_consent: bool = False  # spatial intelligence consent
     active_job: str | None = None  # e.g. "Fladgate residence" — agent references this job's docs
+    ios_version: str | None = None  # e.g. "17.4.1" — used for camera intrinsics lookup
 
 
 class TokenResponse(BaseModel):
@@ -213,12 +237,15 @@ async def create_livekit_token(req: TokenRequest, request: Request):
     room_name = f"arrival_{req.mode}_{short_id}_{uuid.uuid4().hex[:6]}"
 
     # --- Participant metadata — agent reads this for full user context ---
+    intrinsics = _get_intrinsics(req.ios_version)
     participant_metadata = json.dumps({
         "user_id": user_id,
         "mode": req.mode,
         "team_id": team_id,
         "recording_consent": req.recording_consent,
         "active_job": req.active_job,  # job/residence name for doc context
+        "camera_intrinsics": intrinsics,  # focal length, FOV, sensor size for world model
+        "ios_version": req.ios_version,
     })
 
     # --- Generate token ---
