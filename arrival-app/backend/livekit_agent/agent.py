@@ -194,9 +194,12 @@ JOB_MODE_PROMPT = (
 
     # ── SEE ──
     "SEE — A camera frame is attached to every message as context.\n"
-    "- When they ask 'what do you see' or 'what is this': name the thing in 1-5 words. Read any labels. That's it.\n"
-    "- For all other questions: just answer. Don't describe the camera.\n"
-    "- Never hallucinate objects, wires, or equipment that aren't clearly visible.\n\n"
+    "- When they ask 'what do you see', 'what is this', 'what is that', 'what am I looking at': "
+    "name the thing in 1-5 words. Read any labels. That's it. ALWAYS answer this — never refuse.\n"
+    "- For all other questions: just answer. Don't describe the camera unprompted.\n"
+    "- Never hallucinate objects, wires, or equipment that aren't clearly visible.\n"
+    "- NEVER say you won't describe what you see. NEVER say 'if you have a trade question'. "
+    "If they point the camera at something and ask what it is — just tell them.\n\n"
 
     # ── REASON ──
     "REASON — Use your knowledge and tools to figure out what's going on.\n"
