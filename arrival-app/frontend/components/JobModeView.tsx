@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, Animated, StyleSheet, TouchableOpacity, ScrollView, TextInput, Pressable, Image, Easing } from 'react-native';
+import { View, Text, Animated, StyleSheet, TouchableOpacity, Pressable, Image, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
-import { jobContextAPI, JobContext } from '../services/api';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const robotMascot = require('../assets/robot-mascot.png');
@@ -42,22 +41,6 @@ interface JobModeViewProps {
   guidanceActive?: boolean;
 }
 
-const EQUIPMENT_OPTIONS = [
-  { key: 'furnace', label: 'Furnace', icon: 'flame-outline' as const },
-  { key: 'air_conditioner', label: 'AC', icon: 'snow-outline' as const },
-  { key: 'heat_pump', label: 'Heat Pump', icon: 'swap-horizontal-outline' as const },
-  { key: 'water_heater', label: 'Water Heater', icon: 'water-outline' as const },
-  { key: 'tankless', label: 'Tankless', icon: 'flash-outline' as const },
-  { key: 'mini_split', label: 'Mini Split', icon: 'grid-outline' as const },
-  { key: 'electrical_panel', label: 'Panel', icon: 'flash-outline' as const },
-  { key: 'boiler', label: 'Boiler', icon: 'thermometer-outline' as const },
-  { key: 'plumbing', label: 'Plumbing', icon: 'construct-outline' as const },
-];
-
-const TOP_BRANDS = [
-  'Carrier', 'Trane', 'Lennox', 'Rheem', 'Goodman',
-  'Daikin', 'Mitsubishi', 'Rinnai', 'AO Smith', 'Square D',
-];
 
 const QUICK_ACTIONS: { key: QuickActionType; icon: string; label: string }[] = [
   { key: 'text', icon: 'document-text-outline', label: 'Show in text' },
@@ -99,19 +82,7 @@ export default function JobModeView({
   const [textCardMessage, setTextCardMessage] = useState<string | null>(null);
   const textDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Equipment context state
-  const [jobContext, setJobContext] = useState<JobContext | null>(null);
-  const [showEquipmentPicker, setShowEquipmentPicker] = useState(false);
-  const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
-  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
-  const [modelInput, setModelInput] = useState('');
-
-  // Load existing context on mount
-  useEffect(() => {
-    jobContextAPI.get().then(ctx => {
-      if (ctx) setJobContext(ctx);
-    }).catch(() => {});
-  }, []);
+  // Equipment context removed — job mode works without it
 
   // ── Robot idle animations (breathing float + glow pulse) ──
   // Use a single linear 0→1 animation mapped via interpolation to avoid loop seam jank
@@ -172,39 +143,6 @@ export default function JobModeView({
     }, 350);
   }, [startAnimating, robotScale, glowScale, glowOpacity, startScreenOpacity, onStart]);
 
-  const handleSetContext = useCallback(async () => {
-    if (!selectedEquipment) return;
-    try {
-      const ctx = await jobContextAPI.set({
-        equipment_type: selectedEquipment,
-        brand: selectedBrand || undefined,
-        model: modelInput || undefined,
-      });
-      setJobContext(ctx);
-      setShowEquipmentPicker(false);
-      // Notify parent so it can send via data channel
-      onEquipmentChange?.({
-        equipment_type: selectedEquipment,
-        brand: selectedBrand || undefined,
-        model: modelInput || undefined,
-      });
-    } catch (e) {
-      console.warn('[JobMode] Failed to set context:', e);
-    }
-  }, [selectedEquipment, selectedBrand, modelInput, onEquipmentChange]);
-
-  const handleClearContext = useCallback(async () => {
-    try {
-      await jobContextAPI.clear();
-      setJobContext(null);
-      setSelectedEquipment(null);
-      setSelectedBrand(null);
-      setModelInput('');
-      onEquipmentChange?.(null);
-    } catch (e) {
-      console.warn('[JobMode] Failed to clear context:', e);
-    }
-  }, [onEquipmentChange]);
 
   // --- Eye pill: subtle glow when monitoring/analyzing ---
   useEffect(() => {
@@ -325,9 +263,6 @@ export default function JobModeView({
     voiceConnected ? '#34C759' : 'rgba(255,255,255,0.25)';
   const voiceActive = aiState !== 'monitoring';
 
-  const equipLabel = jobContext
-    ? `${jobContext.brand || ''} ${jobContext.equipment_type.replace('_', ' ')}${jobContext.model ? ` (${jobContext.model})` : ''}`.trim()
-    : null;
 
   // ════════════════════════════════════════════════════
   // ██  PRE-START SCREEN — Robot mascot button  ██
@@ -355,10 +290,12 @@ export default function JobModeView({
           </Animated.View>
         </Pressable>
 
-        {/* "Tap to start" hint */}
-        <Animated.View style={[s.startHint, { opacity: hintOpacity }]}>
-          <Text style={s.startHintText}>Tap to start</Text>
-        </Animated.View>
+        {/* "Tap to start" hint — also tappable */}
+        <Pressable onPress={handleStartTap}>
+          <Animated.View style={[s.startHint, { opacity: hintOpacity }]}>
+            <Text style={s.startHintText}>Tap to start</Text>
+          </Animated.View>
+        </Pressable>
       </Animated.View>
     );
   }
@@ -368,64 +305,6 @@ export default function JobModeView({
   // ════════════════════════════════════════════════════
   return (
     <View style={s.container} pointerEvents="box-none">
-
-      {/* Equipment picker (full overlay) */}
-      {showEquipmentPicker ? (
-        <View style={s.pickerContainer}>
-          <Text style={s.pickerTitle}>What are you working on?</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow} contentContainerStyle={s.chipRowContent}>
-            {EQUIPMENT_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[s.eqChip, selectedEquipment === opt.key && s.eqChipSelected]}
-                onPress={() => setSelectedEquipment(opt.key)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name={opt.icon} size={IconSize.sm} color={selectedEquipment === opt.key ? '#FFF' : 'rgba(255,255,255,0.6)'} />
-                <Text style={[s.eqChipText, selectedEquipment === opt.key && s.eqChipTextSelected]}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          {selectedEquipment && (
-            <>
-              <Text style={s.pickerSubtitle}>Brand (optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow} contentContainerStyle={s.chipRowContent}>
-                {TOP_BRANDS.map(brand => (
-                  <TouchableOpacity
-                    key={brand}
-                    style={[s.eqChip, selectedBrand === brand && s.eqChipSelected]}
-                    onPress={() => setSelectedBrand(selectedBrand === brand ? null : brand)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[s.eqChipText, selectedBrand === brand && s.eqChipTextSelected]}>{brand}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <TextInput
-                style={s.modelInput}
-                placeholder="Model # (optional)"
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={modelInput}
-                onChangeText={setModelInput}
-                maxLength={50}
-              />
-            </>
-          )}
-          <View style={s.pickerActions}>
-            <TouchableOpacity onPress={() => setShowEquipmentPicker(false)} style={s.pickerCancel}>
-              <Text style={s.pickerCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleSetContext}
-              style={[s.pickerConfirm, !selectedEquipment && s.pickerConfirmDisabled]}
-              disabled={!selectedEquipment}
-            >
-              <Text style={s.pickerConfirmText}>Set</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <>
           {/* ── TWO GLASS PILLS ── */}
           <View style={s.pillRow}>
             {/* Eye pill — camera watching */}
@@ -442,22 +321,6 @@ export default function JobModeView({
               <Ionicons name={voiceIcon} size={18} color={voiceColor} />
             </Animated.View>
           </View>
-
-          {/* Equipment badge — tap to change */}
-          {jobContext ? (
-            <TouchableOpacity style={s.equipBadge} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
-              <Ionicons name="build-outline" size={14} color={Colors.accent} />
-              <Text style={s.equipBadgeText} numberOfLines={1}>{equipLabel}</Text>
-              <TouchableOpacity onPress={handleClearContext} hitSlop={8}>
-                <Ionicons name="close-circle" size={14} color="rgba(255,255,255,0.3)" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={s.setEquipBtn} onPress={() => setShowEquipmentPicker(true)} activeOpacity={0.7}>
-              <Ionicons name="build-outline" size={14} color="rgba(255,255,255,0.4)" />
-              <Text style={s.setEquipText}>Set equipment</Text>
-            </TouchableOpacity>
-          )}
 
           {/* Guide me / Stop guidance button */}
           <TouchableOpacity
@@ -513,8 +376,6 @@ export default function JobModeView({
               </Pressable>
             </Animated.View>
           )}
-        </>
-      )}
     </View>
   );
 }
@@ -587,39 +448,6 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.22)',
   },
 
-  // --- Equipment badge ---
-  equipBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 20,
-    maxWidth: '75%',
-  },
-  equipBadgeText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
-    textTransform: 'capitalize',
-  },
-  setEquipBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderStyle: 'dashed',
-  },
-  setEquipText: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-  },
   guideBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -716,96 +544,4 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // --- Equipment picker ---
-  pickerContainer: {
-    width: '100%',
-    paddingHorizontal: 20,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  pickerTitle: {
-    color: '#FFF',
-    fontSize: FontSize.lg,
-    fontWeight: '600',
-    marginBottom: Spacing.base,
-    textAlign: 'center',
-  },
-  pickerSubtitle: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: FontSize.sm,
-    marginTop: Spacing.base,
-    marginBottom: Spacing.sm,
-  },
-  chipRow: {
-    flexGrow: 0,
-  },
-  chipRowContent: {
-    gap: Spacing.sm,
-    paddingVertical: Spacing.xs,
-  },
-  eqChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  eqChipSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  eqChipText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: FontSize.sm,
-    fontWeight: '500',
-  },
-  eqChipTextSelected: {
-    color: '#FFF',
-  },
-  modelInput: {
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    color: '#FFF',
-    fontSize: FontSize.sm,
-  },
-  pickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.base,
-    marginTop: Spacing.lg,
-  },
-  pickerCancel: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  pickerCancelText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: FontSize.sm,
-    fontWeight: '500',
-  },
-  pickerConfirm: {
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.accent,
-  },
-  pickerConfirmDisabled: {
-    opacity: 0.4,
-  },
-  pickerConfirmText: {
-    color: '#FFF',
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-  },
 });

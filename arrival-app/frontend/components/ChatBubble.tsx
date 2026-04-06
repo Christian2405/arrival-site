@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../constants/Colors';
 import { Message } from '../store/conversationStore';
@@ -85,24 +85,6 @@ export default function ChatBubble({ message, onSave, onFeedback, isLatest }: Ch
     };
   }, [message.content, isLatest]);
 
-  const handleLongPress = () => {
-    if (isUser || !onSave) return;
-    Alert.alert(
-      'Save Answer',
-      'Bookmark this response for quick access later?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: () => {
-            onSave();
-            setSaved(true);
-          },
-        },
-      ]
-    );
-  };
-
   const bubble = (
     <View
       style={[
@@ -158,24 +140,41 @@ export default function ChatBubble({ message, onSave, onFeedback, isLatest }: Ch
         </View>
       )}
 
-      {/* Feedback: thumbs up/down */}
-      {!isUser && onFeedback && !feedbackGiven && !showCommentInput && (
+      {/* Action row: save + feedback */}
+      {!isUser && (onFeedback || onSave) && !showCommentInput && (
         <View style={styles.feedbackRow}>
-          <TouchableOpacity
-            onPress={() => {
-              setFeedbackGiven('positive');
-              onFeedback('positive');
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="thumbs-up-outline" size={14} color={Colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowCommentInput(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="thumbs-down-outline" size={14} color={Colors.textMuted} />
-          </TouchableOpacity>
+          {/* Save button — always visible for assistant messages */}
+          {onSave && !saved && (
+            <TouchableOpacity
+              onPress={() => { onSave(); setSaved(true); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.actionBtn}
+            >
+              <Ionicons name="bookmark-outline" size={14} color={Colors.textMuted} />
+            </TouchableOpacity>
+          )}
+          {/* Feedback thumbs */}
+          {onFeedback && !feedbackGiven && (
+            <>
+              <TouchableOpacity
+                onPress={() => {
+                  setFeedbackGiven('positive');
+                  onFeedback('positive');
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.actionBtn}
+              >
+                <Ionicons name="thumbs-up-outline" size={14} color={Colors.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowCommentInput(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.actionBtn}
+              >
+                <Ionicons name="thumbs-down-outline" size={14} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
 
@@ -205,7 +204,7 @@ export default function ChatBubble({ message, onSave, onFeedback, isLatest }: Ch
               onPress={() => {
                 setFeedbackGiven('negative');
                 setShowCommentInput(false);
-                onFeedback('negative', commentText.trim() || undefined);
+                onFeedback?.('negative', commentText.trim() || undefined);
                 setCommentText('');
                 Keyboard.dismiss();
               }}
@@ -250,13 +249,7 @@ export default function ChatBubble({ message, onSave, onFeedback, isLatest }: Ch
         </View>
       )}
 
-      {!isUser && onSave ? (
-        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.7} delayLongPress={300}>
-          {bubble}
-        </TouchableOpacity>
-      ) : (
-        bubble
-      )}
+      {bubble}
     </View>
   );
 }
@@ -360,7 +353,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    gap: 12,
+    gap: 14,
+  },
+  actionBtn: {
+    padding: 2,
   },
   feedbackConfirm: {
     fontSize: 10,

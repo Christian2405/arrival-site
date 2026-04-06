@@ -704,9 +704,22 @@ export default function HomeScreen() {
       // Optimistic usage increment
       incrementQueryCount();
     } catch (error: any) {
+      let errMsg = 'Something went wrong. Please try again.';
+      if (error?.response?.status === 401) {
+        errMsg = 'Session expired — please sign out and sign back in.';
+      } else if (error?.response?.status === 429) {
+        errMsg = 'Rate limit reached. Please wait a moment and try again.';
+      } else if (error?.response?.status >= 500) {
+        errMsg = 'Server error — our backend may be restarting. Try again in 30 seconds.';
+      } else if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network')) {
+        errMsg = 'Network error — check your internet connection.';
+      } else if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        errMsg = 'Request timed out — the server may be waking up. Try again.';
+      }
+      console.error('[TextChat] Error:', error?.response?.status, error?.message);
       addMessage({
         id: generateId(), role: 'assistant',
-        content: 'Something went wrong. Please try again.',
+        content: errMsg,
         displayMode: 'text', timestamp: new Date(),
       });
     } finally {
@@ -1014,6 +1027,18 @@ export default function HomeScreen() {
     });
   }, [createNewConversation, chatSlide]);
 
+  // Swipe-down to dismiss chat
+  const chatDragResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 60) {
+        dismissChat();
+        Keyboard.dismiss();
+      }
+    },
+  }), [dismissChat]);
+
   // --- Recording pulse animation ---
   useEffect(() => {
     if (isRecording) {
@@ -1148,20 +1173,24 @@ export default function HomeScreen() {
           )}
 
           {interactionMode === 'text' && (
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <TouchableWithoutFeedback onPress={() => { if (showChat) { dismissChat(); } Keyboard.dismiss(); }} accessible={false}>
               <View style={styles.modeContainer}>
                 {/* Chat messages */}
                 {showChat && textMessages.length > 0 ? (
                   <Animated.View style={[styles.chatArea, { opacity: chatSlide, transform: [{ translateY: chatSlide.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-                    {/* Collapse handle at top */}
-                    <TouchableOpacity
-                      onPress={() => { dismissChat(); Keyboard.dismiss(); }}
-                      style={styles.collapseBar}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.collapseHandle} />
-                    </TouchableOpacity>
+                    {/* Collapse handle — tap or swipe down to dismiss */}
+                    <View {...chatDragResponder.panHandlers}>
+                      <TouchableOpacity
+                        onPress={() => { dismissChat(); Keyboard.dismiss(); }}
+                        style={styles.collapseBar}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.collapseHandle} />
+                        <Text style={styles.collapseLabel}>Swipe down to close</Text>
+                      </TouchableOpacity>
+                    </View>
 
+                    <TouchableWithoutFeedback onPress={() => {}} accessible={false}><View style={{ flex: 1 }}>
                     <FlatList
                       ref={flatListRef}
                       data={textMessages}
@@ -1216,6 +1245,7 @@ export default function HomeScreen() {
                       onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                       keyboardShouldPersistTaps="handled"
                     />
+                    </View></TouchableWithoutFeedback>
                   </Animated.View>
                 ) : (
                   <View style={styles.emptyState}>
@@ -1763,14 +1793,20 @@ const styles = StyleSheet.create({
   collapseBar: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   collapseHandle: {
-    width: 40,
+    width: 48,
     height: 5,
     borderRadius: 3,
-    backgroundColor: Colors.textFaint,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  collapseLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 4,
   },
   processingRow: {
     paddingHorizontal: Spacing.base,
