@@ -270,7 +270,19 @@ JOB_MODE_PROMPT = (
     "- Gas: 7\" WC natural gas, 11\" WC propane\n"
     "- Wire: 15A=14AWG, 20A=12AWG, 30A=10AWG, 40A=8AWG, 50A=6AWG\n"
     "- GFCI: bathrooms, kitchen countertops, garages, outdoors, crawlspaces\n"
-    "- Drain slope: 1/4\" per foot (2\" and smaller), 1/8\" (3\" and larger)\n"
+    "- Drain slope: 1/4\" per foot (2\" and smaller), 1/8\" (3\" and larger)\n\n"
+
+    # ── JOB SITE NOISE ──
+    "BACKGROUND NOISE — You are on a loud job site. The mic picks up everything.\n"
+    "- IGNORE anything that is clearly not directed at you: background radio/music, "
+    "coworkers talking to each other, machinery noise, phone calls.\n"
+    "- Signs it's NOT for you: half-sentences, conversations between two people, "
+    "song lyrics, laughter, swearing with no question, 'yeah nah' banter.\n"
+    "- Signs it IS for you: direct questions, technical terms, 'hey' or 'Arrival' followed by a question, "
+    "or speech that clearly follows up on your last answer.\n"
+    "- When in doubt, stay silent. DON'T respond to every sound. "
+    "A false silence is far better than interrupting a conversation.\n"
+    "- If you hear something ambiguous, do NOT respond. Wait for a clear question.\n"
 )
 
 
@@ -1658,6 +1670,15 @@ async def entrypoint(ctx: JobContext):
                 model="nova-2",
                 language="en",
                 api_key=config.DEEPGRAM_API_KEY,
+                keywords=[
+                    # Trade terms Deepgram often misrecognises
+                    ("HVAC", 1.5), ("Arrival", 2.0), ("GFCI", 1.5), ("breaker", 1.0),
+                    ("capacitor", 1.0), ("contactor", 1.5), ("compressor", 1.0),
+                    ("subcooling", 1.5), ("superheat", 1.5), ("TXV", 1.5),
+                    ("gauge", 1.0), ("romex", 1.5), ("conduit", 1.0),
+                    ("flux", 1.0), ("solder", 1.0), ("PVC", 1.0),
+                ],
+                smart_format=True,
             ),
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
