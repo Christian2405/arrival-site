@@ -253,6 +253,19 @@ export default function HomeScreen() {
     return () => sub.remove();
   }, [permission?.granted]);
 
+  // Reset audio session on foreground — handles Bluetooth connect/disconnect while backgrounded
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && !recordingRef.current) {
+        Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        }).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => {
     aiAPI.warmup();
@@ -446,14 +459,38 @@ export default function HomeScreen() {
         Alert.alert('Permission Required', 'Microphone access is needed for voice input.');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      // Reset audio session fully — handles Bluetooth route changes mid-session
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        ...(Platform.OS === 'ios' ? { interruptionModeIOS: 1 } : {}),
+      });
+      let rec: Audio.Recording | null = null;
+      try {
+        const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        rec = result.recording;
+      } catch (firstErr) {
+        // Bluetooth or audio route change may have broken the session — reset and retry once
+        console.warn('Recording failed, resetting audio session and retrying:', firstErr);
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
+        await new Promise(r => setTimeout(r, 200));
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          ...(Platform.OS === 'ios' ? { interruptionModeIOS: 1 } : {}),
+        });
+        const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        rec = result.recording;
+      }
       // Bug 1: Set ref synchronously so handlePTTEnd always sees it
       recordingRef.current = rec;
       setRecording(rec);
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
+      Alert.alert('Microphone Error', 'Could not access the microphone. If you just connected or disconnected headphones, wait a moment and try again.');
     }
   }, [setIsRecording]);
 
@@ -510,6 +547,15 @@ export default function HomeScreen() {
         if (!uri) { setVoiceState('idle'); setIsProcessing(false); return; }
 
         const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+
+        // Validate audio isn't empty/too short (Bluetooth disconnect can produce empty recordings)
+        if (!audioBase64 || audioBase64.length < 1000) {
+          Alert.alert('Recording Error', 'No audio was captured. If you recently connected or disconnected headphones, wait a moment and try again.');
+          setVoiceState('idle');
+          setIsProcessing(false);
+          return;
+        }
+
         const frameBase64 = pttFrameRef.current;
         pttFrameRef.current = undefined;
 

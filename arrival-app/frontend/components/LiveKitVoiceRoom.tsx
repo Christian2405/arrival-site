@@ -141,10 +141,18 @@ export default function LiveKitVoiceRoom({
         // Do NOT use useIOSAudioManagement — it fires immediately with zero tracks,
         // sets soloAmbient, and kills mic capture before the room even connects.
         if (!audioSessionStarted.current) {
+          // configureAudio sets default output routing
           await AudioSession.configureAudio({
+            ios: { defaultOutput: 'speaker' },
+          });
+          // setAppleAudioConfiguration sets the actual iOS audio category/mode
+          // mixWithOthers: allows background music (Spotify etc) to keep playing
+          // allowBluetooth: enables Bluetooth headphones
+          // defaultToSpeaker: routes to speaker when no headphones connected
+          await AudioSession.setAppleAudioConfiguration({
             audioCategory: 'playAndRecord',
-            audioCategoryOptions: ['allowBluetooth', 'mixWithOthers'],
-            audioMode: 'videoChat',  // routes to speaker (hands-free)
+            audioCategoryOptions: ['allowBluetooth', 'mixWithOthers', 'defaultToSpeaker'],
+            audioMode: 'voiceChat',
           });
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;
@@ -526,13 +534,35 @@ function RoomContent({
           await new Promise(r => setTimeout(r, 500));
           if (cancelled) return;
         }
+
+        // Try to find ultra-wide (0.5x) camera for wider field of view
+        let ultraWideDeviceId: string | undefined;
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const backCameras = devices.filter(
+            (d: any) => d.kind === 'videoinput' && d.facing === 'environment'
+          );
+          // iOS labels ultra-wide as "Back Ultra Wide Camera"
+          const ultraWide = backCameras.find(
+            (d: any) => d.label?.toLowerCase().includes('ultra wide')
+          );
+          if (ultraWide && cameraFacing === 'environment') {
+            ultraWideDeviceId = ultraWide.deviceId;
+            console.log(`[LiveKitVoice] Found ultra-wide camera: ${ultraWide.label}`);
+          }
+        } catch (enumErr) {
+          console.warn('[LiveKitVoice] Could not enumerate devices:', enumErr);
+        }
+
         await room.localParticipant.setCameraEnabled(true, {
-          facingMode: cameraFacing,
+          ...(ultraWideDeviceId
+            ? { deviceId: ultraWideDeviceId }
+            : { facingMode: cameraFacing }),
           // High res for user preview, backend downscales for model
           resolution: { width: 1080, height: 1920, frameRate: 30 },
         });
         cameraInitialized.current = true;
-        console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing})`);
+        console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing}${ultraWideDeviceId ? ', ultra-wide' : ''})`);
       } catch (e: any) {
         console.warn(`[LiveKitVoice] Camera publish failed: ${e?.message || e}`);
       }
