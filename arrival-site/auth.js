@@ -360,7 +360,7 @@ async function handleGoogleSignIn() {
         var result = await sb.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin + '/auth-callback',
+                redirectTo: window.location.origin + '/',
                 queryParams: {
                     prompt: 'select_account'
                 }
