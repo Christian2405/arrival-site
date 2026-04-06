@@ -39,6 +39,10 @@ interface JobModeViewProps {
   onEquipmentChange?: (equipment: EquipmentInfo | null) => void;
   /** Whether guidance is currently active */
   guidanceActive?: boolean;
+  /** Whether camera is currently ultra-wide (0.5x) */
+  isUltraWide?: boolean;
+  /** Called when user taps zoom toggle */
+  onZoomToggle?: () => void;
 }
 
 
@@ -54,7 +58,7 @@ const TEXT_DISPLAY_MS = 10000;
 export default function JobModeView({
   aiState, voiceConnected, onPause, isPaused, lastAlert,
   onQuickAction, onInterrupt, onStart, isStarted, onEquipmentChange,
-  guidanceActive,
+  guidanceActive, isUltraWide, onZoomToggle,
 }: JobModeViewProps) {
   // ── Robot start button animations ──
 
@@ -322,6 +326,18 @@ export default function JobModeView({
             </Animated.View>
           </View>
 
+          {/* Zoom toggle — 0.5x / 1x */}
+          {onZoomToggle && (
+            <TouchableOpacity
+              style={s.zoomToggle}
+              onPress={onZoomToggle}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={s.zoomText}>{isUltraWide ? '0.5x' : '1x'}</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Guide me / Stop guidance button */}
           <TouchableOpacity
             style={[s.guideBtn, guidanceActive && s.guideBtnStop]}
@@ -446,6 +462,21 @@ const s = StyleSheet.create({
   pillActive: {
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderColor: 'rgba(255,255,255,0.22)',
+  },
+  zoomToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    marginBottom: 16,
+  },
+  zoomText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 
   guideBtn: {

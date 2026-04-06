@@ -122,6 +122,7 @@ export default function HomeScreen() {
   const [voiceConnected, setVoiceConnected] = useState(false);
   const [jobPaused, setJobPaused] = useState(false);
   const [jobStarted, setJobStarted] = useState(false);
+  const [jobUltraWide, setJobUltraWide] = useState(true); // Default to 0.5x ultra-wide
   const [equipmentContext, setEquipmentContext] = useState<{ equipment_type: string; brand?: string; model?: string } | null>(null);
   const jobControllerRef = useRef<JobModeController | null>(null);
   const streamingControllerRef = useRef<StreamingJobModeController | null>(null);
@@ -1445,6 +1446,7 @@ export default function HomeScreen() {
                   onLocalVideoTrack={setLocalVideoTrackRef}
                   onFlipCameraReady={(fn: (() => void) | null) => { flipCameraRef.current = fn; }}
                   activeJob={activeJob}
+                  useUltraWide={jobUltraWide}
                 />
               )}
 
@@ -1532,6 +1534,8 @@ export default function HomeScreen() {
                   }
                 }}
                 guidanceActive={guidanceActive}
+                isUltraWide={jobUltraWide}
+                onZoomToggle={() => setJobUltraWide(prev => !prev)}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView
 

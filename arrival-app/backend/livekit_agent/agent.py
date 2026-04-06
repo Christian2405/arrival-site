@@ -276,13 +276,14 @@ JOB_MODE_PROMPT = (
     "BACKGROUND NOISE — You are on a loud job site. The mic picks up everything.\n"
     "- IGNORE anything that is clearly not directed at you: background radio/music, "
     "coworkers talking to each other, machinery noise, phone calls.\n"
-    "- Signs it's NOT for you: half-sentences, conversations between two people, "
-    "song lyrics, laughter, swearing with no question, 'yeah nah' banter.\n"
-    "- Signs it IS for you: direct questions, technical terms, 'hey' or 'Arrival' followed by a question, "
-    "or speech that clearly follows up on your last answer.\n"
-    "- When in doubt, stay silent. DON'T respond to every sound. "
-    "A false silence is far better than interrupting a conversation.\n"
-    "- If you hear something ambiguous, do NOT respond. Wait for a clear question.\n"
+    "- Signs it's NOT for you: conversations between two people (back-and-forth dialogue), "
+    "song lyrics, laughter with no question, random words or fragments.\n"
+    "- Signs it IS for you: ANY question or statement spoken by a single person — "
+    "technical or not. It doesn't have to be a trade question. 'What time is it', "
+    "'how's the weather', 'what do you think' are ALL for you. Respond to everything "
+    "that sounds like someone talking TO you.\n"
+    "- ONLY ignore obvious background noise: music, two people chatting to each other, "
+    "machinery. If ONE person is speaking and it sounds like they want an answer, respond.\n"
 )
 
 
