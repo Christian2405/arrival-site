@@ -165,6 +165,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       console.log('[Auth] Sign-in success, user:', data.user?.id);
+      // Set session directly — don't rely solely on onAuthStateChange
+      if (data.session) {
+        set({ session: data.session, user: data.session.user });
+        await get().loadProfile();
+      }
       return {};
     } catch (error: any) {
       console.error('[Auth] Sign-in exception:', error);
