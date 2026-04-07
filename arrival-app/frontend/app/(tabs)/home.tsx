@@ -193,7 +193,7 @@ export default function HomeScreen() {
   const pinchBaseDistance = useRef(0);
   const pinchBaseZoom = useRef(0);
   // Native lens switching (0.5x / 1x via AVCaptureDevice)
-  const [currentLens, setCurrentLens] = useState<'ultra-wide' | 'wide'>('ultra-wide');
+  const [currentLens, setCurrentLens] = useState<'ultra-wide' | 'wide'>('wide');
   const [lensAvailable, setLensAvailable] = useState(false);
 
   const pinchResponder = useMemo(() => PanResponder.create({
@@ -291,24 +291,6 @@ export default function HomeScreen() {
       console.warn(`[Home] Lens switch to ${lens} failed`);
     }
   }, [currentLens]);
-
-  // Auto-switch to ultra-wide when LiveKit camera starts (session becomes available)
-  const lensInitialized = useRef(false);
-  useEffect(() => {
-    if (!CameraLens || !localVideoTrackRef || lensInitialized.current) return;
-    // Give the capture session a moment to start running
-    const timer = setTimeout(async () => {
-      try {
-        const ok = await CameraLens!.switchLens('ultra-wide');
-        if (ok) {
-          setCurrentLens('ultra-wide');
-          lensInitialized.current = true;
-          console.log('[Home] Auto-switched to ultra-wide on camera start');
-        }
-      } catch {}
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [localVideoTrackRef]);
 
   // Prefill from codes screen (or any deep link)
   useEffect(() => {
