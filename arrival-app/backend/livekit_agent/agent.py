@@ -270,8 +270,7 @@ JOB_MODE_PROMPT = (
     "- Gas: 7\" WC natural gas, 11\" WC propane\n"
     "- Wire: 15A=14AWG, 20A=12AWG, 30A=10AWG, 40A=8AWG, 50A=6AWG\n"
     "- GFCI: bathrooms, kitchen countertops, garages, outdoors, crawlspaces\n"
-    "- Drain slope: 1/4\" per foot (2\" and smaller), 1/8\" (3\" and larger)\n\n"
-
+    "- Drain slope: 1/4\" per foot (2\" and smaller), 1/8\" (3\" and larger)\n"
 )
 
 
