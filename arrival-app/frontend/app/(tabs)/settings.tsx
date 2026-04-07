@@ -36,7 +36,7 @@ export default function SettingsScreen() {
     setTextSize,
   } = useSettingsStore();
 
-  const { profile, subscription, signOut, updateSpatialConsent } = useAuthStore();
+  const { profile, subscription, signOut, updateSpatialConsent, updatePassword } = useAuthStore();
   const { fetchUsage, isLoaded: usageLoaded } = useUsageStore();
 
   useEffect(() => {
@@ -131,6 +131,32 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  };
+
+  const handleChangePassword = () => {
+    Alert.prompt(
+      'Set Password',
+      'Enter a new password (min 6 characters). This lets you log in with email + password.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Set Password',
+          onPress: async (newPassword?: string) => {
+            if (!newPassword || newPassword.length < 6) {
+              Alert.alert('Error', 'Password must be at least 6 characters.');
+              return;
+            }
+            const result = await updatePassword(newPassword);
+            if (result.error) {
+              Alert.alert('Error', result.error);
+            } else {
+              Alert.alert('Done', 'Password set. You can now log in with your email and this password.');
+            }
+          },
+        },
+      ],
+      'secure-text'
+    );
   };
 
   const handleDeleteAccount = () => {
@@ -400,6 +426,14 @@ export default function SettingsScreen() {
               </View>
             }
             onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`).catch(() => {})}
+          />
+          <View style={st.sep} />
+          <Row
+            icon="lock-closed-outline"
+            label="Set Password"
+            hint="Set or change your login password"
+            right={<Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />}
+            onPress={handleChangePassword}
           />
           <View style={st.sep} />
           <Row
