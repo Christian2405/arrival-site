@@ -145,11 +145,10 @@ export default function LiveKitVoiceRoom({
         // sets soloAmbient, and kills mic capture before the room even connects.
         if (!audioSessionStarted.current) {
           await AudioSession.configureAudio({
-            // @ts-ignore — works at runtime, TS types are incomplete
             audioCategory: 'playAndRecord',
-            audioCategoryOptions: ['allowBluetooth', 'defaultToSpeaker', 'mixWithOthers'],
+            audioCategoryOptions: ['allowBluetooth', 'mixWithOthers'],
             audioMode: 'videoChat',
-          });
+          } as any);
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;
         }
