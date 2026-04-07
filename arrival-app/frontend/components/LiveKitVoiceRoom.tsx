@@ -545,26 +545,31 @@ function RoomContent({
         let targetDeviceId: string | undefined;
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          const backCameras = devices.filter(
-            (d: any) => d.kind === 'videoinput' && d.facing === 'environment'
+          // Filter video inputs — use label to identify back cameras
+          // iOS labels: "Back Camera", "Back Ultra Wide Camera", "Back Telephoto Camera", "Front Camera"
+          const videoDevices = (devices as any[]).filter((d: any) => d.kind === 'videoinput');
+          const backCameras = videoDevices.filter(
+            (d: any) => d.label?.toLowerCase().includes('back')
           );
+          console.log(`[LiveKitVoice] Video devices: ${videoDevices.map((d: any) => d.label).join(', ')}`);
+
           if (cameraFacing === 'environment' && backCameras.length > 1) {
-            // iOS labels: "Back Ultra Wide Camera", "Back Camera", "Back Telephoto Camera"
             const ultraWide = backCameras.find(
               (d: any) => d.label?.toLowerCase().includes('ultra wide')
             );
             const mainCamera = backCameras.find(
-              (d: any) => d.label?.toLowerCase() === 'back camera'
-            ) || backCameras.find(
-              (d: any) => !d.label?.toLowerCase().includes('ultra wide') && !d.label?.toLowerCase().includes('telephoto')
+              (d: any) => {
+                const lbl = d.label?.toLowerCase() || '';
+                return lbl.includes('back') && !lbl.includes('ultra') && !lbl.includes('telephoto');
+              }
             );
 
             if (useUltraWide && ultraWide) {
               targetDeviceId = ultraWide.deviceId;
-              console.log(`[LiveKitVoice] Using ultra-wide: ${ultraWide.label}`);
+              console.log(`[LiveKitVoice] Using ultra-wide: ${ultraWide.label} (${ultraWide.deviceId})`);
             } else if (!useUltraWide && mainCamera) {
               targetDeviceId = mainCamera.deviceId;
-              console.log(`[LiveKitVoice] Using main camera: ${mainCamera.label}`);
+              console.log(`[LiveKitVoice] Using main camera: ${mainCamera.label} (${mainCamera.deviceId})`);
             }
           }
         } catch (enumErr) {
