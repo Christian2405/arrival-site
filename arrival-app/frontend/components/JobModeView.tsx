@@ -39,12 +39,6 @@ interface JobModeViewProps {
   onEquipmentChange?: (equipment: EquipmentInfo | null) => void;
   /** Whether guidance is currently active */
   guidanceActive?: boolean;
-  /** Current lens: 'ultra-wide' (0.5x) or 'wide' (1x) */
-  currentLens?: 'ultra-wide' | 'wide';
-  /** Called when user taps the lens toggle */
-  onLensSwitch?: (lens: 'ultra-wide' | 'wide') => void;
-  /** Whether lens switching is available on this device */
-  lensAvailable?: boolean;
 }
 
 
@@ -60,7 +54,7 @@ const TEXT_DISPLAY_MS = 10000;
 export default function JobModeView({
   aiState, voiceConnected, onPause, isPaused, lastAlert,
   onQuickAction, onInterrupt, onStart, isStarted, onEquipmentChange,
-  guidanceActive, currentLens, onLensSwitch, lensAvailable,
+  guidanceActive,
 }: JobModeViewProps) {
   // ── Robot start button animations ──
 
@@ -311,30 +305,6 @@ export default function JobModeView({
   // ════════════════════════════════════════════════════
   return (
     <View style={s.container} pointerEvents="box-none">
-          {/* ── LENS TOGGLE (Apple-style 0.5x / 1x) ── */}
-          {lensAvailable && onLensSwitch && (
-            <View style={s.lensRow}>
-              <TouchableOpacity
-                style={[s.lensBtn, currentLens === 'ultra-wide' && s.lensBtnActive]}
-                onPress={() => onLensSwitch('ultra-wide')}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.lensBtnText, currentLens === 'ultra-wide' && s.lensBtnTextActive]}>
-                  .5
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.lensBtn, currentLens === 'wide' && s.lensBtnActive]}
-                onPress={() => onLensSwitch('wide')}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.lensBtnText, currentLens === 'wide' && s.lensBtnTextActive]}>
-                  1
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           {/* ── TWO GLASS PILLS ── */}
           <View style={s.pillRow}>
             {/* Eye pill — camera watching */}
@@ -455,35 +425,6 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     letterSpacing: 0.5,
-  },
-
-  // --- Lens toggle (Apple Camera style) ---
-  lensRow: {
-    flexDirection: 'row',
-    gap: 2,
-    marginBottom: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 20,
-    padding: 2,
-  },
-  lensBtn: {
-    width: 40,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lensBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  lensBtnText: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  lensBtnTextActive: {
-    color: '#FFD60A',
-    fontWeight: '700',
   },
 
   // --- Two glass pills ---

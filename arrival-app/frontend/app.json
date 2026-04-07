@@ -90,8 +90,7 @@
       ],
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",
-      "expo-font",
-      "./modules/expo-camera-lens"
+      "expo-font"
     ],
     "owner": "christianfladgate"
   }

@@ -36,13 +36,6 @@ try {
 } catch (e) {
   console.warn('[Home] LiveKit native module not available (Expo Go?) — falling back to REST voice');
 }
-// Camera lens switching — native module, lazy-load
-let CameraLens: { switchLens: (type: string) => Promise<boolean>; getAvailableLenses: () => Promise<string[]> } | null = null;
-try {
-  CameraLens = require('../../modules/expo-camera-lens');
-} catch (e) {
-  console.warn('[Home] expo-camera-lens native module not available');
-}
 // OnboardingModal — lazy-load so its module-level code doesn't run at startup
 // (static import was disrupting the iOS camera session on app launch)
 let OnboardingModal: React.ComponentType<{ visible: boolean; onClose: () => void }> | null = null;
@@ -192,9 +185,6 @@ export default function HomeScreen() {
   const cameraZoomAnim = useRef(new Animated.Value(1)).current;  // CSS scale for LiveKit only
   const pinchBaseDistance = useRef(0);
   const pinchBaseZoom = useRef(0);
-  // Native lens switching (0.5x / 1x via AVCaptureDevice)
-  const [currentLens, setCurrentLens] = useState<'ultra-wide' | 'wide'>('wide');
-  const [lensAvailable, setLensAvailable] = useState(false);
 
   const pinchResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: (_, gestureState) => gestureState.numberActiveTouches === 2,
@@ -267,30 +257,6 @@ export default function HomeScreen() {
   useEffect(() => {
     aiAPI.warmup();
   }, []);
-
-  // Detect available camera lenses (native module)
-  useEffect(() => {
-    if (!CameraLens) return;
-    CameraLens.getAvailableLenses().then((lenses) => {
-      const hasUltraWide = lenses.includes('ultra-wide');
-      const hasWide = lenses.includes('wide');
-      setLensAvailable(hasUltraWide && hasWide);
-      console.log(`[Home] Camera lenses: ${lenses.join(', ')} | toggle=${hasUltraWide && hasWide}`);
-    }).catch(() => {});
-  }, []);
-
-  // Handle lens switch (called from JobModeView toggle)
-  const handleLensSwitch = useCallback(async (lens: 'ultra-wide' | 'wide') => {
-    if (!CameraLens || lens === currentLens) return;
-    console.log(`[Home] Switching lens to ${lens}`);
-    const ok = await CameraLens.switchLens(lens);
-    if (ok) {
-      setCurrentLens(lens);
-      console.log(`[Home] Lens switched to ${lens}`);
-    } else {
-      console.warn(`[Home] Lens switch to ${lens} failed`);
-    }
-  }, [currentLens]);
 
   // Prefill from codes screen (or any deep link)
   useEffect(() => {
@@ -1520,9 +1486,6 @@ export default function HomeScreen() {
                   }
                 }}
                 guidanceActive={guidanceActive}
-                currentLens={currentLens}
-                onLensSwitch={handleLensSwitch}
-                lensAvailable={lensAvailable}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView
 
