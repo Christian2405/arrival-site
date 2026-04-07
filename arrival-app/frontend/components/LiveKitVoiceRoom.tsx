@@ -72,8 +72,6 @@ interface LiveKitVoiceRoomProps {
   onFlipCameraReady?: (flipFn: (() => void) | null) => void;
   /** Active job/residence name — agent references these docs first */
   activeJob?: string | null;
-  /** Whether to use ultra-wide (0.5x) camera lens */
-  useUltraWide?: boolean;
 }
 
 const MAX_RETRIES = 3;
@@ -93,7 +91,6 @@ export default function LiveKitVoiceRoom({
   onLocalVideoTrack,
   onFlipCameraReady,
   activeJob,
-  useUltraWide = true,
 }: LiveKitVoiceRoomProps) {
   const [session, setSession] = useState<LiveKitSession | null>(null);
   const [agentState, setAgentState] = useState<AgentVoiceState>('connecting');
@@ -147,8 +144,8 @@ export default function LiveKitVoiceRoom({
           await AudioSession.configureAudio({
             audioCategory: 'playAndRecord',
             audioCategoryOptions: ['allowBluetooth', 'mixWithOthers'],
-            audioMode: 'videoChat',
-          } as any);
+            audioMode: 'videoChat',  // routes to speaker (hands-free)
+          });
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;
         }
@@ -273,7 +270,6 @@ export default function LiveKitVoiceRoom({
         onSendMessageReady={onSendMessageReady}
         onLocalVideoTrack={onLocalVideoTrack}
         onFlipCameraReady={onFlipCameraReady}
-        useUltraWide={useUltraWide}
       />
     </LiveKitRoom>
   );
@@ -299,7 +295,6 @@ function RoomContent({
   onSendMessageReady,
   onLocalVideoTrack,
   onFlipCameraReady,
-  useUltraWide = true,
 }: {
   onStateChange: (state: AgentVoiceState) => void;
   onVoiceConnected?: (connected: boolean) => void;
@@ -313,7 +308,6 @@ function RoomContent({
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
   onLocalVideoTrack?: (trackRef: any | null) => void;
   onFlipCameraReady?: (flipFn: (() => void) | null) => void;
-  useUltraWide?: boolean;
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
@@ -532,51 +526,13 @@ function RoomContent({
           await new Promise(r => setTimeout(r, 500));
           if (cancelled) return;
         }
-
-        // Find the right camera lens based on useUltraWide setting
-        let targetDeviceId: string | undefined;
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          // Filter video inputs — use label to identify back cameras
-          // iOS labels: "Back Camera", "Back Ultra Wide Camera", "Back Telephoto Camera", "Front Camera"
-          const videoDevices = (devices as any[]).filter((d: any) => d.kind === 'videoinput');
-          const backCameras = videoDevices.filter(
-            (d: any) => d.label?.toLowerCase().includes('back')
-          );
-          console.log(`[LiveKitVoice] Video devices: ${videoDevices.map((d: any) => d.label).join(', ')}`);
-
-          if (cameraFacing === 'environment' && backCameras.length > 1) {
-            const ultraWide = backCameras.find(
-              (d: any) => d.label?.toLowerCase().includes('ultra wide')
-            );
-            const mainCamera = backCameras.find(
-              (d: any) => {
-                const lbl = d.label?.toLowerCase() || '';
-                return lbl.includes('back') && !lbl.includes('ultra') && !lbl.includes('telephoto');
-              }
-            );
-
-            if (useUltraWide && ultraWide) {
-              targetDeviceId = ultraWide.deviceId;
-              console.log(`[LiveKitVoice] Using ultra-wide: ${ultraWide.label} (${ultraWide.deviceId})`);
-            } else if (!useUltraWide && mainCamera) {
-              targetDeviceId = mainCamera.deviceId;
-              console.log(`[LiveKitVoice] Using main camera: ${mainCamera.label} (${mainCamera.deviceId})`);
-            }
-          }
-        } catch (enumErr) {
-          console.warn('[LiveKitVoice] Could not enumerate devices:', enumErr);
-        }
-
         await room.localParticipant.setCameraEnabled(true, {
-          ...(targetDeviceId
-            ? { deviceId: targetDeviceId }
-            : { facingMode: cameraFacing }),
+          facingMode: cameraFacing,
           // High res for user preview, backend downscales for model
           resolution: { width: 1080, height: 1920, frameRate: 30 },
         });
         cameraInitialized.current = true;
-        console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing}, ${useUltraWide ? '0.5x' : '1x'})`);
+        console.log(`[LiveKitVoice] ✓ Camera published (${cameraFacing})`);
       } catch (e: any) {
         console.warn(`[LiveKitVoice] Camera publish failed: ${e?.message || e}`);
       }
@@ -587,7 +543,7 @@ function RoomContent({
     return () => {
       cancelled = true;
     };
-  }, [connectionState, room, cameraFacing, useUltraWide]);
+  }, [connectionState, room, cameraFacing]);
 
   // -----------------------------------------------------------------------
   // Connection state tracking

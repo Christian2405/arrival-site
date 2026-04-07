@@ -122,7 +122,6 @@ export default function HomeScreen() {
   const [voiceConnected, setVoiceConnected] = useState(false);
   const [jobPaused, setJobPaused] = useState(false);
   const [jobStarted, setJobStarted] = useState(false);
-  const [jobUltraWide, setJobUltraWide] = useState(true); // Default to 0.5x ultra-wide
   const [equipmentContext, setEquipmentContext] = useState<{ equipment_type: string; brand?: string; model?: string } | null>(null);
   const jobControllerRef = useRef<JobModeController | null>(null);
   const streamingControllerRef = useRef<StreamingJobModeController | null>(null);
@@ -448,19 +447,7 @@ export default function HomeScreen() {
         return;
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      let rec: Audio.Recording | null = null;
-      try {
-        const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        rec = result.recording;
-      } catch (firstErr) {
-        // Bluetooth or audio route change may have broken the session — reset and retry once
-        console.warn('Recording failed, retrying:', firstErr);
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
-        await new Promise(r => setTimeout(r, 200));
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-        const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        rec = result.recording;
-      }
+      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       // Bug 1: Set ref synchronously so handlePTTEnd always sees it
       recordingRef.current = rec;
       setRecording(rec);
@@ -523,15 +510,6 @@ export default function HomeScreen() {
         if (!uri) { setVoiceState('idle'); setIsProcessing(false); return; }
 
         const audioBase64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
-
-        // Validate audio isn't empty/too short (Bluetooth disconnect can produce empty recordings)
-        if (!audioBase64 || audioBase64.length < 1000) {
-          Alert.alert('Recording Error', 'No audio was captured. If you recently connected or disconnected headphones, wait a moment and try again.');
-          setVoiceState('idle');
-          setIsProcessing(false);
-          return;
-        }
-
         const frameBase64 = pttFrameRef.current;
         pttFrameRef.current = undefined;
 
@@ -1421,7 +1399,6 @@ export default function HomeScreen() {
                   onLocalVideoTrack={setLocalVideoTrackRef}
                   onFlipCameraReady={(fn: (() => void) | null) => { flipCameraRef.current = fn; }}
                   activeJob={activeJob}
-                  useUltraWide={jobUltraWide}
                 />
               )}
 
@@ -1509,8 +1486,6 @@ export default function HomeScreen() {
                   }
                 }}
                 guidanceActive={guidanceActive}
-                isUltraWide={jobUltraWide}
-                onZoomToggle={() => setJobUltraWide(prev => !prev)}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView
 
