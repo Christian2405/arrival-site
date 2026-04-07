@@ -1659,15 +1659,6 @@ async def entrypoint(ctx: JobContext):
                 model="nova-2",
                 language="en",
                 api_key=config.DEEPGRAM_API_KEY,
-                keywords=[
-                    # Trade terms Deepgram often misrecognises
-                    ("HVAC", 1.5), ("Arrival", 2.0), ("GFCI", 1.5), ("breaker", 1.0),
-                    ("capacitor", 1.0), ("contactor", 1.5), ("compressor", 1.0),
-                    ("subcooling", 1.5), ("superheat", 1.5), ("TXV", 1.5),
-                    ("gauge", 1.0), ("romex", 1.5), ("conduit", 1.0),
-                    ("flux", 1.0), ("solder", 1.0), ("PVC", 1.0),
-                ],
-                smart_format=True,
             ),
             llm=anthropic.LLM(
                 model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
