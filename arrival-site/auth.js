@@ -675,6 +675,22 @@ document.addEventListener('DOMContentLoaded', async function() {
             updateNavForAuth(session.user);
             // Ensure profile exists for OAuth users
             await ensureProfileExists(session.user);
+            // If on homepage (not already on a dashboard), redirect to dashboard
+            var path = window.location.pathname;
+            if (path === '/' || path === '/index.html') {
+                var tmResult = await sb.from('team_members')
+                    .select('team_id')
+                    .eq('user_id', session.user.id)
+                    .eq('status', 'active')
+                    .limit(1);
+                if (tmResult.data && tmResult.data.length > 0) {
+                    localStorage.setItem('arrival_dashboard', 'business');
+                    window.location.href = '/dashboard-business';
+                } else {
+                    localStorage.setItem('arrival_dashboard', 'individual');
+                    window.location.href = '/dashboard-individual';
+                }
+            }
         } else if (event === 'SIGNED_OUT') {
             _cachedSession = null;
             updateNavForAuth(null);

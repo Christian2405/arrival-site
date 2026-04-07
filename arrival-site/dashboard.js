@@ -971,6 +971,12 @@ function loadSettings() {
 }
 
 async function handleSaveProfile() {
+    var btn = document.getElementById('settings-save-btn');
+    var originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    btn.style.opacity = '0.7';
+
     var firstName = document.getElementById('settings-first-name').value.trim();
     var lastName = document.getElementById('settings-last-name').value.trim();
     var trade = document.getElementById('settings-trade').value;
@@ -1006,9 +1012,21 @@ async function handleSaveProfile() {
         currentProfile.explanation_depth = depth;
         currentProfile.voice_output = voiceOn;
 
-        showToast('Profile saved.');
+        btn.textContent = 'Saved ✓';
+        btn.style.background = '#16a34a';
+        btn.style.opacity = '1';
+        showToast('Profile saved successfully.');
+        setTimeout(function() {
+            btn.textContent = originalText;
+            btn.style.background = '';
+            btn.disabled = false;
+        }, 2000);
     } catch (err) {
         console.error('Save profile error:', err);
+        btn.textContent = originalText;
+        btn.style.opacity = '1';
+        btn.style.background = '';
+        btn.disabled = false;
         showToast('Failed to save profile.', 'error');
     }
 }
