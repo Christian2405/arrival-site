@@ -272,18 +272,6 @@ JOB_MODE_PROMPT = (
     "- GFCI: bathrooms, kitchen countertops, garages, outdoors, crawlspaces\n"
     "- Drain slope: 1/4\" per foot (2\" and smaller), 1/8\" (3\" and larger)\n\n"
 
-    # ── JOB SITE NOISE ──
-    "BACKGROUND NOISE — You are on a loud job site. The mic picks up everything.\n"
-    "- IGNORE anything that is clearly not directed at you: background radio/music, "
-    "coworkers talking to each other, machinery noise, phone calls.\n"
-    "- Signs it's NOT for you: conversations between two people (back-and-forth dialogue), "
-    "song lyrics, laughter with no question, random words or fragments.\n"
-    "- Signs it IS for you: ANY question or statement spoken by a single person — "
-    "technical or not. It doesn't have to be a trade question. 'What time is it', "
-    "'how's the weather', 'what do you think' are ALL for you. Respond to everything "
-    "that sounds like someone talking TO you.\n"
-    "- ONLY ignore obvious background noise: music, two people chatting to each other, "
-    "machinery. If ONE person is speaking and it sounds like they want an answer, respond.\n"
 )
 
 

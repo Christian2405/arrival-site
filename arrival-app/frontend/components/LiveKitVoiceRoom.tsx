@@ -144,18 +144,11 @@ export default function LiveKitVoiceRoom({
         // Do NOT use useIOSAudioManagement — it fires immediately with zero tracks,
         // sets soloAmbient, and kills mic capture before the room even connects.
         if (!audioSessionStarted.current) {
-          // configureAudio sets default output routing
           await AudioSession.configureAudio({
-            ios: { defaultOutput: 'speaker' },
-          });
-          // setAppleAudioConfiguration sets the actual iOS audio category/mode
-          // mixWithOthers: allows background music (Spotify etc) to keep playing
-          // allowBluetooth: enables Bluetooth headphones
-          // defaultToSpeaker: routes to speaker when no headphones connected
-          await AudioSession.setAppleAudioConfiguration({
+            // @ts-ignore — works at runtime, TS types are incomplete
             audioCategory: 'playAndRecord',
-            audioCategoryOptions: ['allowBluetooth', 'mixWithOthers', 'defaultToSpeaker'],
-            audioMode: 'voiceChat',
+            audioCategoryOptions: ['allowBluetooth', 'defaultToSpeaker', 'mixWithOthers'],
+            audioMode: 'videoChat',
           });
           await AudioSession.startAudioSession();
           audioSessionStarted.current = true;

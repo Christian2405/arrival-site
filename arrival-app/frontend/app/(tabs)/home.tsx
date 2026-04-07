@@ -254,19 +254,6 @@ export default function HomeScreen() {
     return () => sub.remove();
   }, [permission?.granted]);
 
-  // Reset audio session on foreground — handles Bluetooth connect/disconnect while backgrounded
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && !recordingRef.current) {
-        Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-        }).catch(() => {});
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => {
     aiAPI.warmup();
@@ -460,28 +447,17 @@ export default function HomeScreen() {
         Alert.alert('Permission Required', 'Microphone access is needed for voice input.');
         return;
       }
-      // Reset audio session fully — handles Bluetooth route changes mid-session
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        ...(Platform.OS === 'ios' ? { interruptionModeIOS: 1 } : {}),
-      });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       let rec: Audio.Recording | null = null;
       try {
         const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         rec = result.recording;
       } catch (firstErr) {
         // Bluetooth or audio route change may have broken the session — reset and retry once
-        console.warn('Recording failed, resetting audio session and retrying:', firstErr);
+        console.warn('Recording failed, retrying:', firstErr);
         await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
         await new Promise(r => setTimeout(r, 200));
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          ...(Platform.OS === 'ios' ? { interruptionModeIOS: 1 } : {}),
-        });
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
         const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         rec = result.recording;
       }
@@ -491,7 +467,6 @@ export default function HomeScreen() {
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
-      Alert.alert('Microphone Error', 'Could not access the microphone. If you just connected or disconnected headphones, wait a moment and try again.');
     }
   }, [setIsRecording]);
 
