@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard-business.html
+Disallow: /dashboard-individual.html
+Disallow: /auth-callback.html
+Disallow: /draft.html
+Disallow: /pitch.html
+
+Sitemap: https://arrivalcompany.com/sitemap.xml
