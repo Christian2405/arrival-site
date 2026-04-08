@@ -1,6 +1,6 @@
 # Arrival AI — Handoff Document
 
-**Last Updated:** April 4, 2026
+**Last Updated:** April 7, 2026
 
 ---
 
@@ -18,7 +18,7 @@
 
 ### What's Working
 - **Voice Q&A** — LiveKit full-duplex voice, Deepgram STT, Claude Sonnet LLM, ElevenLabs TTS
-- **Camera vision** — WebRTC video track frames to agent, model identifies objects
+- **Camera vision** — WebRTC video track frames to agent, model identifies objects. 5Mbps h264 encoding for sharp frames.
 - **Company docs (RAG)** — Auto-search on every query across all modes. Vision extraction for building plans (CAD PDFs). Indexing is automatic on upload, background task, polled by frontend.
 - **Guidance mode** — "Guide Me" → knowledge brief → camera-guided step by step
 - **Spatial data capture** — Video clips (ffmpeg MP4, CFR 2fps) → S3, with auto-labels, sequences, outcome tracking, frame timestamps
@@ -26,6 +26,9 @@
 - **Consent flow** — Modal on first Job Mode entry, settings toggle, backend gating
 - **TTS fixes** — filler stripping, dimension pronunciation ("6 by 6 metres"), mid-sentence break prevention
 - **Dashboard document library** — Upload → backend auto-indexes → status polling → "Ready" when done. Retry button for failed docs. Safari popup fix for View button.
+- **Bluetooth recovery** — Audio session reconfigures on app foreground + MediaDevicesChanged event. Mic re-enabled automatically after route change.
+- **Email/password login** — Fixed: session set directly in zustand store after signInWithPassword (onAuthStateChange wasn't firing).
+- **Website** — Mobile signup form fixed, Google auth redirect, save button feedback, spatial privacy/terms.
 - **TestFlight** — Build #8 submitted April 3, 2026. NZ beta testers start Tuesday April 7.
 
 ### What's Partially Working
@@ -33,9 +36,9 @@
 - **Proactive monitor** — Has engineering gates. Not tested on real job site.
 
 ### What's NOT Working / Untested
+- **0.5x ultra-wide lens in Job Mode** — WebRTC uses 1x wide angle camera by default. `@livekit/react-native-webrtc` strips `deviceId` from constraints and only supports front/back switching. Requires a native iOS module to swap AVCaptureDevice on the running capture session. Attempted April 7 — module worked in concept but broke the EAS build process. Deferred.
 - **IMU (100Hz) + ARKit 6-DOF pose** — Planned post-Tuesday. Requires `expo-sensors` + new EAS build. Without these, world model can't distinguish moving hand from moving object.
 - **Lens switching detection** — If user pinches to zoom mid-session, intrinsics become invalid. Deferred until ARKit added.
-- **Pinch-to-zoom in Job Mode** — LiveKit VideoTrack doesn't expose zoom API.
 
 ---
 
@@ -51,7 +54,8 @@
 - **Crash reporting:** Sentry
 
 ### Critical Architecture Facts
-- **Frame delivery:** LiveKit WebRTC video track via `setCameraEnabled(true)` is the ONLY working path for Job Mode. expo-camera `takePictureAsync` is DEAD when LiveKit audio active on iOS.
+- **Frame delivery:** LiveKit WebRTC video track via `setCameraEnabled(true)` is the ONLY working path for Job Mode. expo-camera `takePictureAsync` is DEAD when LiveKit audio active on iOS. Video encoded at 5Mbps h264 (publishDefaults in LiveKitVoiceRoom).
+- **Audio session config:** `playAndRecord` + `allowBluetooth` + `mixWithOthers` + `videoChat` — DO NOT CHANGE. Reconfigured on app foreground and MediaDevicesChanged for Bluetooth recovery.
 - **RAG is automatic in all modes:** `on_user_turn_completed` auto-searches Pinecone for every query >10 chars.
 - **Three modes:** Voice (default), Text, Job — mode selector in home.tsx
 - **Guidance:** User taps "Guide Me" → `start_guidance` tool → RAG search → knowledge brief → injected into system prompt → proactive monitor watches for that task
