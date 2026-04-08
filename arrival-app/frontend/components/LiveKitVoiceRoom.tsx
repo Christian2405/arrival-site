@@ -17,7 +17,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, AppState } from 'react-native';
 import {
   LiveKitRoom,
   AudioSession,
@@ -216,6 +216,27 @@ export default function LiveKitVoiceRoom({
     };
   }, []);
 
+  // Bluetooth recovery — when app returns to foreground after a Bluetooth
+  // device connects/disconnects, iOS may have changed the audio route.
+  // Re-apply our audio config to keep mic + speaker working.
+  useEffect(() => {
+    if (!active) return;
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state === 'active' && audioSessionStarted.current) {
+        try {
+          await AudioSession.configureAudio({
+            audioCategory: 'playAndRecord',
+            audioCategoryOptions: ['allowBluetooth', 'mixWithOthers'],
+            audioMode: 'videoChat',
+          });
+        } catch (e: any) {
+          console.warn('[LiveKitVoice] Audio reconfigure failed:', e?.message);
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [active]);
+
   if (!active) {
     return null;
   }
@@ -257,7 +278,7 @@ export default function LiveKitVoiceRoom({
         },
         publishDefaults: {
           videoEncoding: {
-            maxBitrate: 3_000_000,  // 3 Mbps — sharp 1080p
+            maxBitrate: 5_000_000,  // 5 Mbps — sharp 1080p
             maxFramerate: 30,
           },
           videoCodec: 'h264',  // Hardware-accelerated on iOS
@@ -551,6 +572,36 @@ function RoomContent({
       cancelled = true;
     };
   }, [connectionState, room, cameraFacing]);
+
+  // -----------------------------------------------------------------------
+  // Bluetooth / audio device change recovery — when Bluetooth connects or
+  // disconnects mid-session, re-apply audio config and re-enable mic if needed.
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected || !room) return;
+
+    const handleDeviceChange = async () => {
+      console.log('[LiveKitVoice] Audio device change detected — reconfiguring');
+      try {
+        await AudioSession.configureAudio({
+          audioCategory: 'playAndRecord',
+          audioCategoryOptions: ['allowBluetooth', 'mixWithOthers'],
+          audioMode: 'videoChat',
+        });
+        if (!room.localParticipant.isMicrophoneEnabled) {
+          await room.localParticipant.setMicrophoneEnabled(true);
+          console.log('[LiveKitVoice] ✓ Mic re-enabled after device change');
+        }
+      } catch (e: any) {
+        console.warn('[LiveKitVoice] Device change recovery failed:', e?.message);
+      }
+    };
+
+    room.on(RoomEvent.MediaDevicesChanged, handleDeviceChange);
+    return () => {
+      room.off(RoomEvent.MediaDevicesChanged, handleDeviceChange);
+    };
+  }, [connectionState, room]);
 
   // -----------------------------------------------------------------------
   // Connection state tracking
