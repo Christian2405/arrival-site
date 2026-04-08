@@ -255,6 +255,13 @@ export default function LiveKitVoiceRoom({
           noiseSuppression: true,
           autoGainControl: true,
         },
+        publishDefaults: {
+          videoEncoding: {
+            maxBitrate: 3_000_000,  // 3 Mbps — sharp 1080p
+            maxFramerate: 30,
+          },
+          videoCodec: 'h264',  // Hardware-accelerated on iOS
+        },
       }}
     >
       <RoomContent
