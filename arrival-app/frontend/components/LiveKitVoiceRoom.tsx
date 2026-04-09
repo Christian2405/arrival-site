@@ -66,6 +66,8 @@ interface LiveKitVoiceRoomProps {
   equipmentContext?: EquipmentContext | null;
   /** Exposes a function to send data channel messages to the agent */
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
+  /** Called when backend sends guidance state updates (active/inactive) */
+  onGuidanceStateUpdate?: (active: boolean) => void;
   /** Exposes the local camera track ref for rendering at the root level */
   onLocalVideoTrack?: (trackRef: any | null) => void;
   /** Exposes a function to flip between front/back camera */
@@ -88,6 +90,7 @@ export default function LiveKitVoiceRoom({
   onError,
   equipmentContext,
   onSendMessageReady,
+  onGuidanceStateUpdate,
   onLocalVideoTrack,
   onFlipCameraReady,
   activeJob,
@@ -296,6 +299,7 @@ export default function LiveKitVoiceRoom({
         roomName={session.roomName}
         equipmentContext={equipmentContext}
         onSendMessageReady={onSendMessageReady}
+        onGuidanceStateUpdate={onGuidanceStateUpdate}
         onLocalVideoTrack={onLocalVideoTrack}
         onFlipCameraReady={onFlipCameraReady}
       />
@@ -321,6 +325,7 @@ function RoomContent({
   roomName,
   equipmentContext,
   onSendMessageReady,
+  onGuidanceStateUpdate,
   onLocalVideoTrack,
   onFlipCameraReady,
 }: {
@@ -334,6 +339,7 @@ function RoomContent({
   roomName?: string;
   equipmentContext?: EquipmentContext | null;
   onSendMessageReady?: (sendFn: ((msg: Record<string, any>) => void) | null) => void;
+  onGuidanceStateUpdate?: (active: boolean) => void;
   onLocalVideoTrack?: (trackRef: any | null) => void;
   onFlipCameraReady?: (flipFn: (() => void) | null) => void;
 }) {
@@ -419,6 +425,12 @@ function RoomContent({
       try {
         const text = new TextDecoder().decode(payload);
         const msg = JSON.parse(text);
+
+        if (msg.type === 'guidance_state_update') {
+          console.log(`[LiveKitVoice] Guidance state update: active=${msg.active}`);
+          onGuidanceStateUpdate?.(!!msg.active);
+          return;
+        }
 
         if (msg.type === 'vision_request') {
           console.log(`[LiveKitVoice] ★ Agent requested vision analysis: "${msg.question?.substring(0, 60)}..."`);

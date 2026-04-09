@@ -449,6 +449,7 @@ class ArrivalAgent(Agent):
         self._guidance_task: str = ""           # "replacing capacitor on Carrier 24ACC"
         self._guidance_brief: str = ""          # knowledge brief (not numbered steps)
         self._guidance_context: str = ""        # RAG context for the procedure
+        self._guidance_lock: asyncio.Lock = asyncio.Lock()  # prevents start/stop race conditions
         # Equipment context (sent from frontend)
         self._equipment_type: str = ""
         self._equipment_brand: str = ""
@@ -482,6 +483,26 @@ class ArrivalAgent(Agent):
         self._guidance_task = state.get("task", "")
         self._guidance_brief = state.get("brief", "")
         logger.info(f"[guidance] ✓ Restored guidance state for '{self._guidance_task}'")
+
+    def _broadcast_guidance_state(self):
+        """Send current guidance state to frontend via data channel."""
+        if not self._room:
+            return
+        try:
+            msg = json.dumps({
+                "type": "guidance_state_update",
+                "active": self._guidance_active,
+                "task": self._guidance_task if self._guidance_active else "",
+            })
+            asyncio.ensure_future(
+                self._room.local_participant.publish_data(
+                    msg.encode("utf-8"),
+                    reliable=True,
+                )
+            )
+            logger.info(f"[guidance] Broadcast state to frontend: active={self._guidance_active}")
+        except Exception as e:
+            logger.debug(f"[guidance] State broadcast failed: {e}")
 
     def update_camera_frame(self, frame_b64: str):
         """Store the latest camera frame from the mobile app."""
@@ -940,24 +961,33 @@ class ArrivalAgent(Agent):
         )
 
         try:
-            response = await client.messages.create(
-                model=config.ANTHROPIC_VISION_MODEL,
-                max_tokens=600,
-                messages=[{"role": "user", "content": brief_prompt}],
+            response = await asyncio.wait_for(
+                client.messages.create(
+                    model=config.ANTHROPIC_VISION_MODEL,
+                    max_tokens=600,
+                    messages=[{"role": "user", "content": brief_prompt}],
+                ),
+                timeout=15,
             )
             brief = response.content[0].text.strip()
+        except asyncio.TimeoutError:
+            logger.error("[guidance] Brief generation timed out (15s)")
+            return "That's taking too long to research. Just tell me what you're working on and I'll talk you through it live."
         except Exception as e:
             logger.error(f"[guidance] Failed to generate brief: {e}")
             return "I couldn't put together guidance for that. Just tell me what you're working on and I'll talk you through it."
 
-        # 3. Activate guidance mode
-        self._guidance_active = True
-        self._guidance_task = task_description
-        self._guidance_brief = brief
-        self._guidance_context = rag_context
-        # Set task context for proactive vision
-        self._inferred_task = task_description
-        self._inferred_task_updated_at = time.time()
+        # 3. Activate guidance mode (under lock to prevent race with stop)
+        async with self._guidance_lock:
+            self._guidance_active = True
+            self._guidance_task = task_description
+            self._guidance_brief = brief
+            self._guidance_context = rag_context
+            # Set task context for proactive vision
+            self._inferred_task = task_description
+            self._inferred_task_updated_at = time.time()
+            # Notify frontend
+            self._broadcast_guidance_state()
 
         # Start spatial sequence for this guided job — include equipment + task_type
         if getattr(self, '_spatial_recorder', None):
@@ -988,13 +1018,16 @@ class ArrivalAgent(Agent):
     async def stop_guidance(self) -> str:
         """Stop the current guidance session. Use when the tech says 'stop', 'I'm done',
         'that's enough', 'nevermind', or when the job is clearly finished."""
-        if not self._guidance_active:
-            return "No active guidance to stop."
-        task = self._guidance_task
-        self._guidance_active = False
-        self._guidance_task = ""
-        self._guidance_brief = ""
-        self._guidance_context = ""
+        async with self._guidance_lock:
+            if not self._guidance_active:
+                return "No active guidance to stop."
+            task = self._guidance_task
+            self._guidance_active = False
+            self._guidance_task = ""
+            self._guidance_brief = ""
+            self._guidance_context = ""
+            # Notify frontend
+            self._broadcast_guidance_state()
         # End spatial sequence with frame comparison
         if getattr(self, '_spatial_recorder', None):
             asyncio.ensure_future(self._spatial_recorder._compare_sequence_frames(self))
@@ -1819,12 +1852,17 @@ async def entrypoint(ctx: JobContext):
 
                 elif msg_type == "guidance_stop":
                     # User tapped "Stop guidance" button
-                    if agent._guidance_active:
-                        task = agent._guidance_task
-                        agent._guidance_active = False
-                        agent._guidance_task = ""
-                        agent._guidance_brief = ""
-                        agent._guidance_context = ""
+                    async def _stop_guidance_dc():
+                        async with agent._guidance_lock:
+                            if not agent._guidance_active:
+                                logger.debug("[guidance] Stop received but no guidance active")
+                                return
+                            task = agent._guidance_task
+                            agent._guidance_active = False
+                            agent._guidance_task = ""
+                            agent._guidance_brief = ""
+                            agent._guidance_context = ""
+                            agent._broadcast_guidance_state()
                         # Spatial recorder cleanup
                         if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
                             asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
@@ -1836,8 +1874,7 @@ async def entrypoint(ctx: JobContext):
                         asyncio.ensure_future(session.generate_reply(
                             instructions=f"Tech stopped guidance for: {task}. Say 'No problem, I'm here if you need me.'"
                         ))
-                    else:
-                        logger.debug("[guidance] Stop received but no guidance active")
+                    asyncio.ensure_future(_stop_guidance_dc())
 
             except Exception as e:
                 logger.warning(f"[data-channel] Error handling data: {type(e).__name__}: {e}")
@@ -1870,24 +1907,27 @@ async def entrypoint(ctx: JobContext):
                             )
                         )
                     elif msg_type == "guidance_stop":
-                        if agent._guidance_active:
+                        async with agent._guidance_lock:
+                            if not agent._guidance_active:
+                                return
                             task = agent._guidance_task
                             agent._guidance_active = False
                             agent._guidance_task = ""
                             agent._guidance_brief = ""
                             agent._guidance_context = ""
-                            # Spatial recorder cleanup
-                            if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
-                                asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
-                                asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
-                            asyncio.ensure_future(agent.update_instructions(
-                                (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
-                            ))
-                            agent._has_injected_codes = False
-                            logger.info(f"[text-stream] User stopped guidance for: {task}")
-                            await session.generate_reply(
-                                instructions=f"Tech stopped guidance for: {task}. Say 'No problem, I'm here if you need me.'"
-                            )
+                            agent._broadcast_guidance_state()
+                        # Spatial recorder cleanup
+                        if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
+                            asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
+                            asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
+                        asyncio.ensure_future(agent.update_instructions(
+                            (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+                        ))
+                        agent._has_injected_codes = False
+                        logger.info(f"[text-stream] User stopped guidance for: {task}")
+                        await session.generate_reply(
+                            instructions=f"Tech stopped guidance for: {task}. Say 'No problem, I'm here if you need me.'"
+                        )
                     elif msg_type == "equipment_context":
                         agent._equipment_type = payload.get("equipment_type", "")
                         agent._equipment_brand = payload.get("brand", "")
@@ -2016,22 +2056,28 @@ async def entrypoint(ctx: JobContext):
 
             # Detect guidance exit — user wants to stop guided procedure
             if agent._guidance_active and text_lower in _GUIDANCE_EXIT_PHRASES:
-                task = agent._guidance_task
-                agent._guidance_active = False
-                agent._guidance_task = ""
-                agent._guidance_brief = ""
-                agent._guidance_context = ""
-                # Spatial recorder cleanup
-                if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
-                    asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
-                    asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
-                # Reset prompt to clean state
-                asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
-                agent._has_injected_codes = False
-                logger.info(f"[guidance] User exited guidance for: {task}")
-                asyncio.ensure_future(session.generate_reply(
-                    instructions=f"Tech said '{transcript}' to end guidance for: {task}. Say something like 'You got it!' or 'Holler if you need me.' Brief."
-                ))
+                async def _stop_guidance_speech():
+                    async with agent._guidance_lock:
+                        if not agent._guidance_active:
+                            return
+                        task = agent._guidance_task
+                        agent._guidance_active = False
+                        agent._guidance_task = ""
+                        agent._guidance_brief = ""
+                        agent._guidance_context = ""
+                        agent._broadcast_guidance_state()
+                    # Spatial recorder cleanup
+                    if getattr(agent, '_spatial_recorder', None) and agent._spatial_recorder._current_sequence_id:
+                        asyncio.ensure_future(agent._spatial_recorder._compare_sequence_frames(agent))
+                        asyncio.ensure_future(agent._spatial_recorder.end_sequence(outcome="completed"))
+                    # Reset prompt to clean state
+                    asyncio.ensure_future(agent.update_instructions((JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE))
+                    agent._has_injected_codes = False
+                    logger.info(f"[guidance] User exited guidance for: {task}")
+                    asyncio.ensure_future(session.generate_reply(
+                        instructions=f"Tech said '{transcript}' to end guidance for: {task}. Say something like 'You got it!' or 'Holler if you need me.' Brief."
+                    ))
+                asyncio.ensure_future(_stop_guidance_speech())
                 return
 
             # Inject guidance context + error code context into prompt (merged, not exclusive)

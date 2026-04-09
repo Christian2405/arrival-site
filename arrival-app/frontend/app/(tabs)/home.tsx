@@ -1396,6 +1396,10 @@ export default function HomeScreen() {
                   onSendMessageReady={(fn: ((msg: Record<string, any>) => void) | null) => {
                     livekitSendRef.current = fn;
                   }}
+                  onGuidanceStateUpdate={(active: boolean) => {
+                    console.log(`[Guide] Backend guidance state: active=${active}`);
+                    setGuidanceActive(active);
+                  }}
                   onLocalVideoTrack={setLocalVideoTrackRef}
                   onFlipCameraReady={(fn: (() => void) | null) => { flipCameraRef.current = fn; }}
                   activeJob={activeJob}
@@ -1492,19 +1496,19 @@ export default function HomeScreen() {
                   if (action === 'walkthrough') {
                     // Send guidance request through LiveKit data channel — the agent
                     // handles it natively via start_guidance tool. No separate REST/TTS.
+                    // Don't set guidanceActive here — backend broadcasts state update
+                    // when guidance actually activates (after start_guidance tool runs).
                     if (livekitSendRef.current) {
                       livekitSendRef.current({ type: 'guidance_request' });
-                      setGuidanceActive(true);
                       console.log('[Guide] Sent guidance_request via data channel');
                     }
                     return;
                   }
 
                   if (action === 'guidance_stop') {
-                    // Stop guidance via data channel
+                    // Stop guidance via data channel — backend broadcasts state update
                     if (livekitSendRef.current) {
                       livekitSendRef.current({ type: 'guidance_stop' });
-                      setGuidanceActive(false);
                       console.log('[Guide] Sent guidance_stop via data channel');
                     }
                     return;

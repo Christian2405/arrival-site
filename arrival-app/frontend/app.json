@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.arrivalcompany.arrival",
-      "versionCode": 4,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFF5"
