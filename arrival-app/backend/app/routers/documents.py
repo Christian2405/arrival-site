@@ -245,17 +245,22 @@ async def _run_indexing_background(
     async def _update_status(status: str) -> None:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.patch(
+                resp = await client.patch(
                     f"{config.SUPABASE_URL}/rest/v1/documents",
                     headers={
                         "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
                         "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
                         "Content-Type": "application/json",
-                        "Prefer": "return=minimal",
+                        "Prefer": "return=representation",
                     },
                     params={"id": f"eq.{document_id}"},
                     json={"status": status},
                 )
+                if resp.status_code >= 300:
+                    logger.error(f"[index-bg] Status update to '{status}' failed: {resp.status_code} {resp.text}")
+                else:
+                    rows = resp.json() if resp.text else []
+                    logger.info(f"[index-bg] Status updated to '{status}' for doc {document_id} ({len(rows)} rows)")
         except Exception as e:
             logger.warning(f"[index-bg] Failed to update status to {status}: {e}")
 
