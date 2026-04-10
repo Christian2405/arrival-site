@@ -77,8 +77,8 @@ export default function JobModeView({
   const [activeAlert, setActiveAlert] = useState<JobAlert | null>(null);
   const chipsDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Guidance button debounce
-  const [guidancePending, setGuidancePending] = useState(false);
+  // Local guidance toggle — goes green instantly, syncs with backend prop
+  const [guidanceLocal, setGuidanceLocal] = useState(false);
 
   // "Show in text" display state
   const textCardOpacity = useRef(new Animated.Value(0)).current;
@@ -160,9 +160,9 @@ export default function JobModeView({
     return () => { eyeGlow.stopAnimation(); };
   }, [eyeGlow, isStarted]);
 
-  // --- Reset guidance pending when backend confirms state change ---
+  // --- Sync local guidance state with backend prop ---
   useEffect(() => {
-    setGuidancePending(false);
+    setGuidanceLocal(!!guidanceActive);
   }, [guidanceActive]);
 
   // --- Voice pill: reacts to state ---
@@ -332,23 +332,21 @@ export default function JobModeView({
 
           {/* Guide me / Stop guidance button */}
           <TouchableOpacity
-            style={[s.guideBtn, guidanceActive ? s.guideBtnActive : null, guidancePending && s.guideBtnPending]}
+            style={[s.guideBtn, guidanceLocal && s.guideBtnActive]}
             onPress={() => {
-              if (guidancePending) return; // Debounce — already sent, waiting for backend
-              if (guidanceActive) {
+              if (guidanceLocal) {
+                setGuidanceLocal(false);
                 onQuickAction?.('guidance_stop', '');
-                setGuidancePending(true);
               } else {
+                setGuidanceLocal(true);
                 onQuickAction?.('walkthrough', '');
-                setGuidancePending(true);
               }
             }}
             activeOpacity={0.7}
-            disabled={guidancePending}
           >
-            <View style={[s.guideDot, guidanceActive ? s.guideDotActive : s.guideDotInactive]} />
-            <Text style={[s.guideBtnText, guidanceActive && s.guideBtnTextActive]}>
-              {guidancePending ? 'Loading...' : guidanceActive ? 'Guidance ON' : 'Guide me'}
+            <View style={[s.guideDot, guidanceLocal ? s.guideDotActive : s.guideDotInactive]} />
+            <Text style={[s.guideBtnText, guidanceLocal && s.guideBtnTextActive]}>
+              {guidanceLocal ? 'Guidance ON' : 'Guide me'}
             </Text>
           </TouchableOpacity>
 
@@ -477,9 +475,6 @@ const s = StyleSheet.create({
   guideBtnActive: {
     backgroundColor: 'rgba(52,199,89,0.18)',
     borderColor: 'rgba(52,199,89,0.40)',
-  },
-  guideBtnPending: {
-    opacity: 0.5,
   },
   guideBtnText: {
     color: '#FFF',
