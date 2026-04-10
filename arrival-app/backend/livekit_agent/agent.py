@@ -1874,20 +1874,22 @@ async def entrypoint(ctx: JobContext):
                     # User tapped "Guide me" — activate immediately so button goes green,
                     # then ask what they need help with. start_guidance will enrich later.
                     logger.info("[guidance] User tapped Guide me button")
-                    async with agent._guidance_lock:
-                        if not agent._guidance_active:
-                            agent._guidance_active = True
-                            agent._guidance_task = ""
-                            agent._guidance_brief = ""
-                            agent._broadcast_guidance_state()
-                    asyncio.ensure_future(session.generate_reply(
-                        instructions=(
-                            "The tech just tapped the 'Guide me' button — they want step-by-step guidance. "
-                            "Ask them naturally what they're working on or need help with. "
-                            "Keep it short and warm, like: 'Sure! What are you working on?' "
-                            "Once they tell you, call start_guidance with their task."
+                    async def _start_guidance_dc():
+                        async with agent._guidance_lock:
+                            if not agent._guidance_active:
+                                agent._guidance_active = True
+                                agent._guidance_task = ""
+                                agent._guidance_brief = ""
+                                agent._broadcast_guidance_state()
+                        await session.generate_reply(
+                            instructions=(
+                                "The tech just tapped the 'Guide me' button — they want step-by-step guidance. "
+                                "Ask them naturally what they're working on or need help with. "
+                                "Keep it short and warm, like: 'Sure! What are you working on?' "
+                                "Once they tell you, call start_guidance with their task."
+                            )
                         )
-                    ))
+                    asyncio.ensure_future(_start_guidance_dc())
 
                 elif msg_type == "guidance_stop":
                     # User tapped "Stop guidance" button
