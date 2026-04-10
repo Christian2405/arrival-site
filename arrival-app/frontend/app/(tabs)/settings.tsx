@@ -442,7 +442,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={[st.actionBtn, { marginTop: 4 }]} onPress={handleDeleteAccount} activeOpacity={0.5}>
-          <Text style={[st.actionText, { color: Colors.textFaint, fontSize: 14 }]}>Delete Account</Text>
+          <Text style={[st.actionText, { color: '#D32F2F', fontSize: 14 }]}>Delete Account</Text>
         </TouchableOpacity>
 
         <Text style={st.version}>Arrival v1.0.0</Text>

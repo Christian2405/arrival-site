@@ -27,7 +27,7 @@ function RootLayout() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const loadConversations = useConversationStore((s) => s.loadConversations);
   const loadAnswers = useSavedAnswersStore((s) => s.loadAnswers);
-  const { initialize, session, isLoading, isInitialized } = useAuthStore();
+  const { initialize, session, isLoading, isInitialized, needsOnboarding } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
 
@@ -57,16 +57,19 @@ function RootLayout() {
   useEffect(() => {
     if (!isInitialized) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
+    const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'onboarding';
 
     if (!session && !inAuthGroup) {
       // Not signed in → go to login
       router.replace('/login');
-    } else if (session && segments[0] !== '(tabs)') {
-      // Signed in but not on a tab screen (login/signup/index) → go to home
+    } else if (session && needsOnboarding && segments[0] !== 'onboarding') {
+      // Signed in but needs to complete profile (OAuth user)
+      router.replace('/onboarding');
+    } else if (session && !needsOnboarding && segments[0] !== '(tabs)') {
+      // Signed in, profile complete → go to home
       router.replace('/(tabs)/home');
     }
-  }, [session, isInitialized, segments]);
+  }, [session, isInitialized, needsOnboarding, segments]);
 
   // Show loading spinner while checking auth
   if (!isInitialized) {

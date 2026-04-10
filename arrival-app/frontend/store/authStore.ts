@@ -60,11 +60,13 @@ interface AuthState {
   teamMembership: TeamMembership | null;
   isLoading: boolean;
   isInitialized: boolean;
+  needsOnboarding: boolean;
 
   // Actions
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
+  completeOnboarding: (params: { firstName: string; lastName: string; trade: string; experience: string }) => Promise<{ error?: string }>;
   signUp: (params: {
     email: string;
     password: string;
@@ -89,6 +91,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   teamMembership: null,
   isLoading: true,
   isInitialized: false,
+  needsOnboarding: false,
 
   initialize: async () => {
     // Bug #25: Prevent auth listener from processing events during initial load
@@ -407,11 +410,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Check if profile already exists
       const { data: existing } = await supabase
         .from('users')
-        .select('id')
+        .select('id, primary_trade')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (existing) return; // Already exists
+      if (existing) {
+        // Profile exists but trade never set (previous OAuth without onboarding)
+        if (existing.primary_trade === 'other' || !existing.primary_trade) {
+          set({ needsOnboarding: true });
+        }
+        return;
+      }
 
       // Also check if subscription exists (prevent duplicates)
       const { data: existingSub } = await supabase
@@ -422,19 +431,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (existingSub && existingSub.length > 0) return; // Has subscription, profile might just be RLS-blocked
 
-      // Extract name from Google metadata
+      // New OAuth user — flag for onboarding, create minimal profile
+      console.log('[Auth] New OAuth user, flagging for onboarding:', user.email);
+      set({ needsOnboarding: true });
+
+      // Extract name from Google metadata as defaults
       const meta = user.user_metadata || {};
       const fullName = meta.full_name || meta.name || '';
       const firstName = meta.first_name || fullName.split(' ')[0] || '';
       const lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
-      const email = user.email || '';
 
-      console.log('[Auth] Creating profile for OAuth user:', email);
-
-      // Insert user profile
+      // Insert minimal profile so RLS doesn't break, onboarding will update it
       await supabase.from('users').upsert({
         id: user.id,
-        email,
+        email: user.email || '',
         first_name: firstName,
         last_name: lastName,
         primary_trade: 'other',
@@ -453,6 +463,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }, { onConflict: 'user_id' });
     } catch (error) {
       console.error('[Auth] ensureProfileExists error:', error);
+    }
+  },
+
+  completeOnboarding: async ({ firstName, lastName, trade, experience }) => {
+    const { user } = get();
+    if (!user) return { error: 'Not authenticated' };
+
+    try {
+      const { error } = await supabase.from('users').update({
+        first_name: firstName,
+        last_name: lastName,
+        primary_trade: trade,
+        experience_level: experience,
+      }).eq('id', user.id);
+
+      if (error) return { error: error.message };
+
+      set({ needsOnboarding: false });
+      await get().loadProfile();
+      return {};
+    } catch (e: any) {
+      return { error: e.message || 'Failed to save profile' };
     }
   },
 
