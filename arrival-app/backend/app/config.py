@@ -18,9 +18,9 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # --- Anthropic (Claude) ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")  # Sonnet for text chat + general
-ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-haiku-4-5-20251001")  # Haiku for fast voice responses
-ANTHROPIC_VISION_MODEL = os.getenv("ANTHROPIC_VISION_MODEL", "claude-sonnet-4-20250514")  # Sonnet for accurate vision
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")  # Sonnet 3.5 for text chat + general
+ANTHROPIC_VOICE_MODEL = os.getenv("ANTHROPIC_VOICE_MODEL", "claude-3-5-sonnet-20241022")  # Sonnet 3.5 for voice
+ANTHROPIC_VISION_MODEL = os.getenv("ANTHROPIC_VISION_MODEL", "claude-3-5-sonnet-20241022")  # Sonnet 3.5 — supports strict tools (Sonnet 4 does NOT)
 
 # --- Deepgram (Speech-to-Text) ---
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
