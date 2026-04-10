@@ -87,17 +87,11 @@ export default function SignupScreen() {
         [{ text: 'OK', onPress: () => router.push('/login') }]
       );
     } else {
-      // Account created — send to website to choose a plan
+      // Account created — they already have a 7-day pro trial, just let them in
       Alert.alert(
-        'Account created!',
-        'To activate your subscription, choose a plan on our website. You have a 7-day trial to get started.',
-        [
-          {
-            text: 'Choose a Plan',
-            onPress: () => Linking.openURL('https://arrivalcompany.com/#pricing').catch(() => Alert.alert('Error', 'Could not open link')),
-          },
-          { text: 'Later', style: 'cancel' },
-        ]
+        'Welcome to Arrival!',
+        'Your account is ready. You have a 7-day free trial with full access.',
+        [{ text: 'Get Started' }]
       );
     }
   };
