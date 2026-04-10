@@ -1642,6 +1642,8 @@ async def entrypoint(ctx: JobContext):
         user_id = "unknown"
         team_id = None
         active_job = None
+        user_units = "imperial"
+        voice_speed = "normal"
 
         for participant in ctx.room.remote_participants.values():
             if participant.metadata:
@@ -1651,14 +1653,23 @@ async def entrypoint(ctx: JobContext):
                     mode = meta.get("mode", mode)
                     team_id = meta.get("team_id")
                     active_job = meta.get("active_job")  # job/residence name
+                    user_units = meta.get("units", "imperial")
+                    voice_speed = meta.get("voice_speed", "normal")
                 except (json.JSONDecodeError, TypeError):
                     pass
                 break
 
-        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode} team={team_id or 'none'} job={active_job or 'none'}")
+        logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode} team={team_id or 'none'} job={active_job or 'none'} units={user_units} speed={voice_speed}")
 
         # Select prompt based on mode — append VOICE_KNOWLEDGE for brand/diagnostic depth
         prompt = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
+
+        # Inject user unit preference
+        if user_units == "metric":
+            prompt += (
+                "\n\nIMPORTANT: The user prefers METRIC units. Use Celsius, millimetres, litres, "
+                "kilopascals, metres, etc. Convert any imperial measurements to metric.\n"
+            )
 
         # Inject active job context so agent always knows which job/residence it's on
         if active_job:
@@ -1707,6 +1718,7 @@ async def entrypoint(ctx: JobContext):
                     stability=0.5,
                     similarity_boost=0.75,
                     use_speaker_boost=True,
+                    speed={"slow": 0.8, "normal": 1.0, "fast": 1.2}.get(voice_speed, 1.0),
                 ),
             ),
         )

@@ -52,6 +52,8 @@ class TokenRequest(BaseModel):
     recording_consent: bool = False  # spatial intelligence consent
     active_job: str | None = None  # e.g. "Fladgate residence" — agent references this job's docs
     ios_version: str | None = None  # e.g. "17.4.1" — used for camera intrinsics lookup
+    units: str = "imperial"  # "imperial" or "metric"
+    voice_speed: str = "normal"  # "slow", "normal", or "fast"
 
 
 class TokenResponse(BaseModel):
@@ -246,6 +248,8 @@ async def create_livekit_token(req: TokenRequest, request: Request):
         "active_job": req.active_job,  # job/residence name for doc context
         "camera_intrinsics": intrinsics,  # focal length, FOV, sensor size for world model
         "ios_version": req.ios_version,
+        "units": req.units,  # "imperial" or "metric"
+        "voice_speed": req.voice_speed,  # "slow", "normal", or "fast"
     })
 
     # --- Generate token ---

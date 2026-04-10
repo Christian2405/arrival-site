@@ -608,6 +608,11 @@ p {
     transform: translateY(-2px);
 }
 
+.btn-primary:active {
+    transform: scale(0.95);
+    transition: transform 0.08s ease;
+}
+
 .btn-outline {
     background: transparent;
     color: var(--text-dark);
@@ -617,6 +622,11 @@ p {
 .btn-outline:hover {
     background: var(--bg-light);
     transform: translateY(-2px);
+}
+
+.btn-outline:active {
+    transform: scale(0.95);
+    transition: transform 0.08s ease;
 }
 
 .btn-lg {

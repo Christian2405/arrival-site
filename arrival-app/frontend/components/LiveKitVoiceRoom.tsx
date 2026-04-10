@@ -31,6 +31,7 @@ import { ConnectionState, RoomEvent, Track } from 'livekit-client';
 import { createLiveKitSession, type LiveKitSession } from '../services/livekitService';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useSettingsStore } from '../store/settingsStore';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -164,7 +165,8 @@ export default function LiveKitVoiceRoom({
         // Get token from backend
         console.log(`[LiveKitVoice] Getting token (attempt ${attempt + 1})...`);
         const consent = useAuthStore.getState().profile?.spatial_capture_consent === true;
-        const lkSession = await createLiveKitSession(mode, consent, activeJob ?? null);
+        const { units, voiceSpeed } = useSettingsStore.getState();
+        const lkSession = await createLiveKitSession(mode, consent, activeJob ?? null, units, voiceSpeed);
         console.log(`[LiveKitVoice] Token received. Room: ${lkSession.roomName}, URL: ${lkSession.wsUrl}`);
 
         if (!cancelled) {

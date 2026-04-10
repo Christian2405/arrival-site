@@ -38,6 +38,12 @@
             margin-top: 36px;
             margin-bottom: 12px;
         }
+        h3 {
+            font-size: 1.05rem;
+            margin-top: 20px;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
         p, li {
             font-size: 1rem;
             margin-bottom: 12px;
@@ -62,67 +68,146 @@
     <div class="container">
         <a href="/" class="back-link">&larr; Back to Arrival</a>
         <h1>Privacy Policy</h1>
-        <p class="updated">Last updated: April 6, 2026</p>
+        <p class="updated">Last updated: April 9, 2026</p>
 
-        <p>Arrival AI ("Arrival," "we," "our," or "us") operates the Arrival AI mobile application and the website at arrivalcompany.com. This Privacy Policy explains how we collect, use, and protect your information.</p>
+        <p>Arrival AI ("Arrival," "we," "our," or "us") operates the Arrival AI mobile application and the website at arrivalcompany.com. This Privacy Policy explains how we collect, use, store, and protect your information. By using Arrival AI, you agree to the practices described in this policy.</p>
 
         <h2>1. Information We Collect</h2>
-        <p><strong>Account Information:</strong> When you create an account, we collect your email address and authentication credentials (managed securely through Supabase).</p>
-        <p><strong>Usage Data:</strong> We collect questions you ask, responses provided, feedback ratings, and general usage patterns to improve the service.</p>
-        <p><strong>Camera and Microphone Data:</strong> When you use voice or camera features, audio and images are processed in real-time to generate responses. We do not permanently store raw audio recordings. Camera frames are temporarily held in memory during active sessions and discarded when the session ends.</p>
-        <p><strong>Spatial Intelligence Data:</strong> When you opt in to spatial data collection, camera frames captured during Job Mode sessions may be stored to build spatial awareness of your work environment. This data includes camera frames, timestamps, and associated AI context. Spatial data is stored securely and is only used to improve the guidance you receive during active job sessions. You can enable or disable spatial data collection at any time in your account settings. Spatial data is never shared with third parties or used for advertising.</p>
-        <p><strong>Uploaded Documents:</strong> Documents you upload (service manuals, spec sheets, building plans) are processed, indexed, and stored to power your personalized knowledge base.</p>
-        <p><strong>Device Information:</strong> We collect basic device information (operating system, app version) for crash reporting and performance monitoring through Sentry.</p>
+
+        <h3>Account Information</h3>
+        <p>When you create an account, we collect your email address and authentication credentials (managed securely through Supabase).</p>
+
+        <h3>Usage Data</h3>
+        <p>We collect questions you ask, responses provided, feedback ratings, and general usage patterns to improve the service.</p>
+
+        <h3>Camera and Video Data</h3>
+        <p>When you use Job Mode, your device camera streams video via WebRTC to our servers for real-time AI analysis. <strong>Video clips (MP4 files) captured during Job Mode sessions are recorded and stored on AWS S3.</strong> These clips are used for spatial intelligence features including equipment identification, environment classification, and workflow analysis. Camera frames are also sent to Anthropic's Claude AI for real-time visual analysis during active sessions.</p>
+        <p>Because video may capture your face or the faces of others in the work environment, this data may constitute <strong>biometric information</strong> as defined under applicable laws. We process video for equipment and environment analysis purposes only -- we do not use facial recognition or build biometric profiles for identification purposes.</p>
+
+        <h3>Voice and Audio Data</h3>
+        <p>When you use voice features, audio is streamed in real-time to Deepgram for speech-to-text transcription and processed through LiveKit for voice communication. <strong>While we do not permanently store raw audio recordings, we do store the text transcriptions derived from your speech.</strong> These transcriptions may be used to generate action labels, task descriptions, and workflow annotations that are stored in your spatial session data. Text responses are sent to ElevenLabs for text-to-speech conversion. Because your voice may exhibit unique patterns, voice data transmitted during sessions may constitute biometric information under applicable laws.</p>
+
+        <h3>Spatial Intelligence Data</h3>
+        <p>When you use Job Mode, the spatial recording system collects and stores structured data about your work sessions, including:</p>
+        <ul>
+            <li><strong>Equipment data:</strong> Equipment type, brand, and model identified from video frames</li>
+            <li><strong>Environment classification:</strong> The type of work environment (e.g., residential, commercial, rooftop)</li>
+            <li><strong>Task descriptions:</strong> Descriptions of work being performed, derived from speech and visual analysis</li>
+            <li><strong>Action labels:</strong> Labels describing specific actions, derived from your spoken descriptions</li>
+            <li><strong>Workflow stages:</strong> The progression of tasks during a job session</li>
+            <li><strong>Outcome inference:</strong> The system may automatically infer whether a problem was resolved based on behavioral signals (e.g., a period of silence after troubleshooting may be interpreted as a successful fix). These inferences are stored as part of your session data.</li>
+            <li><strong>Video clips:</strong> MP4 recordings stored on AWS S3</li>
+            <li><strong>Timestamps and session metadata</strong></li>
+        </ul>
+        <p>This data is stored in our database (Supabase) across several tables: spatial_sessions, spatial_sequences, spatial_clips, and spatial_labels.</p>
+
+        <h3>Uploaded Documents</h3>
+        <p>Documents you upload (service manuals, spec sheets, building plans) are processed, indexed, and stored to power your personalized knowledge base. Document content is converted to vector embeddings stored in Pinecone for search functionality.</p>
+
+        <h3>Device Information</h3>
+        <p>We collect basic device information (operating system, app version, crash logs) for crash reporting and performance monitoring through Sentry.</p>
 
         <h2>2. How We Use Your Information</h2>
         <ul>
             <li>To provide and improve the Arrival AI service</li>
             <li>To generate accurate, trade-specific responses to your questions</li>
-            <li>To process voice commands and camera-based diagnostics</li>
+            <li>To process voice commands and camera-based diagnostics in real time</li>
+            <li>To build spatial awareness of your work environment for better guidance</li>
             <li>To index and search your uploaded documents</li>
             <li>To monitor app performance and fix bugs</li>
             <li>To analyze usage patterns and improve response quality</li>
+            <li>To infer work outcomes and improve guidance accuracy</li>
         </ul>
 
-        <h2>3. Data Sharing</h2>
+        <h2>3. Automated Decision-Making</h2>
+        <p>Arrival AI uses automated processing to provide its core functionality:</p>
+        <ul>
+            <li><strong>AI-generated guidance:</strong> Your questions, images, and context are processed by Claude AI (Anthropic) to generate real-time trade guidance. These responses are generated automatically without human review.</li>
+            <li><strong>Outcome inference:</strong> The system automatically infers whether a job task was completed successfully based on behavioral signals such as periods of silence following troubleshooting activity. These inferences are stored but do not trigger any adverse actions.</li>
+            <li><strong>Equipment identification:</strong> Video frames are automatically analyzed to identify equipment type, brand, and model to provide relevant guidance.</li>
+            <li><strong>Environment classification:</strong> Your work environment is automatically categorized to contextualize AI responses.</li>
+        </ul>
+        <p>All automated guidance is advisory only and should not replace professional judgment. You can contact us to request human review of any automated decision that affects you.</p>
+
+        <h2>4. Data Sharing</h2>
         <p>We do not sell your personal information. We share data only with the following service providers, solely to operate the service:</p>
         <ul>
-            <li><strong>Anthropic (Claude AI):</strong> Your questions and images are sent to generate AI responses</li>
-            <li><strong>Deepgram:</strong> Audio is sent for speech-to-text transcription</li>
-            <li><strong>ElevenLabs:</strong> Text is sent for text-to-speech conversion</li>
-            <li><strong>Supabase:</strong> Authentication and database hosting</li>
-            <li><strong>Pinecone:</strong> Vector storage for document search</li>
+            <li><strong>Anthropic (Claude AI):</strong> Your questions, images, and video frames are sent to generate AI responses</li>
+            <li><strong>Deepgram:</strong> Audio is streamed for real-time speech-to-text transcription</li>
+            <li><strong>ElevenLabs:</strong> Text is sent for text-to-speech voice conversion</li>
+            <li><strong>Amazon Web Services (AWS S3):</strong> Video clips (MP4 files) from Job Mode sessions are stored on AWS S3 infrastructure</li>
+            <li><strong>Supabase:</strong> Authentication, database hosting, and spatial session data storage</li>
+            <li><strong>Pinecone:</strong> Vector storage for document search and knowledge base functionality</li>
+            <li><strong>LiveKit:</strong> Real-time voice and video communication infrastructure</li>
             <li><strong>Sentry:</strong> Crash reporting and performance monitoring</li>
-            <li><strong>LiveKit:</strong> Real-time voice communication infrastructure</li>
         </ul>
         <p>Each provider processes data according to their own privacy policies and data processing agreements.</p>
 
-        <h2>4. Team Features</h2>
-        <p>If you join a team, documents uploaded to the team knowledge base are accessible to all team members. Your individual questions and responses are not shared with your team.</p>
+        <h2>5. Team Features and Data Sharing</h2>
+        <p>If you join a team:</p>
+        <ul>
+            <li>Documents uploaded to the team knowledge base are accessible to all team members.</li>
+            <li><strong>Spatial intelligence data</strong> (including equipment data, environment classifications, task descriptions, workflow stages, and outcome inferences) collected during Job Mode sessions <strong>may be shared with your team</strong> to build collective spatial awareness and improve guidance for all team members.</li>
+            <li>Video clips from your Job Mode sessions may be accessible to team administrators.</li>
+            <li>Your individual voice queries and AI responses in Voice Mode and Text Mode are not shared with your team.</li>
+        </ul>
 
-        <h2>5. Data Retention</h2>
-        <p>Your account data and uploaded documents are retained as long as your account is active. You can delete individual documents or your entire account at any time. Query logs are retained for service improvement and may be anonymized after 90 days.</p>
+        <h2>6. Data Retention and Deletion</h2>
+        <ul>
+            <li><strong>Account data:</strong> Retained as long as your account is active. Deleted within 30 days of account deletion request.</li>
+            <li><strong>Spatial session data:</strong> Session metadata, labels, and sequences are retained as long as your account is active. Deleted upon account deletion.</li>
+            <li><strong>Video clips (AWS S3):</strong> MP4 clips from Job Mode sessions are retained for up to 12 months, after which they are automatically deleted. You may request earlier deletion at any time.</li>
+            <li><strong>Transcriptions and labels:</strong> Text transcriptions, action labels, and task descriptions derived from your speech are retained as long as your account is active.</li>
+            <li><strong>Uploaded documents:</strong> Retained until you delete them individually or delete your account.</li>
+            <li><strong>Query logs:</strong> Retained for service improvement and may be anonymized after 90 days.</li>
+            <li><strong>Crash reports (Sentry):</strong> Retained according to Sentry's data retention policies (typically 90 days).</li>
+        </ul>
+        <p>You can delete individual documents, spatial sessions, or your entire account at any time through the app settings. When you delete your account, we will delete or anonymize all associated data within 30 days, including instructing third-party providers to delete your data where technically feasible.</p>
 
-        <h2>6. Data Security</h2>
-        <p>We use industry-standard security measures including encrypted connections (TLS), secure authentication tokens, and access controls. All API communications are encrypted in transit.</p>
+        <h2>7. Data Security</h2>
+        <p>We use industry-standard security measures including encrypted connections (TLS) for all data in transit, secure authentication tokens, access controls, and encrypted storage for data at rest. Video clips on AWS S3 are stored with server-side encryption. All API communications between the app and our backend, and between our backend and third-party services, are encrypted in transit.</p>
 
-        <h2>7. Your Rights</h2>
+        <h2>8. Your Rights</h2>
         <p>You have the right to:</p>
         <ul>
             <li>Access your personal data</li>
-            <li>Delete your account and associated data</li>
-            <li>Delete individual uploaded documents</li>
-            <li>Opt out of non-essential data collection</li>
+            <li>Request a copy of your data in a portable format</li>
+            <li>Delete your account and all associated data</li>
+            <li>Delete individual uploaded documents or spatial sessions</li>
+            <li>Opt out of spatial data collection in Job Mode</li>
+            <li>Request human review of automated decisions</li>
+            <li>Withdraw consent for data processing</li>
         </ul>
 
-        <h2>8. Children's Privacy</h2>
-        <p>Arrival is not intended for users under the age of 16. We do not knowingly collect information from children.</p>
+        <h2>9. California Privacy Rights (CCPA/CPRA)</h2>
+        <p>If you are a California resident, you have the following additional rights under the California Consumer Privacy Act (CCPA) and the California Privacy Rights Act (CPRA):</p>
+        <ul>
+            <li><strong>Right to Know:</strong> You may request that we disclose the categories and specific pieces of personal information we have collected about you, the categories of sources from which your personal information was collected, the business purpose for collecting your personal information, and the categories of third parties with whom we share your personal information.</li>
+            <li><strong>Right to Delete:</strong> You may request that we delete the personal information we have collected about you, subject to certain exceptions allowed by law.</li>
+            <li><strong>Right to Correct:</strong> You may request that we correct inaccurate personal information we maintain about you.</li>
+            <li><strong>Right to Opt-Out of Sale/Sharing:</strong> We do not sell your personal information and do not share your personal information for cross-context behavioral advertising purposes.</li>
+            <li><strong>Right to Limit Use of Sensitive Personal Information:</strong> To the extent we process sensitive personal information (such as biometric data derived from video or voice), you may request that we limit its use to what is necessary to provide the service.</li>
+            <li><strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising any of your CCPA/CPRA rights.</li>
+        </ul>
+        <p>To exercise any of these rights, contact us at privacy@arrivalcompany.com. We will verify your identity before processing your request and respond within 45 days as required by law. You may also designate an authorized agent to make a request on your behalf.</p>
+        <p><strong>Categories of personal information collected:</strong> Identifiers (email), internet activity (usage data, queries), audiovisual information (video clips, voice audio), biometric information (facial imagery in video, voice patterns), geolocation data (if enabled), professional information (trade specialization, job data), and inferences (outcome inference, equipment identification).</p>
 
-        <h2>9. Changes to This Policy</h2>
-        <p>We may update this Privacy Policy from time to time. We will notify you of significant changes through the app or by email.</p>
+        <h2>10. Biometric Data Notice</h2>
+        <p>Arrival AI may collect biometric information as defined under applicable state laws, including:</p>
+        <ul>
+            <li><strong>Facial geometry:</strong> Video captured during Job Mode may include your face or the faces of coworkers and others present in the work environment.</li>
+            <li><strong>Voice characteristics:</strong> Audio streamed during voice interactions may contain unique voice patterns.</li>
+        </ul>
+        <p>We collect this data solely to provide the Arrival AI service (equipment identification, environment analysis, speech transcription). We do not use biometric data for identification, surveillance, or profiling purposes. We do not sell biometric data. Biometric data derived from video is retained for up to 12 months (consistent with video clip retention) and is deleted upon account deletion or upon request. By using the camera and voice features of Arrival AI, you consent to this collection. You may disable camera and microphone access at any time through your device settings.</p>
 
-        <h2>10. Contact Us</h2>
-        <p>If you have questions about this Privacy Policy or your data, contact us at:</p>
+        <h2>11. Children's Privacy</h2>
+        <p>Arrival is not intended for users under the age of 16. We do not knowingly collect information from children. If we become aware that we have collected personal information from a child under 16, we will take steps to delete that information promptly.</p>
+
+        <h2>12. Changes to This Policy</h2>
+        <p>We may update this Privacy Policy from time to time. We will notify you of significant changes through the app or by email. Your continued use of Arrival AI after changes are posted constitutes acceptance of the updated policy.</p>
+
+        <h2>13. Contact Us</h2>
+        <p>If you have questions about this Privacy Policy, your data, or wish to exercise any of your rights, contact us at:</p>
         <p><strong>Email:</strong> privacy@arrivalcompany.com</p>
         <p><strong>Website:</strong> <a href="https://arrivalcompany.com">arrivalcompany.com</a></p>
     </div>

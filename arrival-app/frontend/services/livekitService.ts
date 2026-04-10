@@ -38,6 +38,8 @@ export async function createLiveKitSession(
   mode: 'default' | 'job' = 'job',
   recordingConsent: boolean = false,
   activeJob: string | null = null,
+  units: string = 'imperial',
+  voiceSpeed: string = 'normal',
 ): Promise<LiveKitSession> {
   // Get fresh auth token — always refresh to avoid expired JWT
   const { data: refreshed } = await supabase.auth.refreshSession();
@@ -71,6 +73,8 @@ export async function createLiveKitSession(
         recording_consent: recordingConsent,
         active_job: activeJob,
         ios_version: Platform.OS === 'ios' ? String(Platform.Version) : null,
+        units,
+        voice_speed: voiceSpeed,
       }),
       signal: controller.signal,
     });
