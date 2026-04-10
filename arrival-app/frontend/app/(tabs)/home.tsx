@@ -1021,13 +1021,14 @@ export default function HomeScreen() {
       return;
     }
 
-    const { jobModeMinutes } = useUsageStore.getState();
+    const { jobModeMinutes, jobSecondsUsedToday } = useUsageStore.getState();
     if (jobModeMinutes === -1) {
       setJobTimeRemaining(null); // unlimited
       return;
     }
 
-    let remaining = jobModeMinutes * 60; // convert to seconds
+    const totalAllowed = jobModeMinutes * 60;
+    let remaining = Math.max(0, totalAllowed - jobSecondsUsedToday);
     setJobTimeRemaining(remaining);
 
     jobTimerRef.current = setInterval(() => {
@@ -1508,7 +1509,21 @@ export default function HomeScreen() {
                 aiState={jobAIState}
                 voiceConnected={voiceConnected}
                 isStarted={jobStarted}
-                onStart={() => setJobStarted(true)}
+                onStart={() => {
+                  const { jobModeMinutes, jobSecondsUsedToday } = useUsageStore.getState();
+                  if (jobModeMinutes !== -1 && jobSecondsUsedToday >= jobModeMinutes * 60) {
+                    Alert.alert(
+                      'Daily Limit Reached',
+                      `You've used your ${jobModeMinutes} minutes of Job Mode today. Upgrade for more time.`,
+                      [
+                        { text: 'OK', style: 'cancel' },
+                        { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
+                      ],
+                    );
+                    return;
+                  }
+                  setJobStarted(true);
+                }}
                 onEquipmentChange={setEquipmentContext}
                 onPause={() => {
                   // Handle pause for both streaming and REST controllers

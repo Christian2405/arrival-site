@@ -179,6 +179,89 @@ async def get_document_count(user_id: str) -> int:
         return 0
 
 
+async def get_job_mode_seconds_today(user_id: str) -> int:
+    """
+    Get total job mode seconds used today by summing duration_seconds
+    from job_mode_usage table. Includes currently-active sessions by
+    calculating elapsed time from started_at.
+    """
+    today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
+
+    try:
+        client = _get_client()
+        resp = await client.get(
+            f"{config.SUPABASE_URL}/rest/v1/job_mode_usage",
+            headers=_service_db_headers(),
+            params={
+                "user_id": f"eq.{user_id}",
+                "started_at": f"gte.{today_start}",
+                "select": "duration_seconds,started_at,ended_at",
+            },
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+
+        total = 0
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            dur = row.get("duration_seconds")
+            if dur is not None:
+                total += dur
+            elif row.get("started_at") and not row.get("ended_at"):
+                # Active session — calculate elapsed
+                try:
+                    started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
+                    total += int((now - started).total_seconds())
+                except (ValueError, TypeError):
+                    pass
+        return total
+    except Exception as e:
+        logger.warning(f"[usage] Job mode time query failed for {user_id[:8]}...: {e}")
+        return 0
+
+
+async def log_job_mode_start(user_id: str, room_name: str) -> str | None:
+    """Log the start of a job mode session. Returns the row ID."""
+    try:
+        client = _get_client()
+        resp = await client.post(
+            f"{config.SUPABASE_URL}/rest/v1/job_mode_usage",
+            headers={**_service_db_headers(), "Prefer": "return=representation"},
+            json={
+                "user_id": user_id,
+                "room_name": room_name,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        row_id = rows[0]["id"] if rows else None
+        logger.info(f"[usage] Job mode session started for {user_id[:8]}... (id={row_id})")
+        return row_id
+    except Exception as e:
+        logger.warning(f"[usage] Failed to log job mode start: {e}")
+        return None
+
+
+async def log_job_mode_end(row_id: str, duration_seconds: int):
+    """Log the end of a job mode session."""
+    try:
+        client = _get_client()
+        resp = await client.patch(
+            f"{config.SUPABASE_URL}/rest/v1/job_mode_usage",
+            headers=_service_db_headers(),
+            params={"id": f"eq.{row_id}"},
+            json={
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "duration_seconds": duration_seconds,
+            },
+        )
+        resp.raise_for_status()
+        logger.info(f"[usage] Job mode session ended (id={row_id}, {duration_seconds}s)")
+    except Exception as e:
+        logger.warning(f"[usage] Failed to log job mode end: {e}")
+
+
 async def check_query_limit(user_id: str) -> dict:
     """
     Check if user is allowed to make another query.

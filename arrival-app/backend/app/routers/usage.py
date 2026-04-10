@@ -13,6 +13,7 @@ from app.services.usage import (
     get_tier_limits,
     get_daily_query_count,
     get_document_count,
+    get_job_mode_seconds_today,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,11 @@ async def get_usage(request: Request):
 
         job_minutes = limits.get("job_mode_minutes", -1)
 
+        # Get job mode time used today (skip for unlimited)
+        job_seconds_used = 0
+        if job_minutes > 0:
+            job_seconds_used = await get_job_mode_seconds_today(user_id)
+
         return {
             "plan": plan,
             "queries_today": queries_today,
@@ -55,6 +61,7 @@ async def get_usage(request: Request):
             "document_limit": -1 if max_docs >= 9999 else max_docs,
             "job_mode": limits["job_mode"],
             "job_mode_minutes": job_minutes,
+            "job_seconds_used_today": job_seconds_used,
         }
 
     except HTTPException:

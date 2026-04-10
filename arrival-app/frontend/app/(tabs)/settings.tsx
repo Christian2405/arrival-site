@@ -279,7 +279,7 @@ export default function SettingsScreen() {
                 {usageLoaded
                   ? useUsageStore.getState().jobModeMinutes === -1
                     ? 'Unlimited'
-                    : `${useUsageStore.getState().jobModeMinutes} min`
+                    : `${Math.floor(useUsageStore.getState().jobSecondsUsedToday / 60)}/${useUsageStore.getState().jobModeMinutes} min`
                   : '—'}
               </Text>
               <Text style={st.usageLabel}>Job Mode</Text>

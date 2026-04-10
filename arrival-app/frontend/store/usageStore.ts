@@ -16,6 +16,7 @@ interface UsageState {
   documentLimit: number; // -1 = unlimited
   jobMode: boolean;
   jobModeMinutes: number; // -1 = unlimited
+  jobSecondsUsedToday: number;
 
   // Loading / error
   isLoaded: boolean;
@@ -37,6 +38,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   documentLimit: 0,
   jobMode: false,
   jobModeMinutes: 5,
+  jobSecondsUsedToday: 0,
   isLoaded: false,
   lastFetchedAt: 0,
 
@@ -63,6 +65,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
         documentLimit: data.document_limit,
         jobMode: data.job_mode,
         jobModeMinutes: data.job_mode_minutes ?? -1,
+        jobSecondsUsedToday: data.job_seconds_used_today ?? 0,
         isLoaded: true,
         lastFetchedAt: now,
       });
@@ -85,6 +88,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
       documentLimit: 0,
       jobMode: false,
       jobModeMinutes: 5,
+      jobSecondsUsedToday: 0,
       isLoaded: false,
       lastFetchedAt: 0,
     });

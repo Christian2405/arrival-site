@@ -82,6 +82,7 @@ from app import config
 from app.services.error_codes import lookup_error_code, format_error_code_context
 from app.services.frame_store import get_frame, get_frame_age
 from app.services.rag import retrieve_context
+from app.services.usage import log_job_mode_start, log_job_mode_end
 
 # URLs for fetching frames from FastAPI (agent runs in a separate process)
 _FASTAPI_PORT = os.environ.get("PORT", "8000")
@@ -1682,6 +1683,12 @@ async def entrypoint(ctx: JobContext):
 
         logger.info(f"[arrival-agent] Room={room_name} user={user_id} mode={mode} team={team_id or 'none'} job={active_job or 'none'} units={user_units} speed={voice_speed}")
 
+        # Log job mode session start for time tracking
+        _job_usage_id = None
+        _job_start_time = time.time()
+        if mode == "job" and user_id != "unknown":
+            _job_usage_id = await log_job_mode_start(user_id, room_name)
+
         # Select prompt based on mode — append VOICE_KNOWLEDGE for brand/diagnostic depth
         prompt = (JOB_MODE_PROMPT if mode == "job" else DEFAULT_MODE_PROMPT) + VOICE_KNOWLEDGE
 
@@ -2233,6 +2240,11 @@ async def entrypoint(ctx: JobContext):
         injector_task.cancel()
         if monitor_task:
             monitor_task.cancel()
+
+        # Log job mode session end
+        if _job_usage_id:
+            duration = int(time.time() - _job_start_time)
+            await log_job_mode_end(_job_usage_id, duration)
 
         # End spatial recording session
         if getattr(agent, '_spatial_recorder', None):
