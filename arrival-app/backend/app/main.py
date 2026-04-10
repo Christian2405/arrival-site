@@ -201,7 +201,7 @@ async def _reindex_stuck_documents():
                             "Prefer": "return=minimal",
                         },
                         params={"id": f"eq.{doc_id}"},
-                        json={"status": "indexed"},
+                        json={"status": "ready"},
                     )
                 logger.info(f"[reindex] ✓ {filename} — {chunks} chunks")
 

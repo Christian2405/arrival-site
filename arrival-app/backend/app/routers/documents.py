@@ -292,7 +292,7 @@ async def _run_indexing_background(
             team_id=team_id,
         )
 
-        await _update_status("indexed")
+        await _update_status("ready")
         logger.info(f"[index-bg] ✓ {filename} — {chunks} chunks")
 
     except DocumentTooShortError as e:

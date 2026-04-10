@@ -445,10 +445,10 @@ function _pollUntilIndexed(docId) {
         if (Date.now() > deadline) return;
         sb.from('documents').select('status').eq('id', docId).single().then(function(result) {
             var status = result.data && result.data.status;
-            if (status === 'indexed' || status === 'index_failed') {
+            if (status === 'ready' || status === 'indexed' || status === 'index_failed') {
                 loadDocuments();
                 loadHome();
-                if (status === 'indexed') showToast('Document ready — AI can now use it.');
+                if (status === 'ready' || status === 'indexed') showToast('Document ready — AI can now use it.');
                 if (status === 'index_failed') showToast('Indexing failed — click Retry in the doc list.', 'error');
             } else {
                 setTimeout(check, 8000);
