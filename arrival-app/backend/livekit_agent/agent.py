@@ -1871,9 +1871,15 @@ async def entrypoint(ctx: JobContext):
                         logger.debug(f"[guidance] State broadcast failed: {e}")
 
                 elif msg_type == "guidance_request":
-                    # User tapped "Guide me" button — interrupt current speech
-                    # and ask them what they need help with
+                    # User tapped "Guide me" — activate immediately so button goes green,
+                    # then ask what they need help with. start_guidance will enrich later.
                     logger.info("[guidance] User tapped Guide me button")
+                    async with agent._guidance_lock:
+                        if not agent._guidance_active:
+                            agent._guidance_active = True
+                            agent._guidance_task = ""
+                            agent._guidance_brief = ""
+                            agent._broadcast_guidance_state()
                     asyncio.ensure_future(session.generate_reply(
                         instructions=(
                             "The tech just tapped the 'Guide me' button — they want step-by-step guidance. "
@@ -1931,6 +1937,12 @@ async def entrypoint(ctx: JobContext):
 
                     if msg_type == "guidance_request":
                         logger.info("[text-stream] Guidance request received")
+                        async with agent._guidance_lock:
+                            if not agent._guidance_active:
+                                agent._guidance_active = True
+                                agent._guidance_task = ""
+                                agent._guidance_brief = ""
+                                agent._broadcast_guidance_state()
                         await session.generate_reply(
                             instructions=(
                                 "The tech just tapped the 'Guide me' button — they want step-by-step guidance. "
