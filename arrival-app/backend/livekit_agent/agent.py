@@ -642,8 +642,8 @@ class ArrivalAgent(Agent):
         is_start = True
         sentence_count = 0
         total_chars = 0
-        MAX_VOICE_SENTENCES = 3  # Hard cap — keep answers tight for voice
-        MAX_VOICE_CHARS = 400    # ~15-20 seconds of speech — failsafe for run-on text
+        MAX_VOICE_SENTENCES = 2  # Hard cap — keep answers tight for voice
+        MAX_VOICE_CHARS = 250    # ~10-12 seconds of speech — failsafe for run-on text
 
         async for chunk in text:
             # Stop generating after max sentences OR max characters
@@ -1725,9 +1725,9 @@ async def entrypoint(ctx: JobContext):
                 api_key=config.DEEPGRAM_API_KEY,
             ),
             llm=anthropic.LLM(
-                model=config.ANTHROPIC_VISION_MODEL,  # Sonnet for accurate vision
+                model=config.ANTHROPIC_VISION_MODEL,
                 api_key=config.ANTHROPIC_API_KEY,
-                max_tokens=400,
+                max_tokens=200,  # Hard limit — forces concise answers
                 caching="ephemeral",  # Cache system prompt — 90% cheaper on input tokens
             ),
             tts=elevenlabs.TTS(
@@ -1736,9 +1736,9 @@ async def entrypoint(ctx: JobContext):
                 api_key=config.ELEVENLABS_API_KEY,
                 encoding="pcm_24000",
                 voice_settings=elevenlabs.VoiceSettings(
-                    stability=0.5,
+                    stability=0.71,
                     similarity_boost=0.75,
-                    use_speaker_boost=True,
+                    use_speaker_boost=False,
                     speed={"slow": 0.8, "normal": 1.0, "fast": 1.2}.get(voice_speed, 1.0),
                 ),
             ),
