@@ -19,9 +19,8 @@ logger = logging.getLogger(__name__)
 
 # ── Tier definitions ──────────────────────────────────────────────
 TIER_LIMITS = {
-    # Free tier is generous for launch — all features unlocked, no IAP yet
-    "free":       {"max_queries_per_day": 9999,  "max_documents": 20,   "job_mode": True},
-    "pro":        {"max_queries_per_day": 9999,  "max_documents": 20,   "job_mode": True},
+    "free":       {"max_queries_per_day": 8,     "max_documents": 3,    "job_mode": True},
+    "pro":        {"max_queries_per_day": 30,    "max_documents": 20,   "job_mode": True},
     "business":   {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True},
     "enterprise": {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True},
 }
@@ -68,7 +67,7 @@ async def get_user_plan(user_id: str) -> str:
             params={
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
-                "select": "plan",
+                "select": "plan,trial_ends_at,stripe_subscription_id",
                 "order": "created_at.desc",
                 "limit": "1",
             },
@@ -76,7 +75,24 @@ async def get_user_plan(user_id: str) -> str:
         resp.raise_for_status()
         rows = resp.json()
         if rows:
-            plan = rows[0].get("plan", "free")
+            row = rows[0]
+            sub_plan = row.get("plan", "free")
+            trial_ends_at = row.get("trial_ends_at")
+            stripe_id = row.get("stripe_subscription_id")
+
+            # If trial has expired and no Stripe subscription (no payment), downgrade to free
+            if trial_ends_at and not stripe_id:
+                try:
+                    trial_end = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+                    if datetime.now(timezone.utc) > trial_end:
+                        logger.info(f"[usage] Trial expired for {user_id[:8]}... — downgrading to free")
+                        plan = "free"
+                    else:
+                        plan = sub_plan
+                except (ValueError, TypeError):
+                    plan = sub_plan
+            else:
+                plan = sub_plan
     except Exception as e:
         logger.warning(f"[usage] Plan lookup failed for {user_id[:8]}...: {e}")
 

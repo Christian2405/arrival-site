@@ -603,7 +603,7 @@ export default function HomeScreen() {
         'You\'ve used all your queries for today. Upgrade your plan for more.',
         [
           { text: 'OK', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/pricing').catch(() => {}) },
+          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
         ],
       );
       return;
@@ -649,7 +649,7 @@ export default function HomeScreen() {
         'You\'ve used all your queries for today. Upgrade your plan for more.',
         [
           { text: 'OK', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/pricing').catch(() => {}) },
+          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
         ],
       );
       return;
