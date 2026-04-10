@@ -346,6 +346,17 @@ async function loadDocuments() {
 
     renderDocTable(teamDocs);
 
+    // Auto-poll if any docs are still processing
+    var hasProcessing = teamDocs.some(function(d) { return d.status !== 'indexed' && d.status !== 'ready' && d.status !== 'index_failed'; });
+    if (hasProcessing && !window._docAutoRefresh) {
+        window._docAutoRefresh = setInterval(function() {
+            loadDocuments();
+        }, 10000);
+    } else if (!hasProcessing && window._docAutoRefresh) {
+        clearInterval(window._docAutoRefresh);
+        window._docAutoRefresh = null;
+    }
+
     // Update count
     var indicator = document.getElementById('doc-storage-indicator');
     if (indicator) indicator.textContent = teamDocs.length + ' documents uploaded. Unlimited on Business plan.';

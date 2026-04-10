@@ -218,6 +218,17 @@ async function loadDocuments() {
     document.getElementById('storage-indicator').innerHTML =
         docs.length + ' / ' + limit + ' documents used <span id="plan-badge" class="plan-badge">' + capitalize(plan) + '</span>';
 
+    // Auto-poll if any docs are still processing
+    var hasProcessing = docs.some(function(d) { return d.status !== 'indexed' && d.status !== 'ready' && d.status !== 'index_failed'; });
+    if (hasProcessing && !window._docAutoRefresh) {
+        window._docAutoRefresh = setInterval(function() {
+            loadDocuments();
+        }, 10000);
+    } else if (!hasProcessing && window._docAutoRefresh) {
+        clearInterval(window._docAutoRefresh);
+        window._docAutoRefresh = null;
+    }
+
     // Gate uploads if limit reached
     var uploadZone = document.getElementById('upload-zone');
     if (docs.length >= limit) {
