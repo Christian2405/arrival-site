@@ -194,8 +194,12 @@ JOB_MODE_PROMPT = (
 
     # ── SEE ──
     "SEE — A camera frame is attached to every message as context.\n"
-    "- When they ask 'what do you see', 'what is this', 'what is that', 'what am I looking at': "
-    "name the thing in 1-5 words. Read any labels. That's it. ALWAYS answer this — never refuse.\n"
+    "- FOCUS ON THE CENTER of the frame. The user is pointing their phone at something specific — "
+    "it's in the middle of the image. Ignore background objects, walls, furniture, clothes, etc. "
+    "The thing they're asking about is what their camera is aimed at, center frame.\n"
+    "- When they ask 'what do you see', 'what is this', 'what is that', 'what am I looking at', "
+    "'what is this called': name the thing in 1-5 words. Read any labels. That's it. "
+    "Do NOT explain what it does. Do NOT explain how it works. Just name it. ALWAYS answer — never refuse.\n"
     "- For all other questions: just answer. Don't describe the camera unprompted.\n"
     "- Never hallucinate objects, wires, or equipment that aren't clearly visible.\n"
     "- NEVER say you won't describe what you see. NEVER say 'if you have a trade question'. "
@@ -229,7 +233,15 @@ JOB_MODE_PROMPT = (
 
     # ── HOW TO TALK ──
     "VOICE — You're spoken aloud. Talk like a coworker, not a manual.\n"
-    "- Match length to the question. Short question = short answer. Complex question = full explanation.\n"
+    "- CRITICAL RULE: Match your answer length to the question complexity.\n"
+    "  - 'What is this?' → 1-5 words. Just the name. NOTHING else.\n"
+    "  - 'What is this called?' → 1-5 words. Just the name. NOTHING else.\n"
+    "  - 'What size wire?' → One sentence. '8 gauge copper.'\n"
+    "  - 'How do I replace this?' → A few sentences of instruction.\n"
+    "  - 'Walk me through this install' → Detailed guidance.\n"
+    "  If the question can be answered in under 5 words, answer in under 5 words. "
+    "Do NOT add history, context, alternatives, or explanations they didn't ask for. "
+    "NEVER give a 30-second answer to a 2-second question.\n"
     "- No filler. No 'Great question!' No 'Let me know if you need anything.' No repeating their question back.\n"
     "- Lead with the answer. Give specific numbers. Use contractions.\n"
     "- If they push back, back off. If they say stop, go silent.\n"
@@ -629,11 +641,13 @@ class ArrivalAgent(Agent):
         buffer = ""
         is_start = True
         sentence_count = 0
+        total_chars = 0
         MAX_VOICE_SENTENCES = 3  # Hard cap — keep answers tight for voice
+        MAX_VOICE_CHARS = 400    # ~15-20 seconds of speech — failsafe for run-on text
 
         async for chunk in text:
-            # Stop generating after max sentences
-            if sentence_count >= MAX_VOICE_SENTENCES:
+            # Stop generating after max sentences OR max characters
+            if sentence_count >= MAX_VOICE_SENTENCES or total_chars >= MAX_VOICE_CHARS:
                 break
 
             buffer += chunk
@@ -656,6 +670,7 @@ class ArrivalAgent(Agent):
                 # Count sentences — only terminal punctuation (not decimals like 17.5)
                 import re as _re_s
                 sentence_count += len(_re_s.findall(r'(?<!\d)\.(?!\d)|[!?]', buffer))
+                total_chars += len(buffer)
                 yield buffer
                 buffer = ""
 
@@ -755,6 +770,8 @@ class ArrivalAgent(Agent):
                 "what's this", "what's that", "can you see", "do you see", "look at this",
                 "what are these", "what are those", "identify", "read this", "read that",
                 "what does this say", "what does that say", "what brand", "what model",
+                "what is this called", "what's this called", "what is that called",
+                "what's that called", "what are these called", "what do you call",
             )
             is_vision_question = any(q in user_text for q in _VISION_QUESTIONS)
 
@@ -766,7 +783,11 @@ class ArrivalAgent(Agent):
 
             if is_vision_question:
                 # Vision question: image first so model focuses on describing
-                new_message.content = [image_content] + new_message.content
+                # Add center-frame hint — user is pointing their phone at something specific
+                new_message.content = [
+                    image_content,
+                    "[FOCUS: The user is pointing their camera at something specific — look at the CENTER of the frame. Ignore background clutter. If unsure, say so rather than guessing wrong.]",
+                ] + new_message.content
             else:
                 # Non-vision question: text first, image is just background context
                 new_message.content = new_message.content + [image_content]
