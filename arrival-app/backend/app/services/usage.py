@@ -74,6 +74,30 @@ async def get_user_plan(user_id: str) -> str:
         )
         resp.raise_for_status()
         rows = resp.json()
+
+        # Auto-create pro trial if no subscription exists (self-heal if frontend insert failed)
+        if not rows:
+            try:
+                from datetime import timedelta
+                trial_end = datetime.now(timezone.utc) + timedelta(days=7)
+                create_resp = await client.post(
+                    f"{config.SUPABASE_URL}/rest/v1/subscriptions",
+                    headers={**_service_db_headers(), "Prefer": "return=representation"},
+                    json={
+                        "user_id": user_id,
+                        "plan": "pro",
+                        "status": "active",
+                        "trial_ends_at": trial_end.isoformat(),
+                    },
+                )
+                if create_resp.status_code < 300:
+                    rows = create_resp.json()
+                    logger.info(f"[usage] Auto-created pro trial for {user_id[:8]}...")
+                else:
+                    logger.warning(f"[usage] Auto-create trial failed: {create_resp.status_code} {create_resp.text[:200]}")
+            except Exception as e:
+                logger.warning(f"[usage] Auto-create trial failed: {e}")
+
         if rows:
             row = rows[0]
             sub_plan = row.get("plan", "free")
