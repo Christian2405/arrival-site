@@ -1277,11 +1277,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Auth check & load data
     initAuth();
 
-    // Force-clear search input — browsers autofill it with saved credentials
+    // Kill browser autofill on search input — set readonly so browser skips it,
+    // then remove readonly on first interaction
     var docSearch = document.getElementById('doc-search');
     if (docSearch) {
+        docSearch.setAttribute('readonly', '');
         docSearch.value = '';
-        setTimeout(function() { docSearch.value = ''; }, 200);
-        setTimeout(function() { docSearch.value = ''; }, 1000);
+        docSearch.addEventListener('focus', function() {
+            this.removeAttribute('readonly');
+        });
+        docSearch.addEventListener('click', function() {
+            this.removeAttribute('readonly');
+        });
+        setTimeout(function() { docSearch.value = ''; }, 100);
+        setTimeout(function() { docSearch.value = ''; }, 500);
+        setTimeout(function() { docSearch.value = ''; }, 2000);
     }
 });
