@@ -3451,6 +3451,11 @@ showPage = function(pageId) {
     if (['privacy', 'terms', 'delete-account', 'delete-data'].indexOf(path) !== -1) {
         showPage(path);
     }
+    // Auto-open login page when redirected from dashboard auth guard
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('login') === 'true') {
+        showPage('login');
+    }
 })();
 
 // Contact form submission

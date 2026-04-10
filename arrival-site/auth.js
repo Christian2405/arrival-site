@@ -678,6 +678,14 @@ document.addEventListener('DOMContentLoaded', async function() {
             // If on homepage (not already on a dashboard), redirect to dashboard
             var path = window.location.pathname;
             if (path === '/' || path === '/index.html') {
+                // Check for redirect param (from dashboard auth guard)
+                var urlParams = new URLSearchParams(window.location.search);
+                var redirectTo = urlParams.get('redirect');
+                if (redirectTo && redirectTo.startsWith('/dashboard')) {
+                    window.location.href = redirectTo;
+                    return;
+                }
+
                 var tmResult = await sb.from('team_members')
                     .select('team_id')
                     .eq('user_id', session.user.id)
@@ -707,5 +715,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (sessionResult.data.session) {
         _cachedSession = sessionResult.data.session;
         updateNavForAuth(sessionResult.data.session.user);
+
+        // If already logged in and redirected here from dashboard auth guard, go straight back
+        var urlParams = new URLSearchParams(window.location.search);
+        var redirectTo = urlParams.get('redirect');
+        if (redirectTo && redirectTo.startsWith('/dashboard')) {
+            window.location.href = redirectTo;
+        }
     }
 });

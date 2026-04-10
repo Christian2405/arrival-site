@@ -74,7 +74,7 @@ function showToast(message, type) {
 async function initAuth() {
     var result = await sb.auth.getSession();
     if (!result.data.session) {
-        window.location.href = '/';
+        window.location.href = '/?login=true&redirect=' + encodeURIComponent(window.location.pathname + window.location.hash);
         return;
     }
     currentUser = result.data.session.user;
