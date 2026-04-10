@@ -177,6 +177,14 @@ async def chat(
             user = await get_current_user(req)
             user_id = user["user_id"]
 
+            # Check query limit
+            limit_check = await check_query_limit(user_id)
+            if not limit_check["allowed"]:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Daily query limit reached ({limit_check['query_limit']} queries). Upgrade your plan for more."
+                )
+
             simple = _is_simple_message(request.message) and not request.image_base64
             team_id = None  # Will be set in full path
 

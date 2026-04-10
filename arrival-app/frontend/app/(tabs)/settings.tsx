@@ -47,10 +47,18 @@ export default function SettingsScreen() {
     ? `${profile.first_name} ${profile.last_name}`
     : 'Arrival User';
   const displayEmail = profile?.email || 'Sign in to sync your data';
-  const plan = subscription?.plan;
-  const planLabel = plan
-    ? plan.charAt(0).toUpperCase() + plan.slice(1)
-    : 'Free';
+
+  // Use the effective plan from usage store (checks trial expiry on backend)
+  // Fall back to subscription row if usage hasn't loaded yet
+  const effectivePlan = usageLoaded
+    ? useUsageStore.getState().plan
+    : (subscription?.plan || 'free');
+  const isTrial = subscription?.trial_ends_at && !subscription?.stripe_subscription_id;
+  const planLabel = effectivePlan === 'free' && isTrial
+    ? 'Free'
+    : isTrial
+      ? `${effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1)} (Trial)`
+      : effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1);
 
   // Permission states
   const [micPermission, setMicPermission] = useState<boolean | null>(null);
@@ -245,7 +253,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Upgrade Banner — free users only */}
-        {(!plan || plan === 'free') && (
+        {(!effectivePlan || effectivePlan === 'free') && (
           <TouchableOpacity
             style={st.upgradeBanner}
             activeOpacity={0.7}
@@ -410,7 +418,7 @@ export default function SettingsScreen() {
                 <Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />
               </View>
             }
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual#billing`).catch(() => {})}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual.html#billing`).catch(() => {})}
           />
           <View style={st.sep} />
           <Row

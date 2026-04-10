@@ -36,6 +36,7 @@ export interface Subscription {
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
   current_period_end?: string;
+  trial_ends_at?: string;
 }
 
 export interface TeamMembership {

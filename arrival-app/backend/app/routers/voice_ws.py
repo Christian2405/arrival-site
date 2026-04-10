@@ -228,6 +228,14 @@ async def voice_session(
         return
 
     await websocket.accept()
+
+    # Check query limit before starting session
+    limit_check = await check_query_limit(user_id)
+    if not limit_check["allowed"]:
+        await websocket.send_json({"type": "error", "message": f"Daily query limit reached ({limit_check['query_limit']} queries). Upgrade your plan for more."})
+        await websocket.close(code=4002, reason="Query limit reached")
+        return
+
     logger.info(f"[voice-ws] Session started: user={user_id} mode={mode}")
 
     session = VoiceSession(websocket, user_id, mode)
