@@ -86,6 +86,38 @@ async def agent_log(request: Request):
         return {"error": str(e)}
 
 
+@router.get("/agent-health")
+async def agent_health():
+    """Check if the LiveKit agent process is running. No auth required."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "livekit_agent.agent"],
+            capture_output=True, text=True, timeout=5
+        )
+        pids = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
+        alive = len(pids) > 0
+
+        # Also check agent log tail for recent errors
+        log_tail = ""
+        try:
+            log_result = subprocess.run(
+                ["tail", "-10", "/tmp/agent_output.log"],
+                capture_output=True, text=True, timeout=5
+            )
+            log_tail = log_result.stdout.strip()
+        except Exception:
+            pass
+
+        return {
+            "agent_alive": alive,
+            "agent_pids": pids,
+            "log_tail": log_tail,
+        }
+    except Exception as e:
+        return {"agent_alive": False, "error": str(e)}
+
+
 @router.get("/livekit-status")
 async def livekit_status():
     """Diagnostic: check LiveKit config is loaded (no auth required)."""
