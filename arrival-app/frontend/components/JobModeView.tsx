@@ -77,9 +77,6 @@ export default function JobModeView({
   const [activeAlert, setActiveAlert] = useState<JobAlert | null>(null);
   const chipsDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Local guidance toggle — goes green instantly, syncs with backend prop
-  const [guidanceLocal, setGuidanceLocal] = useState(false);
-
   // "Show in text" display state
   const textCardOpacity = useRef(new Animated.Value(0)).current;
   const [textCardMessage, setTextCardMessage] = useState<string | null>(null);
@@ -160,10 +157,6 @@ export default function JobModeView({
     return () => { eyeGlow.stopAnimation(); };
   }, [eyeGlow, isStarted]);
 
-  // --- Sync local guidance state with backend prop ---
-  useEffect(() => {
-    setGuidanceLocal(!!guidanceActive);
-  }, [guidanceActive]);
 
   // --- Voice pill: reacts to state ---
   useEffect(() => {
@@ -332,21 +325,19 @@ export default function JobModeView({
 
           {/* Guide me / Stop guidance button */}
           <TouchableOpacity
-            style={[s.guideBtn, guidanceLocal && s.guideBtnActive]}
+            style={[s.guideBtn, guidanceActive && s.guideBtnActive]}
             onPress={() => {
-              if (guidanceLocal) {
-                setGuidanceLocal(false);
+              if (guidanceActive) {
                 onQuickAction?.('guidance_stop', '');
               } else {
-                setGuidanceLocal(true);
                 onQuickAction?.('walkthrough', '');
               }
             }}
             activeOpacity={0.7}
           >
-            <View style={[s.guideDot, guidanceLocal ? s.guideDotActive : s.guideDotInactive]} />
-            <Text style={[s.guideBtnText, guidanceLocal && s.guideBtnTextActive]}>
-              {guidanceLocal ? 'Guidance ON' : 'Guide me'}
+            <View style={[s.guideDot, guidanceActive ? s.guideDotActive : s.guideDotInactive]} />
+            <Text style={[s.guideBtnText, guidanceActive && s.guideBtnTextActive]}>
+              {guidanceActive ? 'Guidance ON' : 'Guide me'}
             </Text>
           </TouchableOpacity>
 
