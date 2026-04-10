@@ -111,7 +111,7 @@ def _get_httpx_client() -> httpx.AsyncClient:
         _httpx_client = httpx.AsyncClient(timeout=3.0)
     return _httpx_client
 
-def _frame_to_jpeg(frame: rtc.VideoFrame, quality: int = 50) -> bytes | None:
+def _frame_to_jpeg(frame: rtc.VideoFrame, quality: int = 80) -> bytes | None:
     """Convert a LiveKit VideoFrame (RGBA) to JPEG bytes."""
     try:
         from PIL import Image
