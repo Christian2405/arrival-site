@@ -39,6 +39,8 @@ interface JobModeViewProps {
   onEquipmentChange?: (equipment: EquipmentInfo | null) => void;
   /** Whether guidance is currently active */
   guidanceActive?: boolean;
+  /** Seconds remaining in job mode session, null = unlimited */
+  timeRemaining?: number | null;
 }
 
 
@@ -54,7 +56,7 @@ const TEXT_DISPLAY_MS = 10000;
 export default function JobModeView({
   aiState, voiceConnected, onPause, isPaused, lastAlert,
   onQuickAction, onInterrupt, onStart, isStarted, onEquipmentChange,
-  guidanceActive,
+  guidanceActive, timeRemaining,
 }: JobModeViewProps) {
   // ── Robot start button animations ──
 
@@ -323,6 +325,13 @@ export default function JobModeView({
             </Animated.View>
           </View>
 
+          {/* Session timer — shows remaining time for limited plans */}
+          {timeRemaining != null && timeRemaining >= 0 && (
+            <Text style={[s.timerText, timeRemaining <= 60 && s.timerTextWarning]}>
+              {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+            </Text>
+          )}
+
           {/* Guide me / Stop guidance button */}
           <TouchableOpacity
             style={[s.guideBtn, guidanceActive && s.guideBtnActive]}
@@ -485,6 +494,18 @@ const s = StyleSheet.create({
   },
   guideDotInactive: {
     backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+
+  // --- Session timer ---
+  timerText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 8,
+    fontVariant: ['tabular-nums'],
+  },
+  timerTextWarning: {
+    color: '#FF6B6B',
   },
 
   // --- Interrupt overlay ---

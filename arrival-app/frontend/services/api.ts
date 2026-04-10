@@ -354,6 +354,7 @@ export interface UsageData {
   documents_count: number;
   document_limit: number; // -1 = unlimited
   job_mode: boolean;
+  job_mode_minutes: number; // -1 = unlimited
 }
 
 export const usageAPI = {

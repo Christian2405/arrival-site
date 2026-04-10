@@ -23,7 +23,7 @@ export const TIER_LIMITS: Record<string, TierLimits> = {
   },
   pro: {
     maxQueries: 30,
-    maxDocs: 20,
+    maxDocs: 10,
     jobMode: true,
     proactiveAlerts: true,
     teamDocs: false,

@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 # ── Tier definitions ──────────────────────────────────────────────
 TIER_LIMITS = {
-    "free":       {"max_queries_per_day": 8,     "max_documents": 3,    "job_mode": True},
-    "pro":        {"max_queries_per_day": 30,    "max_documents": 20,   "job_mode": True},
-    "business":   {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True},
-    "enterprise": {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True},
+    "free":       {"max_queries_per_day": 8,     "max_documents": 3,    "job_mode": True, "job_mode_minutes": 5},
+    "pro":        {"max_queries_per_day": 30,    "max_documents": 10,   "job_mode": True, "job_mode_minutes": 30},
+    "business":   {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True, "job_mode_minutes": -1},
+    "enterprise": {"max_queries_per_day": 9999,  "max_documents": 9999, "job_mode": True, "job_mode_minutes": -1},
 }
 
 # In-memory plan cache: user_id -> (plan, timestamp)

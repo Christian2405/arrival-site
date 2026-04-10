@@ -130,6 +130,8 @@ export default function HomeScreen() {
   const [interimTranscript, setInterimTranscript] = useState<string>('');
   const [guidanceActive, setGuidanceActive] = useState(false);
   const livekitSendRef = useRef<((msg: Record<string, any>) => void) | null>(null);
+  const [jobTimeRemaining, setJobTimeRemaining] = useState<number | null>(null); // seconds remaining, null = unlimited
+  const jobTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Text Mode state
   const [inputText, setInputText] = useState('');
@@ -1006,6 +1008,56 @@ export default function HomeScreen() {
     }
   }, [interactionMode, permission?.granted, useLiveKit, useStreamingVoice, jobStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // --- JOB MODE TIMER — enforce time limits per plan ---
+  useEffect(() => {
+    // Clear any existing timer
+    if (jobTimerRef.current) {
+      clearInterval(jobTimerRef.current);
+      jobTimerRef.current = null;
+    }
+
+    if (!jobStarted || interactionMode !== 'job') {
+      setJobTimeRemaining(null);
+      return;
+    }
+
+    const { jobModeMinutes } = useUsageStore.getState();
+    if (jobModeMinutes === -1) {
+      setJobTimeRemaining(null); // unlimited
+      return;
+    }
+
+    let remaining = jobModeMinutes * 60; // convert to seconds
+    setJobTimeRemaining(remaining);
+
+    jobTimerRef.current = setInterval(() => {
+      remaining -= 1;
+      setJobTimeRemaining(remaining);
+      if (remaining <= 0) {
+        // Time's up — exit job mode
+        if (jobTimerRef.current) clearInterval(jobTimerRef.current);
+        jobTimerRef.current = null;
+        setJobStarted(false);
+        setJobTimeRemaining(null);
+        Alert.alert(
+          'Session Limit Reached',
+          `Your plan allows ${jobModeMinutes} minutes of Job Mode per session. Upgrade for more time.`,
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
+          ],
+        );
+      }
+    }, 1000);
+
+    return () => {
+      if (jobTimerRef.current) {
+        clearInterval(jobTimerRef.current);
+        jobTimerRef.current = null;
+      }
+    };
+  }, [jobStarted, interactionMode]);
+
   // --- TEXT MODE: Chat show/hide effects ---
   // Bug 20: Animate instead of snapping to 1
   useEffect(() => {
@@ -1490,6 +1542,7 @@ export default function HomeScreen() {
                   }
                 }}
                 guidanceActive={guidanceActive}
+                timeRemaining={jobTimeRemaining}
                 onQuickAction={async (action, alertMsg) => {
                   if (action === 'text') return; // Handled internally by JobModeView
 

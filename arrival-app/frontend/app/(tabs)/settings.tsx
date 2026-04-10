@@ -249,12 +249,12 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={st.upgradeBanner}
             activeOpacity={0.7}
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/#pricing`).catch(() => {})}
+            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual.html#billing`).catch(() => {})}
           >
             <View style={st.upgradeBannerInner}>
               <View style={{ flex: 1 }}>
                 <Text style={st.upgradeBannerTitle}>Upgrade to Pro or Business</Text>
-                <Text style={st.upgradeBannerSub}>Unlock Job Mode, more queries & priority support</Text>
+                <Text style={st.upgradeBannerSub}>More queries, longer Job Mode sessions & team docs</Text>
               </View>
               <Ionicons name="arrow-forward-circle" size={28} color="#FFF" />
             </View>
@@ -272,6 +272,17 @@ export default function SettingsScreen() {
             <View style={st.usageStat}>
               <Text style={st.usageNumber}>{usageLoaded ? documentDisplayText() : '—'}</Text>
               <Text style={st.usageLabel}>Documents</Text>
+            </View>
+            <View style={st.usageDivider} />
+            <View style={st.usageStat}>
+              <Text style={st.usageNumber}>
+                {usageLoaded
+                  ? useUsageStore.getState().jobModeMinutes === -1
+                    ? 'Unlimited'
+                    : `${useUsageStore.getState().jobModeMinutes} min`
+                  : '—'}
+              </Text>
+              <Text style={st.usageLabel}>Job Mode</Text>
             </View>
           </View>
         )}

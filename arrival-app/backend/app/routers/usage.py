@@ -45,6 +45,8 @@ async def get_usage(request: Request):
         if max_docs < 9999:
             documents_count = await get_document_count(user_id)
 
+        job_minutes = limits.get("job_mode_minutes", -1)
+
         return {
             "plan": plan,
             "queries_today": queries_today,
@@ -52,6 +54,7 @@ async def get_usage(request: Request):
             "documents_count": documents_count,
             "document_limit": -1 if max_docs >= 9999 else max_docs,
             "job_mode": limits["job_mode"],
+            "job_mode_minutes": job_minutes,
         }
 
     except HTTPException:
