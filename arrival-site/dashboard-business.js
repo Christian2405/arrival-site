@@ -1440,4 +1440,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Auth check & load data
     initAuth();
+
+    // Force-clear search input — browsers autofill it with saved credentials
+    var docSearch = document.getElementById('doc-search');
+    if (docSearch) {
+        docSearch.value = '';
+        setTimeout(function() { docSearch.value = ''; }, 200);
+        setTimeout(function() { docSearch.value = ''; }, 1000);
+    }
 });
