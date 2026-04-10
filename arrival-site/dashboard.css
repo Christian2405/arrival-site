@@ -912,6 +912,43 @@ p { line-height: 1.7; color: var(--text-dark); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.info-tip {
+    position: relative;
+    cursor: help;
+    font-size: 14px;
+    color: #9a9590;
+    margin-left: 2px;
+}
+.info-tip:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2a2622;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+    padding: 10px 14px;
+    border-radius: 8px;
+    width: 240px;
+    white-space: normal;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    pointer-events: none;
+}
+.info-tip:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #2a2622;
+    z-index: 100;
+}
+
 .status-failed {
     display: inline-flex;
     align-items: center;

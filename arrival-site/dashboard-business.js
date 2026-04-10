@@ -372,7 +372,7 @@ function renderDocTable(docs) {
         } else if (d.status === 'index_failed') {
             statusClass = 'status-failed'; statusLabel = 'Index failed';
         } else {
-            statusClass = 'status-processing'; statusLabel = 'Indexing…';
+            statusClass = 'status-processing'; statusLabel = 'Indexing… <span class="info-tip" title="Your document is being read and indexed so Arrival can reference it when answering questions. This usually takes 1–5 minutes depending on file size.">ⓘ</span>';
         }
         var date = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         var project = d.project_tag || '—';

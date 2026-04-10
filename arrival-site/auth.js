@@ -115,8 +115,8 @@ async function handleSignup(event) {
     var trade = document.getElementById('signup-trade').value;
     var experience = document.getElementById('signup-experience').value;
     var terms = document.getElementById('signup-terms').checked;
-    var planRadio = document.querySelector('input[name="signup-plan"]:checked');
-    var selectedPlan = planRadio ? planRadio.value : 'pro';
+    var planInput = document.querySelector('input[name="signup-plan"]');
+    var selectedPlan = planInput ? planInput.value : 'pro';
 
     if (!terms) {
         showFormError('signup-error', 'Please agree to the terms of service.');
