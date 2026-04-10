@@ -77,6 +77,9 @@ export default function JobModeView({
   const [activeAlert, setActiveAlert] = useState<JobAlert | null>(null);
   const chipsDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Guidance button debounce
+  const [guidancePending, setGuidancePending] = useState(false);
+
   // "Show in text" display state
   const textCardOpacity = useRef(new Animated.Value(0)).current;
   const [textCardMessage, setTextCardMessage] = useState<string | null>(null);
@@ -156,6 +159,11 @@ export default function JobModeView({
     ).start();
     return () => { eyeGlow.stopAnimation(); };
   }, [eyeGlow, isStarted]);
+
+  // --- Reset guidance pending when backend confirms state change ---
+  useEffect(() => {
+    setGuidancePending(false);
+  }, [guidanceActive]);
 
   // --- Voice pill: reacts to state ---
   useEffect(() => {
@@ -324,18 +332,24 @@ export default function JobModeView({
 
           {/* Guide me / Stop guidance button */}
           <TouchableOpacity
-            style={[s.guideBtn, guidanceActive && s.guideBtnStop]}
+            style={[s.guideBtn, guidanceActive ? s.guideBtnActive : null, guidancePending && s.guideBtnPending]}
             onPress={() => {
+              if (guidancePending) return; // Debounce — already sent, waiting for backend
               if (guidanceActive) {
                 onQuickAction?.('guidance_stop', '');
+                setGuidancePending(true);
               } else {
                 onQuickAction?.('walkthrough', '');
+                setGuidancePending(true);
               }
             }}
             activeOpacity={0.7}
+            disabled={guidancePending}
           >
-            <Ionicons name={guidanceActive ? 'stop-circle-outline' : 'compass-outline'} size={16} color="#FFF" />
-            <Text style={s.guideBtnText}>{guidanceActive ? 'Stop guidance' : 'Guide me'}</Text>
+            <View style={[s.guideDot, guidanceActive ? s.guideDotActive : s.guideDotInactive]} />
+            <Text style={[s.guideBtnText, guidanceActive && s.guideBtnTextActive]}>
+              {guidancePending ? 'Loading...' : guidanceActive ? 'Guidance ON' : 'Guide me'}
+            </Text>
           </TouchableOpacity>
 
           {/* "Show in text" card */}
@@ -460,14 +474,31 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
-  guideBtnStop: {
-    backgroundColor: 'rgba(255,80,80,0.20)',
-    borderColor: 'rgba(255,80,80,0.35)',
+  guideBtnActive: {
+    backgroundColor: 'rgba(52,199,89,0.18)',
+    borderColor: 'rgba(52,199,89,0.40)',
+  },
+  guideBtnPending: {
+    opacity: 0.5,
   },
   guideBtnText: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  guideBtnTextActive: {
+    color: '#34C759',
+  },
+  guideDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  guideDotActive: {
+    backgroundColor: '#34C759',
+  },
+  guideDotInactive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
 
   // --- Interrupt overlay ---
