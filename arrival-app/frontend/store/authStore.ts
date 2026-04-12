@@ -105,14 +105,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session) {
-        set({ session, user: session.user });
-        // Only ensure profile for OAuth users (Google sign-in) — email/password
-        // users already have profiles created during signup on website or app
-        const provider = session.user.app_metadata?.provider;
-        if (provider && provider !== 'email') {
-          await get().ensureProfileExists(session.user);
+        // Verify session is still valid (account may have been deleted)
+        const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
+        if (userError || !verifiedUser) {
+          // Session is stale (account deleted) — clear it
+          console.log('[Auth] Stale session detected, clearing');
+          await supabase.auth.signOut().catch(() => {});
+          set({ session: null, user: null });
+        } else {
+          set({ session, user: session.user });
+          const provider = session.user.app_metadata?.provider;
+          if (provider && provider !== 'email') {
+            await get().ensureProfileExists(session.user);
+          }
+          await get().loadProfile();
         }
-        await get().loadProfile();
       }
 
       // Bug #25: Initial load complete — allow listener to process events
