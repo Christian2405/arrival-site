@@ -19,6 +19,7 @@ import { Audio } from 'expo-av';
 import { Colors, Spacing, Radius, FontSize, IconSize } from '../../constants/Colors';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
+import { supabase } from '../../services/supabase';
 import { useUsageStore, queryDisplayText, documentDisplayText } from '../../store/usageStore';
 
 const WEBSITE_URL = 'https://arrivalcompany.com';
@@ -150,28 +151,51 @@ export default function SettingsScreen() {
         {
           text: 'Delete My Account',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const token = await useAuthStore.getState().getAccessToken();
-              if (!token) {
-                Alert.alert('Error', 'Not authenticated. Please sign in again.');
-                return;
-              }
-              const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
-              const resp = await fetch(`${BASE_URL}/api/account`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (!resp.ok) {
-                const msg = await resp.text().catch(() => 'Unknown error');
-                Alert.alert('Error', `Failed to delete account (${resp.status}). Please contact support@arrivalcompany.com`);
-                return;
-              }
-              await signOut();
-              Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
-            }
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              'Are you sure?',
+              'This action cannot be reversed. All your data will be permanently deleted.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete Everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const token = await useAuthStore.getState().getAccessToken();
+                      if (!token) {
+                        Alert.alert('Error', 'Not authenticated. Please sign in again.');
+                        return;
+                      }
+                      const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+                      const resp = await fetch(`${BASE_URL}/api/account`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      if (!resp.ok) {
+                        Alert.alert('Error', `Failed to delete account (${resp.status}). Please contact support@arrivalcompany.com`);
+                        return;
+                      }
+                      // Clear local state directly to avoid race conditions
+                      useAuthStore.setState({
+                        session: null,
+                        user: null,
+                        profile: null,
+                        subscription: null,
+                        teamMembership: null,
+                        needsOnboarding: false,
+                      });
+                      // Sign out of Supabase (may fail since user is deleted, that's OK)
+                      await supabase.auth.signOut().catch(() => {});
+                      router.replace('/login');
+                    } catch (e) {
+                      Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
+                    }
+                  },
+                },
+              ]
+            );
           },
         },
       ]
