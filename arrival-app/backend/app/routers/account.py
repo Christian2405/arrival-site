@@ -36,39 +36,43 @@ async def delete_account(request: Request):
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            # Delete in order: dependent data first
+            # Delete dependent data first — ignore errors on tables that may not have rows
             tables = [
-                # Spatial data (CASCADE handles spatial_labels via spatial_clips FK)
-                ("spatial_sequences", {"user_id": f"eq.{user_id}"}),
-                ("spatial_clips", {"session_id": f"in.(select id from spatial_sessions where user_id=eq.{user_id})"}),
-                ("spatial_sessions", {"user_id": f"eq.{user_id}"}),
-                # Core user data
+                ("documents", {"uploaded_by": f"eq.{user_id}"}),
                 ("queries", {"user_id": f"eq.{user_id}"}),
                 ("saved_answers", {"user_id": f"eq.{user_id}"}),
                 ("team_members", {"user_id": f"eq.{user_id}"}),
                 ("subscriptions", {"user_id": f"eq.{user_id}"}),
                 ("feedback", {"user_id": f"eq.{user_id}"}),
                 ("user_preferences", {"user_id": f"eq.{user_id}"}),
+                ("spatial_sessions", {"user_id": f"eq.{user_id}"}),
                 ("users", {"id": f"eq.{user_id}"}),
             ]
             for table_name, params in tables:
-                resp = await client.delete(
-                    f"{config.SUPABASE_URL}/rest/v1/{table_name}",
-                    headers=headers,
-                    params=params,
-                )
-                if resp.status_code >= 400:
-                    logger.warning(f"[Account] {table_name} delete returned {resp.status_code} for {user_id}")
+                try:
+                    resp = await client.delete(
+                        f"{config.SUPABASE_URL}/rest/v1/{table_name}",
+                        headers=headers,
+                        params=params,
+                    )
+                    if resp.status_code >= 400:
+                        logger.warning(f"[Account] {table_name} delete returned {resp.status_code}: {resp.text}")
+                except Exception as e:
+                    logger.warning(f"[Account] {table_name} delete failed: {e}")
 
-            # 6. Delete auth user (Supabase Admin API)
+            # Delete auth user (Supabase Admin API)
             del_auth_resp = await client.delete(
                 f"{config.SUPABASE_URL}/auth/v1/admin/users/{user_id}",
                 headers=headers,
             )
-            del_auth_resp.raise_for_status()
+            if del_auth_resp.status_code >= 400:
+                logger.error(f"[Account] Auth user delete failed: {del_auth_resp.status_code} {del_auth_resp.text}")
+                raise HTTPException(status_code=500, detail="Failed to delete account. Please contact support.")
 
         logger.info(f"[Account] Deleted account for user {user_id}")
         return {"status": "deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[Account] Delete failed for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete account. Please contact support.")
