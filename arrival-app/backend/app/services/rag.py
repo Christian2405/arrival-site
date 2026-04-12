@@ -510,6 +510,22 @@ async def delete_document_vectors(document_id: str, user_id: str, team_id: str |
         logger.warning(f"[rag] Vector delete error: {e}")
 
 
+async def delete_user_namespace(user_id: str) -> None:
+    """
+    Delete ALL vectors in a user's Pinecone namespace.
+    Called during account deletion to prevent data leaks.
+    """
+    index = _get_pinecone_index()
+    if not index:
+        return
+
+    try:
+        await asyncio.to_thread(index.delete, delete_all=True, namespace=user_id)
+        logger.info(f"[rag] Deleted entire namespace for user {user_id}")
+    except Exception as e:
+        logger.warning(f"[rag] Failed to delete namespace for user {user_id}: {e}")
+
+
 async def retrieve_context(
     user_id: str,
     query: str,

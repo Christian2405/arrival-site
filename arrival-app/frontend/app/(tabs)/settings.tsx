@@ -153,10 +153,11 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Use Supabase RPC — it's a SECURITY DEFINER function that handles everything
-              const rpcResult = await supabase.rpc('delete_own_account');
-              if (rpcResult.error) {
-                console.error('[Delete] RPC error:', rpcResult.error);
+              // Call backend endpoint — handles Pinecone cleanup + DB + auth deletion
+              const api = (await import('../../services/api')).default;
+              const resp = await api.delete('/account');
+              if (resp.status !== 200) {
+                console.error('[Delete] Backend error:', resp.status, resp.data);
                 Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
                 return;
               }

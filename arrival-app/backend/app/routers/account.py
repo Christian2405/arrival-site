@@ -22,6 +22,13 @@ async def delete_account(request: Request):
     user = await get_current_user(request)
     user_id = user["user_id"]
 
+    # Clean up Pinecone vectors for this user before deleting DB records
+    try:
+        from app.services.rag import delete_user_namespace
+        await delete_user_namespace(user_id)
+    except Exception as e:
+        logger.warning(f"[Account] Pinecone cleanup failed for {user_id}: {e}")
+
     if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
         raise HTTPException(status_code=500, detail="Failed to delete account. Please contact support.")
 

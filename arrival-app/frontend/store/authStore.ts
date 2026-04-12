@@ -435,9 +435,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .maybeSingle();
 
       if (existing) {
-        if (!existing.primary_trade || existing.primary_trade === 'other') {
-          set({ needsOnboarding: true });
-        }
+        // Existing profile — never show onboarding, they've already completed it
         return;
       }
 

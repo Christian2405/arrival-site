@@ -73,12 +73,6 @@ export default function OnboardingScreen() {
 
     if (result.error) {
       setError(result.error);
-    } else {
-      Alert.alert(
-        'Welcome to Arrival!',
-        'Your account is ready. You have a 7-day free trial with full access.',
-        [{ text: 'Get Started' }]
-      );
     }
   };
 
