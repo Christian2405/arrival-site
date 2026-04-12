@@ -153,29 +153,12 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Try backend API first
-              const token = await useAuthStore.getState().getAccessToken();
-              let deleted = false;
-
-              if (token) {
-                const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
-                const resp = await fetch(`${BASE_URL}/api/account`, {
-                  method: 'DELETE',
-                  headers: { Authorization: `Bearer ${token}` },
-                }).catch(() => null);
-
-                if (resp && resp.ok) {
-                  deleted = true;
-                }
-              }
-
-              // Fallback: use Supabase RPC
-              if (!deleted) {
-                const rpcResult = await supabase.rpc('delete_own_account');
-                if (rpcResult.error) {
-                  Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
-                  return;
-                }
+              // Use Supabase RPC — it's a SECURITY DEFINER function that handles everything
+              const rpcResult = await supabase.rpc('delete_own_account');
+              if (rpcResult.error) {
+                console.error('[Delete] RPC error:', rpcResult.error);
+                Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
+                return;
               }
 
               useAuthStore.setState({
@@ -189,6 +172,7 @@ export default function SettingsScreen() {
               await supabase.auth.signOut().catch(() => {});
               router.replace('/login');
             } catch (e) {
+              console.error('[Delete] Error:', e);
               Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
             }
           },

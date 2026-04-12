@@ -253,18 +253,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { error: 'No authentication tokens received' };
       }
 
-      // Set the session manually with the tokens
+      // Run ensureProfileExists BEFORE setting session to avoid race condition
+      // where _layout routes to home before onboarding flag is set
+      _initializing = true; // Block onAuthStateChange from running ensureProfileExists again
+
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken || '',
       });
 
       if (sessionError) {
+        _initializing = false;
         console.error('[Auth] Set session error:', sessionError);
         return { error: sessionError.message };
       }
 
-      console.log('[Auth] Google sign-in success');
+      // Now run ensureProfileExists with the session active
+      const { data: { session: newSession } } = await supabase.auth.getSession();
+      if (newSession) {
+        set({ session: newSession, user: newSession.user });
+        await get().ensureProfileExists(newSession.user);
+        await get().loadProfile();
+      }
+
+      _initializing = false;
+      console.log('[Auth] Google sign-in success, needsOnboarding:', get().needsOnboarding);
       return {};
     } catch (error: any) {
       console.error('[Auth] Google sign-in exception:', error);
