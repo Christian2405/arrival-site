@@ -553,6 +553,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         };
       }
 
+      // Check if OAuth user still needs onboarding (trade never set)
+      const provider = user.app_metadata?.provider;
+      if (provider && provider !== 'email' && profile) {
+        if (!profile.primary_trade || profile.primary_trade === 'other') {
+          set({ needsOnboarding: true });
+        }
+      }
+
       set({ profile, subscription, teamMembership });
     } catch (error) {
       console.error('Load profile error:', error);
