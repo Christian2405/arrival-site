@@ -153,20 +153,31 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Try backend API first
               const token = await useAuthStore.getState().getAccessToken();
-              if (!token) {
-                Alert.alert('Error', 'Not authenticated. Please sign in again.');
-                return;
+              let deleted = false;
+
+              if (token) {
+                const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+                const resp = await fetch(`${BASE_URL}/api/account`, {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${token}` },
+                }).catch(() => null);
+
+                if (resp && resp.ok) {
+                  deleted = true;
+                }
               }
-              const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
-              const resp = await fetch(`${BASE_URL}/api/account`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (!resp.ok) {
-                Alert.alert('Error', `Failed to delete account (${resp.status}). Please contact support@arrivalcompany.com`);
-                return;
+
+              // Fallback: use Supabase RPC
+              if (!deleted) {
+                const rpcResult = await supabase.rpc('delete_own_account');
+                if (rpcResult.error) {
+                  Alert.alert('Error', 'Failed to delete account. Please contact support@arrivalcompany.com');
+                  return;
+                }
               }
+
               useAuthStore.setState({
                 session: null,
                 user: null,

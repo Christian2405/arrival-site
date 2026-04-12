@@ -415,77 +415,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .maybeSingle();
 
       if (existing) {
-        // Profile exists but trade never set (previous OAuth without onboarding)
-        if (existing.primary_trade === 'other' || !existing.primary_trade) {
+        if (!existing.primary_trade || existing.primary_trade === 'other') {
           set({ needsOnboarding: true });
         }
         return;
       }
 
-      // Check if a profile exists for this EMAIL (e.g. user signed up with email/password
-      // but is now signing in with Google — different auth user ID, same email)
+      // New OAuth user — always show onboarding
       const email = user.email || '';
-      if (email) {
-        const { data: emailMatch } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, primary_trade, experience_level, account_type')
-          .eq('email', email)
-          .maybeSingle();
-
-        if (emailMatch) {
-          // Copy the existing profile to this new auth user ID
-          console.log('[Auth] Found existing profile by email, linking to OAuth user:', email);
-          await supabase.from('users').upsert({
-            id: user.id,
-            email,
-            first_name: emailMatch.first_name,
-            last_name: emailMatch.last_name,
-            primary_trade: emailMatch.primary_trade,
-            experience_level: emailMatch.experience_level,
-            account_type: emailMatch.account_type,
-          }, { onConflict: 'id' });
-
-          // Copy subscription too
-          const { data: existingSub } = await supabase
-            .from('subscriptions')
-            .select('plan, status, trial_ends_at, stripe_subscription_id')
-            .eq('user_id', emailMatch.id)
-            .limit(1)
-            .maybeSingle();
-
-          if (existingSub) {
-            await supabase.from('subscriptions').upsert({
-              user_id: user.id,
-              plan: existingSub.plan,
-              status: existingSub.status,
-              trial_ends_at: existingSub.trial_ends_at,
-              stripe_subscription_id: existingSub.stripe_subscription_id,
-            }, { onConflict: 'user_id' });
-          }
-          return;
-        }
-      }
-
-      // Also check if subscription exists (prevent duplicates)
-      const { data: existingSub } = await supabase
-        .from('subscriptions')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
-
-      if (existingSub && existingSub.length > 0) return;
-
-      // Genuinely new user — flag for onboarding
-      console.log('[Auth] New OAuth user, flagging for onboarding:', email);
+      console.log('[Auth] New OAuth user, showing onboarding:', email);
       set({ needsOnboarding: true });
 
-      // Extract name from Google metadata as defaults
       const meta = user.user_metadata || {};
       const fullName = meta.full_name || meta.name || '';
       const firstName = meta.first_name || fullName.split(' ')[0] || '';
       const lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
 
-      // Insert minimal profile, onboarding will update it
       await supabase.from('users').upsert({
         id: user.id,
         email,
@@ -494,7 +439,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         primary_trade: 'other',
         experience_level: '1_3_years',
         account_type: 'pro',
-      }, { onConflict: 'id', ignoreDuplicates: true });
+      }, { onConflict: 'id' });
 
       const trialEnd = new Date();
       trialEnd.setDate(trialEnd.getDate() + 7);
