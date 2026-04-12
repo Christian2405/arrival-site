@@ -101,18 +101,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Listen for auth state changes (clean up previous listener if re-initialized)
       (get() as any)?._authSubscription?.unsubscribe();
 
-      // Check for existing session
-      const { data: { session } } = await supabase.auth.getSession();
+      // Check for existing session — use getUser() which validates against the server,
+      // not getSession() which just reads cached tokens from storage
+      const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
 
-      if (session) {
-        // Verify session is still valid (account may have been deleted)
-        const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
-        if (userError || !verifiedUser) {
-          // Session is stale (account deleted) — clear it
-          console.log('[Auth] Stale session detected, clearing');
-          await supabase.auth.signOut().catch(() => {});
-          set({ session: null, user: null });
-        } else {
+      if (verifiedUser && !userError) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
           set({ session, user: session.user });
           const provider = session.user.app_metadata?.provider;
           if (provider && provider !== 'email') {
@@ -120,6 +115,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
           await get().loadProfile();
         }
+      } else {
+        // No valid user — clear any stale session
+        console.log('[Auth] No valid session, clearing stale data');
+        await supabase.auth.signOut().catch(() => {});
+        set({ session: null, user: null, needsOnboarding: false });
       }
 
       // Bug #25: Initial load complete — allow listener to process events
