@@ -359,17 +359,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
-    // Bug #39: Unsubscribe auth listener before signing out
-    const sub = (get() as any)?._authSubscription;
-    if (sub) sub.unsubscribe();
+    // Sign out of Supabase first (before clearing state)
+    await supabase.auth.signOut().catch(() => {});
 
-    await supabase.auth.signOut();
+    // Clear all state
     set({
       session: null,
       user: null,
       profile: null,
       subscription: null,
       teamMembership: null,
+      needsOnboarding: false,
     });
 
     // Clear usage store on sign out
@@ -380,7 +380,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error('Failed to clear usage store:', e);
     }
 
-    // Bug #28: Clear actual settings keys used by settingsStore (not the old 'settings_v2')
+    // Clear AsyncStorage
     try {
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
       await AsyncStorage.multiRemove([

@@ -36,12 +36,22 @@ function RootLayout() {
     initialize();
     loadSettings();
 
+    // Safety: if isInitialized never flips true, force it after 5s
+    const timeout = setTimeout(() => {
+      if (!useAuthStore.getState().isInitialized) {
+        console.warn('[Auth] Init timed out — forcing isInitialized');
+        useAuthStore.setState({ isInitialized: true, isLoading: false });
+      }
+    }, 5000);
+
     // Set initial audio mode — ensures iOS routes to loudspeaker at full volume.
     // Without this, iOS may default to earpiece (quiet) from a previous recording session.
     Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
     }).catch(() => {});
+
+    return () => clearTimeout(timeout);
   }, []);
 
   // Bug #32: Load conversations and saved answers only after auth is initialized
