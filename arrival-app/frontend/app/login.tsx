@@ -20,8 +20,9 @@ import ArrivalLogo from '../components/ArrivalLogo';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, resetPassword, isLoading } = useAuthStore();
+  const { signIn, signInWithGoogle, signInWithApple, resetPassword, isLoading } = useAuthStore();
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -74,6 +75,16 @@ export default function LoginScreen() {
       setError(result.error);
     }
     setGoogleLoading(false);
+  };
+
+  const handleAppleSignIn = async () => {
+    setError('');
+    setAppleLoading(true);
+    const result = await signInWithApple();
+    if (result.error) {
+      setError(result.error);
+    }
+    setAppleLoading(false);
   };
 
   return (
@@ -178,11 +189,31 @@ export default function LoginScreen() {
               <View style={styles.dividerLine} />
             </View>
 
+            {/* Apple Sign-In */}
+            <TouchableOpacity
+              style={[styles.appleButton, appleLoading && styles.buttonDisabled]}
+              onPress={handleAppleSignIn}
+              disabled={isLoading || googleLoading || appleLoading}
+              activeOpacity={0.8}
+            >
+              {appleLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#FFF" size="small" />
+                  <Text style={styles.appleButtonText}>Connecting...</Text>
+                </View>
+              ) : (
+                <>
+                  <Ionicons name="logo-apple" size={20} color="#FFF" />
+                  <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             {/* Google Sign-In */}
             <TouchableOpacity
               style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
               onPress={handleGoogleSignIn}
-              disabled={isLoading || googleLoading}
+              disabled={isLoading || googleLoading || appleLoading}
               activeOpacity={0.8}
             >
               {googleLoading ? (
@@ -354,6 +385,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textLight,
     fontWeight: '500',
+  },
+  appleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
+    borderRadius: 14,
+    paddingVertical: 15,
+    gap: 10,
+    marginBottom: 10,
+  },
+  appleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+    letterSpacing: -0.2,
   },
   googleButton: {
     flexDirection: 'row',

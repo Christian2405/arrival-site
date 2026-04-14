@@ -251,27 +251,7 @@ export default function SettingsScreen() {
           </View>
           <Text style={st.profileName}>{displayName}</Text>
           <Text style={st.profileEmail}>{displayEmail}</Text>
-          <View style={st.planPill}>
-            <Text style={st.planPillText}>{planLabel} Plan</Text>
-          </View>
         </View>
-
-        {/* Upgrade Banner — free users only */}
-        {(!effectivePlan || effectivePlan === 'free') && (
-          <TouchableOpacity
-            style={st.upgradeBanner}
-            activeOpacity={0.7}
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual.html#billing`).catch(() => {})}
-          >
-            <View style={st.upgradeBannerInner}>
-              <View style={{ flex: 1 }}>
-                <Text style={st.upgradeBannerTitle}>Upgrade to Pro or Business</Text>
-                <Text style={st.upgradeBannerSub}>More queries, longer Job Mode sessions & team docs</Text>
-              </View>
-              <Ionicons name="arrow-forward-circle" size={28} color="#FFF" />
-            </View>
-          </TouchableOpacity>
-        )}
 
         {/* Usage */}
         {profile && (
@@ -413,18 +393,6 @@ export default function SettingsScreen() {
         {/* Account */}
         <Text style={st.section}>ACCOUNT</Text>
         <View style={st.group}>
-          <Row
-            icon="card-outline"
-            label="Subscription"
-            right={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={st.rowDetail}>{planLabel}</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textFaint} />
-              </View>
-            }
-            onPress={() => Linking.openURL(`${WEBSITE_URL}/dashboard-individual.html#billing`).catch(() => {})}
-          />
-          <View style={st.sep} />
           <Row
             icon="help-circle-outline"
             label="Help & Support"

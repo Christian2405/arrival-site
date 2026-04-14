@@ -87,10 +87,10 @@ export default function SignupScreen() {
         [{ text: 'OK', onPress: () => router.push('/login') }]
       );
     } else {
-      // Account created — they already have a 7-day pro trial, just let them in
+      // Account created — let them in
       Alert.alert(
         'Welcome to Arrival!',
-        'Your account is ready. You have a 7-day free trial with full access.',
+        'Your account is ready. All features are unlocked.',
         [{ text: 'Get Started' }]
       );
     }

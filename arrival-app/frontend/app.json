@@ -15,8 +15,9 @@
     },
     "ios": {
       "bundleIdentifier": "com.arrivalcompany.arrival",
-      "buildNumber": "4",
+      "buildNumber": "10",
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Arrival uses the camera to see equipment and help diagnose issues.",
         "NSMicrophoneUsageDescription": "Arrival uses the microphone for hands-free voice commands.",

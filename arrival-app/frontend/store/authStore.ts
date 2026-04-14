@@ -66,6 +66,7 @@ interface AuthState {
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
+  signInWithApple: () => Promise<{ error?: string }>;
   completeOnboarding: (params: { firstName: string; lastName: string; trade: string; experience: string }) => Promise<{ error?: string }>;
   signUp: (params: {
     email: string;
@@ -289,6 +290,76 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error: any) {
       console.error('[Auth] Google sign-in exception:', error);
       return { error: error.message || 'Google sign-in failed' };
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  signInWithApple: async () => {
+    try {
+      set({ isLoading: true });
+
+      const AppleAuthentication = (await import('expo-apple-authentication')).default;
+      const crypto = await import('expo-crypto');
+
+      // Generate nonce for security
+      const rawNonce = crypto.getRandomValues(new Uint8Array(32))
+        .reduce((acc, v) => acc + v.toString(16).padStart(2, '0'), '');
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        return { error: 'No identity token received from Apple' };
+      }
+
+      // Block onAuthStateChange while we set up the session
+      _initializing = true;
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+
+      if (error) {
+        _initializing = false;
+        console.error('[Auth] Apple sign-in error:', error);
+        return { error: error.message };
+      }
+
+      if (data.session) {
+        set({ session: data.session, user: data.session.user });
+
+        // Apple only provides name on FIRST sign-in — store it in user metadata
+        if (credential.fullName?.givenName) {
+          await supabase.auth.updateUser({
+            data: {
+              first_name: credential.fullName.givenName,
+              last_name: credential.fullName.familyName || '',
+              full_name: `${credential.fullName.givenName} ${credential.fullName.familyName || ''}`.trim(),
+            },
+          });
+        }
+
+        await get().ensureProfileExists(data.session.user);
+        await get().loadProfile();
+      }
+
+      _initializing = false;
+      console.log('[Auth] Apple sign-in success, needsOnboarding:', get().needsOnboarding);
+      return {};
+    } catch (error: any) {
+      _initializing = false;
+      // User cancelled — don't show error
+      if (error.code === 'ERR_REQUEST_CANCELED') {
+        return {};
+      }
+      console.error('[Auth] Apple sign-in exception:', error);
+      return { error: error.message || 'Apple sign-in failed' };
     } finally {
       set({ isLoading: false });
     }

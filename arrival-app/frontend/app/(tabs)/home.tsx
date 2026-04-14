@@ -602,11 +602,8 @@ export default function HomeScreen() {
     if (isQueryLimitReached()) {
       Alert.alert(
         'Daily Limit Reached',
-        'You\'ve used all your queries for today. Upgrade your plan for more.',
-        [
-          { text: 'OK', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
-        ],
+        'You\'ve used all your queries for today. Try again tomorrow.',
+        [{ text: 'OK' }],
       );
       return;
     }
@@ -644,15 +641,12 @@ export default function HomeScreen() {
     const text = inputText.trim();
     if (!text || isProcessing) return;
 
-    // Check query limit before sending (skip in demo mode)
+    // Check query limit before sending
     if (isQueryLimitReached()) {
       Alert.alert(
         'Daily Limit Reached',
-        'You\'ve used all your queries for today. Upgrade your plan for more.',
-        [
-          { text: 'OK', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
-        ],
+        'You\'ve used all your queries for today. Try again tomorrow.',
+        [{ text: 'OK' }],
       );
       return;
     }
@@ -733,15 +727,9 @@ export default function HomeScreen() {
   // Bug 4: Tier gate checks FIRST, before any cleanup
   // Bug 16: Make async to await stopAudio
   const handleModeChange = useCallback(async (newMode: 'default' | 'text' | 'job') => {
-    // Tier gates — check BEFORE destroying any work
-    if (newMode === 'job' && !tierLimits.jobMode) {
-      Alert.alert('Business Plan Required', 'Job Mode is available on the Business plan.');
-      return;
-    }
-    if (newMode === 'default' && !tierLimits.voiceOutput) {
-      Alert.alert('Pro Plan Required', 'Voice mode requires the Pro plan or above.');
-      return;
-    }
+    // Tier gates — all features unlocked for now
+    // if (newMode === 'job' && !tierLimits.jobMode) { return; }
+    // if (newMode === 'default' && !tierLimits.voiceOutput) { return; }
 
     // Spatial capture consent — ask once on first Job Mode entry
     if (newMode === 'job') {
@@ -1042,11 +1030,8 @@ export default function HomeScreen() {
         setJobTimeRemaining(null);
         Alert.alert(
           'Session Limit Reached',
-          `Your plan allows ${jobModeMinutes} minutes of Job Mode per session. Upgrade for more time.`,
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
-          ],
+          `Your Job Mode session has reached the ${jobModeMinutes}-minute limit.`,
+          [{ text: 'OK' }],
         );
       }
     }, 1000);
@@ -1514,11 +1499,8 @@ export default function HomeScreen() {
                   if (jobModeMinutes !== -1 && jobSecondsUsedToday >= jobModeMinutes * 60) {
                     Alert.alert(
                       'Daily Limit Reached',
-                      `You've used your ${jobModeMinutes} minutes of Job Mode today. Upgrade for more time.`,
-                      [
-                        { text: 'OK', style: 'cancel' },
-                        { text: 'Upgrade', onPress: () => Linking.openURL('https://arrivalcompany.com/dashboard-individual.html#billing').catch(() => {}) },
-                      ],
+                      `You've used your ${jobModeMinutes} minutes of Job Mode today.`,
+                      [{ text: 'OK' }],
                     );
                     return;
                   }
@@ -1724,7 +1706,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.drawerName}>{displayName}</Text>
-              <Text style={styles.drawerPlan}>{(plan || 'free').charAt(0).toUpperCase() + (plan || 'free').slice(1)} Plan</Text>
+              <Text style={styles.drawerPlan}>{profile?.primary_trade ? profile.primary_trade.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Trade Worker'}</Text>
             </View>
             <Ionicons name="settings-outline" size={18} color={Colors.textMuted} />
           </TouchableOpacity>
