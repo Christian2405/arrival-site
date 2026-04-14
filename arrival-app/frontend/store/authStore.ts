@@ -15,6 +15,22 @@ WebBrowser.maybeCompleteAuthSession();
 // Bug #25: Guard flag to prevent auth listener from firing during initial load
 let _initializing = false;
 
+/** Convert raw API/auth errors into user-friendly messages */
+function friendlyError(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes('unacceptable audience')) return 'Apple Sign-In is temporarily unavailable. Please try another sign-in method.';
+  if (lower.includes('invalid login credentials')) return 'Incorrect email or password. Try resetting your password.';
+  if (lower.includes('email not confirmed')) return 'Please check your email and confirm your account first.';
+  if (lower.includes('already registered')) return 'This email is already registered. Try signing in instead.';
+  if (lower.includes('network') || lower.includes('fetch')) return 'No internet connection. Please check your network and try again.';
+  if (lower.includes('rate limit') || lower.includes('too many')) return 'Too many attempts. Please wait a moment and try again.';
+  if (lower.includes('expired')) return 'Your session has expired. Please sign in again.';
+  if (lower.includes('token')) return 'Sign-in failed. Please try again.';
+  // Fallback — don't show raw technical messages
+  if (raw.length > 80 || lower.includes('error') || lower.includes('exception')) return 'Something went wrong. Please try again.';
+  return raw;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -67,7 +83,7 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
   signInWithApple: () => Promise<{ error?: string }>;
-  completeOnboarding: (params: { firstName: string; lastName: string; trade: string; experience: string }) => Promise<{ error?: string }>;
+  completeOnboarding: (params: { firstName: string; lastName: string; email?: string; trade: string; experience: string }) => Promise<{ error?: string }>;
   signUp: (params: {
     email: string;
     password: string;
@@ -79,7 +95,7 @@ interface AuthState {
   resetPassword: (email: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   loadProfile: () => Promise<void>;
-  ensureProfileExists: (user: User) => Promise<void>;
+  ensureProfileExists: (user: User, overrideEmail?: string) => Promise<void>;
   getAccessToken: () => Promise<string | null>;
   updateSpatialConsent: (consent: boolean) => Promise<void>;
 }
@@ -173,7 +189,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (error) {
         console.error('[Auth] Sign-in error:', error.message, '| status:', error.status, '| code:', (error as any).code);
-        return { error: error.message };
+        return { error: friendlyError(error.message) };
       }
 
       console.log('[Auth] Sign-in success, user:', data.user?.id);
@@ -185,7 +201,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return {};
     } catch (error: any) {
       console.error('[Auth] Sign-in exception:', error);
-      return { error: error.message || 'Sign in failed' };
+      return { error: friendlyError(error.message || 'Sign in failed') };
     } finally {
       set({ isLoading: false });
     }
@@ -289,7 +305,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return {};
     } catch (error: any) {
       console.error('[Auth] Google sign-in exception:', error);
-      return { error: error.message || 'Google sign-in failed' };
+      return { error: friendlyError(error.message || 'Google sign-in failed') };
     } finally {
       set({ isLoading: false });
     }
@@ -299,22 +315,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      const AppleAuthentication = (await import('expo-apple-authentication')).default;
-      const crypto = await import('expo-crypto');
+      const AppleAuth = await import('expo-apple-authentication');
 
-      // Generate nonce for security
-      const rawNonce = crypto.getRandomValues(new Uint8Array(32))
-        .reduce((acc, v) => acc + v.toString(16).padStart(2, '0'), '');
-
-      const credential = await AppleAuthentication.signInAsync({
+      const credential = await AppleAuth.signInAsync({
         requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          AppleAuth.AppleAuthenticationScope.FULL_NAME,
+          AppleAuth.AppleAuthenticationScope.EMAIL,
         ],
       });
 
       if (!credential.identityToken) {
-        return { error: 'No identity token received from Apple' };
+        return { error: 'Apple Sign-In failed. Please try again.' };
       }
 
       // Block onAuthStateChange while we set up the session
@@ -328,24 +339,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) {
         _initializing = false;
         console.error('[Auth] Apple sign-in error:', error);
-        return { error: error.message };
+        return { error: friendlyError(error.message) };
       }
 
       if (data.session) {
         set({ session: data.session, user: data.session.user });
 
-        // Apple only provides name on FIRST sign-in — store it in user metadata
-        if (credential.fullName?.givenName) {
+        // Apple only provides name + email on FIRST sign-in — store them
+        const appleEmail = credential.email || '';
+        const appleFirstName = credential.fullName?.givenName || '';
+        const appleLastName = credential.fullName?.familyName || '';
+
+        if (appleFirstName || appleEmail) {
           await supabase.auth.updateUser({
             data: {
-              first_name: credential.fullName.givenName,
-              last_name: credential.fullName.familyName || '',
-              full_name: `${credential.fullName.givenName} ${credential.fullName.familyName || ''}`.trim(),
+              ...(appleFirstName && {
+                first_name: appleFirstName,
+                last_name: appleLastName,
+                full_name: `${appleFirstName} ${appleLastName}`.trim(),
+              }),
+              ...(appleEmail && { apple_real_email: appleEmail }),
             },
           });
         }
 
-        await get().ensureProfileExists(data.session.user);
+        // Pass Apple's real email so the profile uses it instead of the relay address
+        await get().ensureProfileExists(data.session.user, appleEmail || undefined);
         await get().loadProfile();
       }
 
@@ -359,7 +378,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return {};
       }
       console.error('[Auth] Apple sign-in exception:', error);
-      return { error: error.message || 'Apple sign-in failed' };
+      return { error: friendlyError(error.message || 'Apple sign-in failed') };
     } finally {
       set({ isLoading: false });
     }
@@ -379,7 +398,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       if (error) {
-        return { error: error.message };
+        return { error: friendlyError(error.message) };
       }
 
       // If email confirmation required
@@ -433,7 +452,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       return {};
     } catch (error: any) {
-      return { error: error.message || 'Sign up failed' };
+      return { error: friendlyError(error.message || 'Sign up failed') };
     } finally {
       set({ isLoading: false });
     }
@@ -442,10 +461,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   resetPassword: async (email) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) return { error: error.message };
+      if (error) return { error: friendlyError(error.message) };
       return {};
     } catch (error: any) {
-      return { error: error.message || 'Failed to send reset email' };
+      return { error: friendlyError(error.message || 'Failed to send reset email') };
     }
   },
 
@@ -496,7 +515,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    * Google OAuth doesn't go through the signup form, so we create
    * the profile on first sign-in if it doesn't exist yet.
    */
-  ensureProfileExists: async (user: User) => {
+  ensureProfileExists: async (user: User, overrideEmail?: string) => {
     try {
       // Check if profile already exists by ID
       const { data: existing } = await supabase
@@ -506,12 +525,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .maybeSingle();
 
       if (existing) {
-        // Existing profile — never show onboarding, they've already completed it
+        // Existing profile — check if email is an Apple relay that needs fixing
+        const { data: profile } = await supabase.from('users').select('email').eq('id', user.id).maybeSingle();
+        if (profile?.email?.includes('privaterelay.appleid.com')) {
+          // Show onboarding so user can enter their real email
+          set({ needsOnboarding: true });
+          return;
+        }
         return;
       }
 
       // New OAuth user — always show onboarding
-      const email = user.email || '';
+      // Use overrideEmail (Apple's real email) if available, otherwise fall back to user.email
+      const email = overrideEmail || user.email || '';
       console.log('[Auth] New OAuth user, showing onboarding:', email);
       set({ needsOnboarding: true });
 
@@ -543,19 +569,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  completeOnboarding: async ({ firstName, lastName, trade, experience }) => {
+  completeOnboarding: async ({ firstName, lastName, email, trade, experience }) => {
     const { user } = get();
     if (!user) return { error: 'Not authenticated' };
 
     try {
-      const { error } = await supabase.from('users').update({
+      const updateData: any = {
         first_name: firstName,
         last_name: lastName,
         primary_trade: trade,
         experience_level: experience,
-      }).eq('id', user.id);
+      };
+      if (email) updateData.email = email;
 
-      if (error) return { error: error.message };
+      const { error } = await supabase.from('users').update(updateData).eq('id', user.id);
+
+      if (error) {
+        if (error.message.includes('users_email_key')) {
+          return { error: 'This email is already linked to another account. Try a different email or sign in with that account instead.' };
+        }
+        return { error: friendlyError(error.message) };
+      }
 
       set({ needsOnboarding: false });
       await get().loadProfile();

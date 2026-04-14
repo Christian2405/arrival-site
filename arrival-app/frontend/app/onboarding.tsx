@@ -37,14 +37,19 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const { user, completeOnboarding } = useAuthStore();
 
-  // Pre-fill name from Google metadata if available
+  // Pre-fill from OAuth metadata (Google or Apple)
   const meta = user?.user_metadata || {};
-  const googleFullName = meta.full_name || meta.name || '';
-  const googleFirst = meta.first_name || googleFullName.split(' ')[0] || '';
-  const googleLast = meta.last_name || googleFullName.split(' ').slice(1).join(' ') || '';
+  const oauthFullName = meta.full_name || meta.name || '';
+  const oauthFirst = meta.first_name || oauthFullName.split(' ')[0] || '';
+  const oauthLast = meta.last_name || oauthFullName.split(' ').slice(1).join(' ') || '';
 
-  const [firstName, setFirstName] = useState(googleFirst);
-  const [lastName, setLastName] = useState(googleLast);
+  const rawEmail = meta.apple_real_email || user?.email || '';
+  // If it's an Apple relay address, leave blank so user enters their real email
+  const initialEmail = rawEmail.includes('privaterelay.appleid.com') ? '' : rawEmail;
+
+  const [firstName, setFirstName] = useState(oauthFirst);
+  const [lastName, setLastName] = useState(oauthLast);
+  const [email, setEmail] = useState(initialEmail);
   const [trade, setTrade] = useState('');
   const [experience, setExperience] = useState('1_3_years');
   const [loading, setLoading] = useState(false);
@@ -57,6 +62,10 @@ export default function OnboardingScreen() {
       setError('Please enter your name.');
       return;
     }
+    if (!email.trim()) {
+      setError('Please enter your email.');
+      return;
+    }
     if (!trade) {
       setError('Please select your trade.');
       return;
@@ -66,6 +75,7 @@ export default function OnboardingScreen() {
     const result = await completeOnboarding({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
+      email: email.trim(),
       trade,
       experience,
     });
@@ -126,6 +136,22 @@ export default function OnboardingScreen() {
                 editable={!loading}
               />
             </View>
+          </View>
+
+          {/* Email */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={Colors.textLight}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
           </View>
 
           {/* Trade picker */}

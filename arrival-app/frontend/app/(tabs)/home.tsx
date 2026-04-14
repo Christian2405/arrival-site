@@ -245,15 +245,19 @@ export default function HomeScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Re-check camera permission when app returns to foreground
+  // Request camera permission on mount + when app returns to foreground
+  useEffect(() => {
+    requestPermission();
+  }, []);
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && !permission?.granted) {
+      if (state === 'active') {
         requestPermission();
       }
     });
     return () => sub.remove();
-  }, [permission?.granted]);
+  }, []);
 
   // Warmup ping — wake up Render server on app open so first query is fast
   useEffect(() => {
@@ -1713,23 +1717,26 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* Camera permission request — only shown in voice/job mode */}
-      {!permission?.granted && interactionMode !== 'text' && (
+      {showOnboarding && OnboardingModal && (
+        <OnboardingModal visible={true} onClose={() => setShowOnboarding(false)} />
+      )}
+
+      {/* Camera + mic permission — shown after onboarding */}
+      {!showOnboarding && !permission?.granted && interactionMode !== 'text' && (
         <View style={[StyleSheet.absoluteFill, styles.permissionOverlay]}>
           <Ionicons name="camera-outline" size={48} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.permissionTitle}>Camera Access</Text>
-          <Text style={styles.permissionSubtitle}>Required for voice and job mode</Text>
-          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+          <Text style={styles.permissionTitle}>Camera & Microphone</Text>
+          <Text style={styles.permissionSubtitle}>Required for voice commands and visual AI</Text>
+          <TouchableOpacity style={styles.permissionBtn} onPress={async () => {
+            await requestPermission();
+            await Audio.requestPermissionsAsync();
+          }}>
             <Text style={styles.permissionBtnText}>Grant Access</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => Linking.openSettings()}>
             <Text style={styles.permissionLink}>Open Settings Instead</Text>
           </TouchableOpacity>
         </View>
-      )}
-
-      {showOnboarding && OnboardingModal && (
-        <OnboardingModal visible={true} onClose={() => setShowOnboarding(false)} />
       )}
     </View>
   );
