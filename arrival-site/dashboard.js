@@ -651,6 +651,9 @@ var cardElement = null;
 var setupClientSecret = null;
 
 function loadBilling() {
+    // Load promo code status
+    loadActivePromo();
+
     var plan = currentSubscription ? currentSubscription.plan : 'pro';
     var isOnTrial = currentSubscription && currentSubscription.trial_ends_at && !currentSubscription.stripe_subscription_id;
 
@@ -1171,6 +1174,100 @@ function capitalize(str) {
 }
 
 // ============================================
+// PROMO CODES
+// ============================================
+
+var activePromo = null;
+
+async function applyPromoCode() {
+    var input = document.getElementById('promo-code-input');
+    var feedback = document.getElementById('promo-feedback');
+    var code = input.value.trim().toUpperCase();
+
+    if (!code) {
+        feedback.textContent = 'Please enter a code.';
+        feedback.style.color = '#b91c1c';
+        feedback.style.display = 'block';
+        return;
+    }
+
+    var btn = document.getElementById('promo-apply-btn');
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+
+    try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        var resp = await fetch('/.netlify/functions/validate-promo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ code: code })
+        });
+
+        var data = await resp.json();
+
+        if (data.valid) {
+            feedback.innerHTML = '&#10003; ' + escapeHtml(data.description);
+            feedback.style.color = '#15803d';
+            feedback.style.display = 'block';
+            activePromo = data;
+
+            // Show active promo badge
+            var activeEl = document.getElementById('promo-active');
+            var detailEl = document.getElementById('promo-active-detail');
+            if (activeEl && detailEl) {
+                detailEl.textContent = data.code + ' \u2014 ' + data.description;
+                activeEl.style.display = '';
+            }
+
+            showToast('Promo code applied! It will be used at checkout.');
+        } else {
+            feedback.innerHTML = '&#10007; ' + escapeHtml(data.error || 'Invalid code');
+            feedback.style.color = '#b91c1c';
+            feedback.style.display = 'block';
+            activePromo = null;
+        }
+    } catch (err) {
+        console.error('Promo validation error:', err);
+        feedback.innerHTML = '&#10007; Failed to validate code.';
+        feedback.style.color = '#b91c1c';
+        feedback.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Apply Code';
+}
+
+// Load any previously redeemed promo for display
+async function loadActivePromo() {
+    if (!currentUser) return;
+    try {
+        var { data: redemptions } = await sb
+            .from('promo_redemptions')
+            .select('*, promo_codes(*)')
+            .eq('user_id', currentUser.id)
+            .order('redeemed_at', { ascending: false })
+            .limit(1);
+
+        if (redemptions && redemptions.length > 0 && redemptions[0].promo_codes) {
+            var promo = redemptions[0].promo_codes;
+            var activeEl = document.getElementById('promo-active');
+            var detailEl = document.getElementById('promo-active-detail');
+            if (activeEl && detailEl) {
+                detailEl.textContent = promo.code + ' \u2014 ' + (promo.description || 'Active discount');
+                activeEl.style.display = '';
+            }
+            // Hide the input since they already have a code
+            var inputRow = document.querySelector('.promo-input-row');
+            if (inputRow) inputRow.style.display = 'none';
+        }
+    } catch (err) {
+        console.error('Load promo error:', err);
+    }
+}
+
+// ============================================
 // STRIPE BILLING HELPERS
 // ============================================
 
@@ -1180,10 +1277,18 @@ async function startCheckout(targetPlan) {
         var token = session.data.session.access_token;
 
         showToast('Redirecting to checkout...');
+
+        var body = { plan: targetPlan, userId: currentUser.id, email: currentUser.email };
+
+        // Include promo code if one was validated
+        if (activePromo && activePromo.code) {
+            body.promoCode = activePromo.code;
+        }
+
         var response = await fetch('/.netlify/functions/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ plan: targetPlan, userId: currentUser.id, email: currentUser.email })
+            body: JSON.stringify(body)
         });
 
         var data = await response.json();

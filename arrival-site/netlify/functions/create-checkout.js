@@ -43,9 +43,27 @@ exports.handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
     }
 
-    const { plan } = JSON.parse(event.body);
+    const { plan, promoCode } = JSON.parse(event.body);
     if (!plan || !['pro', 'business'].includes(plan)) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid plan. Must be pro or business.' }) };
+    }
+
+    // Look up promo code if provided
+    let promoDiscount = null;
+    if (promoCode) {
+      const { data: promo } = await supabase
+        .from('promo_codes')
+        .select('*')
+        .eq('code', promoCode.toUpperCase().trim())
+        .eq('active', true)
+        .single();
+
+      if (promo) {
+        // Check plan compatibility
+        if (promo.applies_to === 'all' || promo.applies_to === plan) {
+          promoDiscount = promo;
+        }
+      }
     }
 
     // Check if user already has a Stripe customer ID
@@ -88,8 +106,8 @@ exports.handler = async (event) => {
     const origin = event.headers.origin || event.headers.referer?.replace(/\/[^/]*$/, '') || 'https://arrival-site.netlify.app';
     const dashboardPath = plan === 'business' ? '/dashboard-business' : '/dashboard-individual';
 
-    // Create Checkout Session
-    const session = await stripe.checkout.sessions.create({
+    // Build checkout session params
+    const sessionParams = {
       customer: customerId,
       mode: 'subscription',
       line_items: lineItems,
@@ -105,7 +123,24 @@ exports.handler = async (event) => {
           plan: plan
         }
       }
-    });
+    };
+
+    // Apply promo code discount via Stripe
+    if (promoDiscount) {
+      if (promoDiscount.stripe_coupon_id) {
+        // Use existing Stripe coupon
+        sessionParams.discounts = [{ coupon: promoDiscount.stripe_coupon_id }];
+      }
+      if (promoDiscount.discount_type === 'free_months') {
+        // Convert free months to trial days
+        sessionParams.subscription_data.trial_period_days = Math.round(promoDiscount.discount_value * 30);
+      }
+      // Store promo code in metadata for redemption tracking
+      sessionParams.metadata.promo_code = promoDiscount.code;
+    }
+
+    // Create Checkout Session
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return {
       statusCode: 200,
