@@ -275,27 +275,9 @@
       if (userResult.error) throw userResult.error;
 
       // 3. Accept the team invite
-      var inviteResult = await sb.from('team_members')
-        .select('id, team_id')
-        .eq('email', email)
-        .eq('status', 'invited')
-        .limit(1);
+      var accepted = await acceptInvite(userId, email);
 
-      if (inviteResult.data && inviteResult.data.length > 0) {
-        var invite = inviteResult.data[0];
-        await sb.from('team_members').update({
-          user_id: userId,
-          status: 'active',
-          joined_at: new Date().toISOString()
-        }).eq('id', invite.id);
-
-        // Set subscription to business (covered by team owner)
-        await sb.from('subscriptions').upsert({
-          user_id: userId,
-          plan: 'business',
-          status: 'active'
-        }, { onConflict: 'user_id' });
-      } else {
+      if (!accepted) {
         // No pending invite found — create a free subscription
         var trialEnd = new Date();
         trialEnd.setDate(trialEnd.getDate() + 7);
@@ -315,8 +297,8 @@
         body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
       }).catch(function(err) { console.error('Welcome email error:', err); });
 
-      // 5. Redirect to dashboard
-      window.location.href = '/dashboard-individual';
+      // 5. Redirect to appropriate dashboard
+      window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
 
     } catch (error) {
       console.error('Invite signup error:', error);
@@ -348,27 +330,44 @@
 
   // ── Accept invite helper ──
   async function acceptInvite(userId, email) {
+    // Find the pending invite by email
     var inviteResult = await sb.from('team_members')
       .select('id, team_id')
       .eq('email', email)
       .eq('status', 'invited')
       .limit(1);
 
+    console.log('Invite lookup for', email, ':', JSON.stringify(inviteResult));
+
     if (inviteResult.data && inviteResult.data.length > 0) {
       var invite = inviteResult.data[0];
-      await sb.from('team_members').update({
+
+      // Link user to team
+      var updateResult = await sb.from('team_members').update({
         user_id: userId,
         status: 'active',
         joined_at: new Date().toISOString()
       }).eq('id', invite.id);
+      console.log('Team member update:', JSON.stringify(updateResult));
 
-      await sb.from('subscriptions').upsert({
+      // Set subscription to business
+      var subResult = await sb.from('subscriptions').upsert({
         user_id: userId,
         plan: 'business',
         status: 'active'
       }, { onConflict: 'user_id' });
+      console.log('Subscription upsert:', JSON.stringify(subResult));
+
+      // Update user account type
+      var userResult = await sb.from('users').update({
+        account_type: 'business'
+      }).eq('id', userId);
+      console.log('User update:', JSON.stringify(userResult));
+
       return true;
     }
+
+    console.warn('No pending invite found for', email);
     return false;
   }
 
@@ -389,10 +388,10 @@
       var userId = result.data.user.id;
 
       // Accept the invite
-      await acceptInvite(userId, email);
+      var accepted = await acceptInvite(userId, email);
 
-      // Redirect
-      window.location.href = '/dashboard-individual';
+      // Redirect to appropriate dashboard
+      window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
 
     } catch (error) {
       console.error('Invite login error:', error);
