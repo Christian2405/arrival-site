@@ -150,6 +150,9 @@ async function handleSignup(event) {
         var userId = result.data.user.id;
 
         // 2. Upsert user profile (handles retries if auth user exists but profile failed)
+        // Clean up any stale row with this email from a previously deleted account
+        await sb.from('users').delete().eq('email', email).neq('id', userId);
+
         var userResult = await sb.from('users').upsert({
             id: userId,
             email: email,
