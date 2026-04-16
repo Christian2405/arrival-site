@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accept Invite — Arrival AI</title>
+<link rel="icon" type="image/svg+xml" href="/images/logo.svg">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #f3efe9 0%, #f8f5f1 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+  .auth-card { background: #fff; border: 1px solid #e8e1da; border-radius: 16px; padding: 48px 56px; width: 620px; max-width: 100%; box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+  .logo { text-align: center; margin-bottom: 24px; }
+  .logo img { height: 72px; margin-bottom: 12px; }
+  .logo p { color: #999; font-size: 15px; }
+  .invite-badge { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px 20px; margin-bottom: 28px; text-align: center; }
+  .invite-badge .label { font-size: 12px; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px; }
+  .invite-badge .team { font-size: 18px; font-weight: 700; color: #166534; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-row .form-group { margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; margin-bottom: 24px; }
+  .form-group label { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
+  .form-group input, .form-group select { padding: 12px 16px; border: 1px solid #e8e1da; border-radius: 6px; font-family: inherit; font-size: 14px; color: #1a1a1a; transition: all 0.2s; background: #fff; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #1a1a1a; box-shadow: 0 0 0 3px rgba(26,26,26,0.1); }
+  .form-group input::placeholder { color: #bbb; }
+  .form-group input[readonly] { background: #f5f3ef; color: #666; }
+  .form-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #1a1a1a; cursor: pointer; margin: 0 0 16px; }
+  .form-check input { width: 18px; height: 18px; cursor: pointer; margin: 0; }
+  .form-error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 10px 14px; border-radius: 6px; font-size: 14px; margin-bottom: 16px; display: none; }
+  .form-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 6px; font-size: 14px; margin-bottom: 16px; display: none; }
+  .btn { display: inline-block; width: 100%; padding: 14px 24px; border: none; border-radius: 100px; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
+  .btn-primary { background: #1a1a18; color: #fff; }
+  .btn-primary:hover { background: #333; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-loading { display: none; }
+  .divider { display: flex; align-items: center; margin: 20px 0; }
+  .divider-line { flex: 1; height: 1px; background: #e8e1da; }
+  .divider-text { padding: 0 14px; font-size: 13px; color: #999; font-weight: 500; }
+  .google-signin-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 24px; border: 1px solid #e8e1da; border-radius: 100px; background: #fff; font-size: 15px; font-weight: 500; color: #1a1a1a; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-family: inherit; }
+  .google-signin-btn:hover { border-color: #b0aaa3; background: #faf8f5; }
+  .footer-link { text-align: center; padding-top: 16px; margin-top: 16px; border-top: 1px solid #e8e1da; }
+  .footer-link p { color: #999; font-size: 14px; }
+  .footer-link a { color: #1a1a1a; font-weight: 600; text-decoration: underline; }
+  @media (max-width: 640px) { .auth-card { padding: 32px 24px; } .form-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <div class="logo">
+    <img src="/logo.svg" alt="Arrival">
+    <p>You've been invited to join a team</p>
+  </div>
+
+  <div class="invite-badge" id="invite-badge" style="display: none;">
+    <div class="label">Team Invite</div>
+    <div class="team" id="invite-team-name">—</div>
+  </div>
+
+  <form id="invite-form">
+    <div class="form-row">
+      <div class="form-group">
+        <label>First Name</label>
+        <input type="text" id="invite-first-name" placeholder="Your name" required>
+      </div>
+      <div class="form-group">
+        <label>Last Name</label>
+        <input type="text" id="invite-last-name" placeholder="Your last name" required>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="invite-email" placeholder="you@company.com" required readonly>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="invite-password" placeholder="Minimum 6 characters" required minlength="6">
+    </div>
+    <div class="form-group">
+      <label>What's your trade?</label>
+      <select id="invite-trade" required>
+        <option value="">Select...</option>
+        <option value="hvac">HVAC</option>
+        <option value="plumbing">Plumbing</option>
+        <option value="electrical">Electrical</option>
+        <option value="general_construction">General Construction</option>
+        <option value="appliance_repair">Appliance Repair</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Experience Level</label>
+      <select id="invite-experience" required>
+        <option value="">Select...</option>
+        <option value="apprentice">Apprentice</option>
+        <option value="1_3_years">1-3 Years</option>
+        <option value="3_10_years">3-10 Years</option>
+        <option value="10_plus_years">10+ Years</option>
+      </select>
+    </div>
+    <label class="form-check">
+      <input type="checkbox" id="invite-terms" required>
+      <span>I agree to the <a href="/terms" style="color: #1a1a1a; text-decoration: underline;">terms of service</a> and <a href="/privacy" style="color: #1a1a1a; text-decoration: underline;">privacy policy</a></span>
+    </label>
+    <div class="form-error" id="invite-error"></div>
+    <div class="form-success" id="invite-success"></div>
+    <button type="submit" class="btn btn-primary" id="invite-submit">
+      <span class="btn-text">Create Account & Join Team</span>
+      <span class="btn-loading">Creating account...</span>
+    </button>
+  </form>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <span class="divider-text">or</span>
+    <div class="divider-line"></div>
+  </div>
+
+  <button type="button" class="google-signin-btn" id="google-signin">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Continue with Google
+  </button>
+
+  <div class="footer-link">
+    <p>Already have an account? <a href="/?login=true">Sign in</a></p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(function() {
+  // ── Config ──
+  var SUPABASE_URL = 'https://nmmmrujtfrxrmajuggki.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1ydWp0ZnJ4cm1hanVnZ2tpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjk4NzEsImV4cCI6MjA4NzEwNTg3MX0.XaOQaqN_vbYSBeYFol63OzQFuKQYJ_pLXhMX7bvLAJQ';
+  var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: function(_name, _acquireTimeout, fn) { return fn(); } }
+  });
+
+  // ── Get invite email from URL ──
+  var params = new URLSearchParams(window.location.search);
+  var inviteEmail = params.get('email');
+
+  if (!inviteEmail) {
+    document.getElementById('invite-error').textContent = 'Invalid invite link. Please ask your team admin to resend the invite.';
+    document.getElementById('invite-error').style.display = 'block';
+    document.getElementById('invite-submit').disabled = true;
+    return;
+  }
+
+  document.getElementById('invite-email').value = decodeURIComponent(inviteEmail);
+
+  // ── Look up team name from the invite ──
+  (async function() {
+    try {
+      var inviteResult = await sb.from('team_members')
+        .select('team_id, teams(name)')
+        .eq('email', inviteEmail)
+        .eq('status', 'invited')
+        .limit(1);
+
+      if (inviteResult.data && inviteResult.data.length > 0 && inviteResult.data[0].teams) {
+        var teamName = inviteResult.data[0].teams.name;
+        if (teamName) {
+          document.getElementById('invite-team-name').textContent = teamName;
+          document.getElementById('invite-badge').style.display = 'block';
+        }
+      }
+    } catch (e) {
+      console.error('Could not load team info:', e);
+    }
+  })();
+
+  // ── Helpers ──
+  function showError(msg) {
+    var el = document.getElementById('invite-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('invite-success').style.display = 'none';
+  }
+  function showSuccess(msg) {
+    var el = document.getElementById('invite-success');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('invite-error').style.display = 'none';
+  }
+  function setLoading(on) {
+    var btn = document.getElementById('invite-submit');
+    btn.disabled = on;
+    btn.querySelector('.btn-text').style.display = on ? 'none' : '';
+    btn.querySelector('.btn-loading').style.display = on ? 'inline' : 'none';
+  }
+
+  // ── Form submit ──
+  document.getElementById('invite-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    document.getElementById('invite-error').style.display = 'none';
+
+    var firstName = document.getElementById('invite-first-name').value.trim();
+    var lastName = document.getElementById('invite-last-name').value.trim();
+    var email = document.getElementById('invite-email').value.trim();
+    var password = document.getElementById('invite-password').value;
+    var trade = document.getElementById('invite-trade').value;
+    var experience = document.getElementById('invite-experience').value;
+    var terms = document.getElementById('invite-terms').checked;
+
+    if (!terms) { showError('Please agree to the terms of service.'); return; }
+    if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+
+    setLoading(true);
+
+    try {
+      // 1. Create auth user
+      var result = await sb.auth.signUp({
+        email: email,
+        password: password,
+        options: { data: { first_name: firstName, last_name: lastName } }
+      });
+      if (result.error) throw result.error;
+
+      if (!result.data.session) {
+        showSuccess('Check your email to confirm your account, then sign in.');
+        setLoading(false);
+        return;
+      }
+
+      var userId = result.data.user.id;
+
+      // 2. Create user profile
+      var userResult = await sb.from('users').upsert({
+        id: userId,
+        email: email,
+        first_name: firstName,
+        last_name: lastName,
+        primary_trade: trade,
+        experience_level: experience,
+        account_type: 'business'
+      }, { onConflict: 'id' });
+      if (userResult.error) throw userResult.error;
+
+      // 3. Accept the team invite
+      var inviteResult = await sb.from('team_members')
+        .select('id, team_id')
+        .eq('email', email)
+        .eq('status', 'invited')
+        .limit(1);
+
+      if (inviteResult.data && inviteResult.data.length > 0) {
+        var invite = inviteResult.data[0];
+        await sb.from('team_members').update({
+          user_id: userId,
+          status: 'active',
+          joined_at: new Date().toISOString()
+        }).eq('id', invite.id);
+
+        // Set subscription to business (covered by team owner)
+        await sb.from('subscriptions').upsert({
+          user_id: userId,
+          plan: 'business',
+          status: 'active'
+        }, { onConflict: 'user_id' });
+      } else {
+        // No pending invite found — create a free subscription
+        var trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 7);
+        await sb.from('subscriptions').upsert({
+          user_id: userId,
+          plan: 'pro',
+          status: 'active',
+          trial_ends_at: trialEnd.toISOString()
+        }, { onConflict: 'user_id' });
+      }
+
+      // 4. Send welcome email
+      var accessToken = result.data.session.access_token;
+      fetch('/.netlify/functions/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ to: email, template: 'welcome', args: [firstName] })
+      }).catch(function(err) { console.error('Welcome email error:', err); });
+
+      // 5. Redirect to dashboard
+      window.location.href = '/dashboard-individual';
+
+    } catch (error) {
+      console.error('Invite signup error:', error);
+      var msg = error.message || 'Something went wrong. Please try again.';
+      if (msg.includes('already registered') || msg.includes('already been registered')) {
+        msg = 'This email is already registered. Try signing in instead.';
+      }
+      showError(msg);
+      setLoading(false);
+    }
+  });
+
+  // ── Google Sign-In ──
+  document.getElementById('google-signin').addEventListener('click', async function() {
+    try {
+      var result = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin + '/invite?email=' + encodeURIComponent(inviteEmail) }
+      });
+      if (result.error) throw result.error;
+    } catch (err) {
+      showError(err.message || 'Google sign-in failed.');
+    }
+  });
+
+  // ── Handle OAuth redirect (Google comes back to this page) ──
+  (async function() {
+    var hash = window.location.hash;
+    if (!hash || !hash.includes('access_token')) return;
+
+    var sessionResult = await sb.auth.getSession();
+    if (!sessionResult.data.session) return;
+
+    var user = sessionResult.data.session.user;
+    var userId = user.id;
+    var firstName = user.user_metadata?.first_name || user.user_metadata?.full_name?.split(' ')[0] || '';
+    var lastName = user.user_metadata?.last_name || user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '';
+
+    try {
+      // Create profile
+      await sb.from('users').upsert({
+        id: userId,
+        email: user.email,
+        first_name: firstName,
+        last_name: lastName,
+        account_type: 'business'
+      }, { onConflict: 'id' });
+
+      // Accept invite
+      var inviteResult = await sb.from('team_members')
+        .select('id, team_id')
+        .eq('email', inviteEmail)
+        .eq('status', 'invited')
+        .limit(1);
+
+      if (inviteResult.data && inviteResult.data.length > 0) {
+        var invite = inviteResult.data[0];
+        await sb.from('team_members').update({
+          user_id: userId,
+          status: 'active',
+          joined_at: new Date().toISOString()
+        }).eq('id', invite.id);
+
+        await sb.from('subscriptions').upsert({
+          user_id: userId,
+          plan: 'business',
+          status: 'active'
+        }, { onConflict: 'user_id' });
+      }
+
+      window.location.href = '/dashboard-individual';
+    } catch (err) {
+      console.error('OAuth invite error:', err);
+      showError('Account created but we could not link your team invite. Please contact your team admin.');
+    }
+  })();
+})();
+</script>
+</body>
+</html>

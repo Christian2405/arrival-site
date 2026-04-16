@@ -233,7 +233,7 @@ function inviteEmail(email, teamName, inviterName) {
         <li>Shared team document library</li>
       </ul>
       <p>Create your account to get started:</p>
-      <a href="https://arrivalcompany.com/signup?invite=${encodeURIComponent(email)}" class="btn">Accept Invite</a>
+      <a href="https://arrivalcompany.com/invite?email=${encodeURIComponent(email)}" class="btn">Accept Invite</a>
       <hr class="divider">
       <p style="font-size: 13px; color: #7c736a;">If you weren't expecting this invite, you can safely ignore this email.</p>
     `)
