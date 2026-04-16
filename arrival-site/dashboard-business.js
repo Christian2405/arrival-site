@@ -230,10 +230,17 @@ async function loadHome() {
         sidebarBadge.style.display = '';
     }
 
-    // Hide admin-only buttons for non-admins
+    // Set role globally for page-level access control
+    window._userRole = currentTeamMembership ? currentTeamMembership.role : '';
     var isAdmin = currentTeamMembership && currentTeamMembership.role === 'admin';
-    document.querySelectorAll('.admin-only-btn').forEach(function(btn) {
-        btn.style.display = isAdmin ? '' : 'none';
+    document.querySelectorAll('.admin-only-btn').forEach(function(el) {
+        el.style.display = isAdmin ? '' : 'none';
+    });
+    document.querySelectorAll('.admin-only-link').forEach(function(el) {
+        el.style.display = isAdmin ? '' : 'none';
+    });
+    document.querySelectorAll('.admin-only-section').forEach(function(el) {
+        el.style.display = isAdmin ? '' : 'none';
     });
 
     // Team members count (active)
