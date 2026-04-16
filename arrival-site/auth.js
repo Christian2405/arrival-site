@@ -172,8 +172,32 @@ async function handleSignup(event) {
         }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
 
-        // 4. If business plan selected, create team for the user
-        if (selectedPlan === 'business') {
+        // 4. Check if this email has a pending team invite
+        var inviteResult = await sb.from('team_members')
+            .select('id, team_id')
+            .eq('email', email)
+            .eq('status', 'invited')
+            .limit(1);
+
+        if (inviteResult.data && inviteResult.data.length > 0) {
+            // Accept the invite — link user to the team
+            var invite = inviteResult.data[0];
+            await sb.from('team_members').update({
+                user_id: userId,
+                status: 'active',
+                joined_at: new Date().toISOString()
+            }).eq('id', invite.id);
+
+            // Update their subscription to business (they're joining a business team)
+            await sb.from('subscriptions').upsert({
+                user_id: userId,
+                plan: 'business',
+                status: 'active'
+            }, { onConflict: 'user_id' });
+
+            selectedPlan = 'business';
+        } else if (selectedPlan === 'business') {
+            // No invite — create their own team
             var teamResult = await sb.from('teams').upsert({
                 owner_id: userId,
                 name: firstName + "'s Team",
@@ -189,7 +213,7 @@ async function handleSignup(event) {
             }
         }
 
-        // 4. Send welcome email (fire-and-forget; function requires JWT and to === user email)
+        // 5. Send welcome email (fire-and-forget)
         var accessToken = result.data.session ? result.data.session.access_token : '';
         if (accessToken) {
             fetch('/.netlify/functions/send-email', {
@@ -199,7 +223,7 @@ async function handleSignup(event) {
             }).catch(function(err) { console.error('Welcome email error:', err); });
         }
 
-        // 5. Redirect to appropriate dashboard
+        // 6. Redirect to appropriate dashboard
         window.location.href = selectedPlan === 'business' ? '/dashboard-business' : '/dashboard-individual';
 
     } catch (error) {
@@ -239,6 +263,34 @@ async function handleLogin(event) {
         if (result.error) throw result.error;
 
         var userId = result.data.user.id;
+
+        // Check for pending invite by email and accept it
+        var pendingInvite = await sb
+            .from('team_members')
+            .select('id, team_id')
+            .eq('email', email)
+            .eq('status', 'invited')
+            .limit(1);
+
+        if (pendingInvite.data && pendingInvite.data.length > 0) {
+            var invite = pendingInvite.data[0];
+            await sb.from('team_members').update({
+                user_id: userId,
+                status: 'active',
+                joined_at: new Date().toISOString()
+            }).eq('id', invite.id);
+
+            // Upgrade their subscription to business
+            await sb.from('subscriptions').upsert({
+                user_id: userId,
+                plan: 'business',
+                status: 'active'
+            }, { onConflict: 'user_id' });
+
+            localStorage.setItem('arrival_dashboard', 'business');
+            window.location.href = '/dashboard-business';
+            return;
+        }
 
         // Check if user has an active team membership → business dashboard
         var tmResult = await sb

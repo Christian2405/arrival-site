@@ -811,10 +811,11 @@ async function handleInvite() {
         // Send invite email (fire-and-forget)
         var session = await sb.auth.getSession();
         var token = session.data.session.access_token;
+        var inviterName = currentUser?.user_metadata?.first_name || '';
         fetch('/.netlify/functions/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ to: email, template: 'invite', args: [email] })
+            body: JSON.stringify({ to: email, template: 'invite', args: [email, currentTeam.name || '', inviterName] })
         }).catch(function(err) { console.error('Invite email error:', err); });
 
         showToast('Invite sent to ' + email + '.');
@@ -887,10 +888,11 @@ async function resendInvite(memberId, email) {
     try {
         var session = await sb.auth.getSession();
         var token = session.data.session.access_token;
+        var inviterName = currentUser?.user_metadata?.first_name || '';
         await fetch('/.netlify/functions/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ to: email, template: 'invite', args: [email] })
+            body: JSON.stringify({ to: email, template: 'invite', args: [email, currentTeam.name || '', inviterName] })
         });
         showToast('Invite resent to ' + email + '.');
     } catch (err) {

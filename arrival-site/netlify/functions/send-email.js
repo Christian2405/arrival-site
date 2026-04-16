@@ -215,6 +215,31 @@ function contactFormEmail(firstName, lastName, email, subject, message) {
   };
 }
 
+// --- INVITE EMAIL ---
+function inviteEmail(email, teamName, inviterName) {
+  return {
+    subject: `You've been invited to join ${teamName || 'a team'} on Arrival`,
+    html: baseTemplate(`
+      <h1>You're invited!</h1>
+      <p>${inviterName ? inviterName + ' has' : 'Your team admin has'} invited you to join <strong>${teamName || 'their team'}</strong> on Arrival — the AI assistant for trade workers.</p>
+      <div class="highlight">
+        <div class="highlight-label">What you get</div>
+        <div class="highlight-value">Full Business Plan access</div>
+      </div>
+      <ul class="feature-list">
+        <li>250 questions per day</li>
+        <li>Unlimited document uploads</li>
+        <li>Hands-free Job Mode</li>
+        <li>Shared team document library</li>
+      </ul>
+      <p>Create your account to get started:</p>
+      <a href="https://arrivalcompany.com/signup?invite=${encodeURIComponent(email)}" class="btn">Accept Invite</a>
+      <hr class="divider">
+      <p style="font-size: 13px; color: #7c736a;">If you weren't expecting this invite, you can safely ignore this email.</p>
+    `)
+  };
+}
+
 // ============================================
 // TEMPLATE REGISTRY
 // ============================================
@@ -226,7 +251,8 @@ const TEMPLATES = {
   payment_failed: paymentFailedEmail,
   trial_ending_tomorrow: trialEndingTomorrowEmail,
   trial_expired: trialExpiredEmail,
-  contact_form: contactFormEmail
+  contact_form: contactFormEmail,
+  invite: inviteEmail
 };
 
 // ============================================

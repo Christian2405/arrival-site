@@ -67,16 +67,12 @@ exports.handler = async (event) => {
     // Get the current subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
 
-    // Find the seat line item
-    const seatItem = subscription.items.data.find(
+    // Find the seat line item (may not exist yet if no extra seats added before)
+    let seatItem = subscription.items.data.find(
       item => item.price.id === PRICE_BIZ_SEAT
     );
 
-    if (!seatItem) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Seat line item not found on subscription' }) };
-    }
-
-    const currentQuantity = seatItem.quantity || 0;
+    const currentQuantity = seatItem ? (seatItem.quantity || 0) : 0;
     let newQuantity;
 
     if (action === 'add') {
@@ -116,13 +112,25 @@ exports.handler = async (event) => {
     }
 
     // Update Stripe subscription
-    await stripe.subscriptions.update(sub.stripe_subscription_id, {
-      items: [{
-        id: seatItem.id,
-        quantity: newQuantity
-      }],
-      proration_behavior: 'create_prorations'
-    });
+    if (seatItem) {
+      // Update existing seat line item
+      await stripe.subscriptions.update(sub.stripe_subscription_id, {
+        items: [{
+          id: seatItem.id,
+          quantity: newQuantity
+        }],
+        proration_behavior: 'create_prorations'
+      });
+    } else {
+      // Add seat line item for the first time
+      await stripe.subscriptions.update(sub.stripe_subscription_id, {
+        items: [{
+          price: PRICE_BIZ_SEAT,
+          quantity: newQuantity
+        }],
+        proration_behavior: 'create_prorations'
+      });
+    }
 
     const newTotalSeats = 10 + newQuantity;
 
