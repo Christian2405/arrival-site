@@ -1204,14 +1204,12 @@ async function loadActivePromo() {
 
 function loadBilling() {
     var seatCount = teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length;
-    var maxSeats = currentTeam ? (currentTeam.max_seats || 10) : 10;
-    var extraSeats = Math.max(0, maxSeats - 10);
-    var extraCost = extraSeats * 200;
-    var total = 200 + extraCost;
+    var pricePerSeat = 200;
+    var total = seatCount * pricePerSeat;
 
     document.getElementById('billing-plan-name').textContent = 'Business Plan';
-    document.getElementById('billing-plan-price').textContent = '$200/month';
-    document.getElementById('billing-seats-detail').textContent = '10 base seats' + (extraSeats > 0 ? ' + ' + extraSeats + ' extra ($' + extraCost + '/mo)' : '') + ', ' + seatCount + ' in use';
+    document.getElementById('billing-plan-price').textContent = '$' + pricePerSeat + '/seat/month';
+    document.getElementById('billing-seats-detail').textContent = seatCount + ' active seat' + (seatCount !== 1 ? 's' : '');
     document.getElementById('billing-total').textContent = 'Monthly total: $' + total.toFixed(2);
 
     // Load promo code status
