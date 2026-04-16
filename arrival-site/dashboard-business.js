@@ -1437,13 +1437,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Delete account
     document.getElementById('delete-confirm-btn').addEventListener('click', handleDeleteAccount);
 
-    // Billing — Add/Remove seats
-    document.getElementById('billing-add-seats-btn').addEventListener('click', handleAddSeats);
-    document.getElementById('billing-remove-seats-btn').addEventListener('click', handleRemoveSeats);
-
-    // Seat modal confirm buttons
-    document.getElementById('add-seats-confirm-btn').addEventListener('click', confirmAddSeats);
-    document.getElementById('remove-seats-confirm-btn').addEventListener('click', confirmRemoveSeats);
+    // Billing — Remove seats (add seats is now handled via Add Team Member)
+    var removeSeatsBtn = document.getElementById('billing-remove-seats-btn');
+    if (removeSeatsBtn) removeSeatsBtn.addEventListener('click', handleRemoveSeats);
+    var removeSeatsConfirmBtn = document.getElementById('remove-seats-confirm-btn');
+    if (removeSeatsConfirmBtn) removeSeatsConfirmBtn.addEventListener('click', confirmRemoveSeats);
 
     // Billing — Cancel subscription (opens portal)
     document.getElementById('billing-cancel-btn').addEventListener('click', function() {
