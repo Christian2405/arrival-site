@@ -837,13 +837,18 @@ async function handleInvite() {
 
         // Send invite email
         var inviterName = currentUser?.user_metadata?.first_name || '';
-        fetch('/.netlify/functions/send-email', {
+        var emailResp = await fetch('/.netlify/functions/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({ to: email, template: 'invite', args: [email, currentTeam.name || '', inviterName] })
-        }).catch(function(err) { console.error('Invite email error:', err); });
-
-        showToast('Invite sent to ' + firstName + ' (' + email + ').');
+        });
+        var emailData = await emailResp.json();
+        if (!emailResp.ok) {
+            console.error('Invite email error:', emailData);
+            showToast('Team member added but invite email failed: ' + (emailData.error || 'Unknown error'), 'error');
+        } else {
+            showToast('Invite sent to ' + firstName + ' (' + email + ').');
+        }
         closeModal('add-member-modal');
         firstNameInput.value = '';
         lastNameInput.value = '';
