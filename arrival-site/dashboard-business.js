@@ -919,17 +919,25 @@ async function handleRemoveMember() {
 async function resendInvite(memberId, email) {
     try {
         var session = await sb.auth.getSession();
+        if (!session.data.session) {
+            showToast('Session expired. Please refresh and log in again.', 'error');
+            return;
+        }
         var token = session.data.session.access_token;
         var inviterName = currentUser?.user_metadata?.first_name || '';
-        await fetch('/.netlify/functions/send-email', {
+        var resp = await fetch('/.netlify/functions/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({ to: email, template: 'invite', args: [email, currentTeam.name || '', inviterName] })
         });
+        var data = await resp.json();
+        if (!resp.ok) {
+            throw new Error(data.error || 'Email service error');
+        }
         showToast('Invite resent to ' + email + '.');
     } catch (err) {
         console.error('Resend invite error:', err);
-        showToast('Failed to resend invite.', 'error');
+        showToast('Failed to resend invite: ' + err.message, 'error');
     }
 }
 
