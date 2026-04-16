@@ -795,13 +795,12 @@ function renderTeamTable(members) {
 
 function updateSeatIndicator() {
     var usedSeats = teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length;
-    var maxSeats = currentTeam.max_seats || 10;
     var usedEl = document.getElementById('seat-used');
     var maxEl = document.getElementById('seat-max');
     var barEl = document.getElementById('seat-bar-fill');
     if (usedEl) usedEl.textContent = usedSeats;
-    if (maxEl) maxEl.textContent = maxSeats;
-    if (barEl) barEl.style.width = Math.round((usedSeats / maxSeats) * 100) + '%';
+    if (maxEl) maxEl.textContent = usedSeats + ' ($' + (usedSeats * 200) + '/mo)';
+    if (barEl) barEl.style.width = '100%';
 }
 
 async function handleInvite() {
@@ -823,31 +822,11 @@ async function handleInvite() {
         return;
     }
 
-    var usedSeats = teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length;
-    var maxSeats = currentTeam.max_seats || 10;
-
     try {
         var session = await sb.auth.getSession();
         var token = session.data.session.access_token;
 
-        // Auto-add a seat if at the limit
-        if (usedSeats >= maxSeats) {
-            showToast('Adding an extra seat to your plan...');
-            var seatResp = await fetch('/.netlify/functions/update-seats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ action: 'add', count: 1 })
-            });
-            var seatData = await seatResp.json();
-            if (!seatResp.ok) {
-                showToast(seatData.error || 'Failed to add seat.', 'error');
-                return;
-            }
-            // Update local team data
-            if (currentTeam) currentTeam.max_seats = seatData.newSeatCount;
-        }
-
-        // Insert the team member
+        // Insert the team member (Stripe seat count updates when they accept the invite)
         var result = await sb.from('team_members').insert({
             team_id: currentTeam.id,
             first_name: firstName,

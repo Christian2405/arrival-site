@@ -1,10 +1,15 @@
+const Stripe = require('stripe');
 const { createClient } = require('@supabase/supabase-js');
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Use service role key to bypass RLS
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const PRICE_BIZ_SEAT = 'price_1T2wmDAO3BMpwX67JSkM2fkF';
 
 exports.handler = async (event) => {
   const headers = {
@@ -99,6 +104,43 @@ exports.handler = async (event) => {
 
     if (userError) {
       console.error('User update error:', userError);
+    }
+
+    // Update Stripe subscription seat count
+    // Find the admin of this team to get the Stripe subscription
+    const { data: admin } = await supabase
+      .from('team_members')
+      .select('user_id')
+      .eq('team_id', invite.team_id)
+      .eq('role', 'admin')
+      .limit(1)
+      .single();
+
+    if (admin) {
+      const { data: adminSub } = await supabase
+        .from('subscriptions')
+        .select('stripe_subscription_id')
+        .eq('user_id', admin.user_id)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
+
+      if (adminSub && adminSub.stripe_subscription_id) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(adminSub.stripe_subscription_id);
+          const seatItem = subscription.items.data.find(item => item.price.id === PRICE_BIZ_SEAT);
+
+          if (seatItem) {
+            await stripe.subscriptions.update(adminSub.stripe_subscription_id, {
+              items: [{ id: seatItem.id, quantity: (seatItem.quantity || 1) + 1 }],
+              proration_behavior: 'create_prorations'
+            });
+            console.log('Stripe seat count bumped for team', invite.team_id);
+          }
+        } catch (stripeErr) {
+          console.error('Stripe seat update error (non-fatal):', stripeErr);
+        }
+      }
     }
 
     console.log('Invite accepted:', email, '-> team', invite.team_id);

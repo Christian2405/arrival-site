@@ -96,9 +96,30 @@ exports.handler = async (event) => {
     if (plan === 'pro') {
       lineItems = [{ price: PRICES.pro, quantity: 1 }];
     } else {
-      // Business: base plan (10 seats included)
+      // Business: $200/seat/month — count current team members for initial quantity
+      let seatCount = 1; // minimum 1 (the admin)
+
+      // Check if user already has a team with members
+      const { data: membership } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
+
+      if (membership) {
+        const { count } = await supabase
+          .from('team_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('team_id', membership.team_id)
+          .in('status', ['active', 'invited']);
+
+        if (count && count > 1) seatCount = count;
+      }
+
       lineItems = [
-        { price: PRICES.business_base, quantity: 1 }
+        { price: PRICES.business_seat, quantity: seatCount }
       ];
     }
 

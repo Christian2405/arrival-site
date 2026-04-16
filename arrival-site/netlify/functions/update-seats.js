@@ -47,6 +47,19 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'count must be a positive integer' }) };
     }
 
+    // Get the admin's team
+    const { data: teamMember } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .limit(1)
+      .single();
+
+    if (!teamMember) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin access required' }) };
+    }
+
     // Get subscription
     const { data: sub } = await supabase
       .from('subscriptions')
@@ -67,7 +80,7 @@ exports.handler = async (event) => {
     // Get the current subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
 
-    // Find the seat line item (may not exist yet if no extra seats added before)
+    // Find the seat line item
     let seatItem = subscription.items.data.find(
       item => item.price.id === PRICE_BIZ_SEAT
     );
@@ -78,69 +91,45 @@ exports.handler = async (event) => {
     if (action === 'add') {
       newQuantity = currentQuantity + seatCount;
     } else {
-      newQuantity = Math.max(0, currentQuantity - seatCount);
-
-      // Validate: make sure we're not removing below active member count
-      const { data: teamMember } = await supabase
+      // Count active members to prevent going below
+      const { count: activeMembers } = await supabase
         .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .limit(1)
-        .single();
+        .select('*', { count: 'exact', head: true })
+        .eq('team_id', teamMember.team_id)
+        .in('status', ['active', 'invited']);
 
-      if (teamMember) {
-        const { count: activeMembers } = await supabase
-          .from('team_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('team_id', teamMember.team_id)
-          .in('status', ['active', 'invited']);
+      newQuantity = Math.max(1, currentQuantity - seatCount); // minimum 1 seat (admin)
 
-        const baseSeats = 10;
-        const totalSeatsAfter = baseSeats + newQuantity;
-
-        if (activeMembers > totalSeatsAfter) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({
-              error: 'Cannot reduce below ' + activeMembers + ' seats (current active members). Remove team members first.'
-            })
-          };
-        }
+      if (activeMembers > newQuantity) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            error: 'Cannot reduce below ' + activeMembers + ' seats (current active members). Remove team members first.'
+          })
+        };
       }
     }
 
     // Update Stripe subscription
     if (seatItem) {
-      // Update existing seat line item
       await stripe.subscriptions.update(sub.stripe_subscription_id, {
-        items: [{
-          id: seatItem.id,
-          quantity: newQuantity
-        }],
+        items: [{ id: seatItem.id, quantity: newQuantity }],
         proration_behavior: 'create_prorations'
       });
     } else {
-      // Add seat line item for the first time
       await stripe.subscriptions.update(sub.stripe_subscription_id, {
-        items: [{
-          price: PRICE_BIZ_SEAT,
-          quantity: newQuantity
-        }],
+        items: [{ price: PRICE_BIZ_SEAT, quantity: newQuantity }],
         proration_behavior: 'create_prorations'
       });
     }
-
-    const newTotalSeats = 10 + newQuantity;
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        extraSeats: newQuantity,
-        newSeatCount: newTotalSeats
+        newSeatCount: newQuantity
       })
     };
   } catch (err) {
