@@ -40,6 +40,9 @@
   .footer-link { text-align: center; padding-top: 16px; margin-top: 16px; border-top: 1px solid #e8e1da; }
   .footer-link p { color: #999; font-size: 14px; }
   .footer-link a { color: #1a1a1a; font-weight: 600; text-decoration: underline; }
+  .tab-switcher { display: flex; border: 1px solid #e8e1da; border-radius: 100px; overflow: hidden; margin-bottom: 28px; }
+  .tab { flex: 1; padding: 12px 16px; border: none; background: #fff; font-family: inherit; font-size: 14px; font-weight: 600; color: #999; cursor: pointer; transition: all 0.2s; }
+  .tab.active { background: #1a1a18; color: #fff; }
   @media (max-width: 640px) { .auth-card { padding: 32px 24px; } .form-row { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -56,6 +59,13 @@
     <div class="team" id="invite-team-name">—</div>
   </div>
 
+  <!-- TAB SWITCHER -->
+  <div class="tab-switcher">
+    <button class="tab active" id="tab-signup" onclick="switchTab('signup')">New Account</button>
+    <button class="tab" id="tab-login" onclick="switchTab('login')">Existing Account</button>
+  </div>
+
+  <!-- SIGNUP FORM -->
   <form id="invite-form">
     <div class="form-row">
       <div class="form-group">
@@ -109,6 +119,24 @@
     </button>
   </form>
 
+  <!-- LOGIN FORM -->
+  <form id="login-form" style="display: none;">
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@company.com" required readonly>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="Enter your password" required>
+    </div>
+    <div class="form-error" id="login-error"></div>
+    <div class="form-success" id="login-success"></div>
+    <button type="submit" class="btn btn-primary" id="login-submit">
+      <span class="btn-text">Sign In & Join Team</span>
+      <span class="btn-loading">Signing in...</span>
+    </button>
+  </form>
+
   <div class="divider">
     <div class="divider-line"></div>
     <span class="divider-text">or</span>
@@ -119,10 +147,6 @@
     <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
     Continue with Google
   </button>
-
-  <div class="footer-link">
-    <p>Already have an account? <a href="/?login=true">Sign in</a></p>
-  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -147,6 +171,20 @@
   }
 
   document.getElementById('invite-email').value = decodeURIComponent(inviteEmail);
+  document.getElementById('login-email').value = decodeURIComponent(inviteEmail);
+
+  // ── Tab switching ──
+  window.switchTab = function(tab) {
+    document.getElementById('invite-form').style.display = tab === 'signup' ? '' : 'none';
+    document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+    document.getElementById('tab-signup').className = tab === 'signup' ? 'tab active' : 'tab';
+    document.getElementById('tab-login').className = tab === 'login' ? 'tab active' : 'tab';
+    // Clear errors
+    document.getElementById('invite-error').style.display = 'none';
+    document.getElementById('invite-success').style.display = 'none';
+    document.getElementById('login-error').style.display = 'none';
+    document.getElementById('login-success').style.display = 'none';
+  };
 
   // ── Look up team name from the invite ──
   (async function() {
@@ -283,11 +321,87 @@
     } catch (error) {
       console.error('Invite signup error:', error);
       var msg = error.message || 'Something went wrong. Please try again.';
-      if (msg.includes('already registered') || msg.includes('already been registered')) {
-        msg = 'This email is already registered. Try signing in instead.';
+      if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('users_email_key')) {
+        switchTab('login');
+        showLoginError('This email already has an account. Enter your password to join the team.');
+        setLoading(false);
+        return;
       }
       showError(msg);
       setLoading(false);
+    }
+  });
+
+  // ── Login helpers ──
+  function showLoginError(msg) {
+    var el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('login-success').style.display = 'none';
+  }
+  function setLoginLoading(on) {
+    var btn = document.getElementById('login-submit');
+    btn.disabled = on;
+    btn.querySelector('.btn-text').style.display = on ? 'none' : '';
+    btn.querySelector('.btn-loading').style.display = on ? 'inline' : 'none';
+  }
+
+  // ── Accept invite helper ──
+  async function acceptInvite(userId, email) {
+    var inviteResult = await sb.from('team_members')
+      .select('id, team_id')
+      .eq('email', email)
+      .eq('status', 'invited')
+      .limit(1);
+
+    if (inviteResult.data && inviteResult.data.length > 0) {
+      var invite = inviteResult.data[0];
+      await sb.from('team_members').update({
+        user_id: userId,
+        status: 'active',
+        joined_at: new Date().toISOString()
+      }).eq('id', invite.id);
+
+      await sb.from('subscriptions').upsert({
+        user_id: userId,
+        plan: 'business',
+        status: 'active'
+      }, { onConflict: 'user_id' });
+      return true;
+    }
+    return false;
+  }
+
+  // ── Login form submit ──
+  document.getElementById('login-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    document.getElementById('login-error').style.display = 'none';
+
+    var email = document.getElementById('login-email').value.trim();
+    var password = document.getElementById('login-password').value;
+
+    setLoginLoading(true);
+
+    try {
+      var result = await sb.auth.signInWithPassword({ email: email, password: password });
+      if (result.error) throw result.error;
+
+      var userId = result.data.user.id;
+
+      // Accept the invite
+      await acceptInvite(userId, email);
+
+      // Redirect
+      window.location.href = '/dashboard-individual';
+
+    } catch (error) {
+      console.error('Invite login error:', error);
+      var msg = error.message || 'Something went wrong.';
+      if (msg.includes('Invalid login')) {
+        msg = 'Incorrect password. Please try again.';
+      }
+      showLoginError(msg);
+      setLoginLoading(false);
     }
   });
 
