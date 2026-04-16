@@ -266,7 +266,7 @@
       // First remove any stale row with this email (from a previous deleted account)
       await sb.from('users').delete().eq('email', email).neq('id', userId);
       // Also clean up any stale subscription
-      await sb.from('subscriptions').delete().eq('user_id', userId).throwOnError().catch(function(){});
+      try { await sb.from('subscriptions').delete().eq('user_id', userId); } catch(e) {}
 
       var userResult = await sb.from('users').upsert({
         id: userId,
