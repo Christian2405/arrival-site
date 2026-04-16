@@ -773,26 +773,53 @@ function updateSeatIndicator() {
 }
 
 async function handleInvite() {
+    var firstNameInput = document.getElementById('invite-first-name');
+    var lastNameInput = document.getElementById('invite-last-name');
     var emailInput = document.getElementById('invite-email');
     var roleSelect = document.getElementById('invite-role');
+    var firstName = firstNameInput.value.trim();
+    var lastName = lastNameInput.value.trim();
     var email = emailInput.value.trim().toLowerCase();
     var role = roleSelect.value;
 
+    if (!firstName || !lastName) {
+        showToast('Please enter the team member\'s name.', 'error');
+        return;
+    }
     if (!email) {
         showToast('Please enter an email address.', 'error');
         return;
     }
 
-    // Check seat limit
     var usedSeats = teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length;
-    if (usedSeats >= (currentTeam.max_seats || 10)) {
-        showToast('Seat limit reached. Add more seats to invite members.', 'error');
-        return;
-    }
+    var maxSeats = currentTeam.max_seats || 10;
 
     try {
+        var session = await sb.auth.getSession();
+        var token = session.data.session.access_token;
+
+        // Auto-add a seat if at the limit
+        if (usedSeats >= maxSeats) {
+            showToast('Adding an extra seat to your plan...');
+            var seatResp = await fetch('/.netlify/functions/update-seats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ action: 'add', count: 1 })
+            });
+            var seatData = await seatResp.json();
+            if (!seatResp.ok) {
+                showToast(seatData.error || 'Failed to add seat.', 'error');
+                return;
+            }
+            // Update local team data
+            if (currentTeam) currentTeam.max_seats = seatData.newSeatCount;
+        }
+
+        // Insert the team member
         var result = await sb.from('team_members').insert({
             team_id: currentTeam.id,
+            first_name: firstName,
+            last_name: lastName,
             email: email,
             role: role,
             status: 'invited',
@@ -808,9 +835,7 @@ async function handleInvite() {
             return;
         }
 
-        // Send invite email (fire-and-forget)
-        var session = await sb.auth.getSession();
-        var token = session.data.session.access_token;
+        // Send invite email
         var inviterName = currentUser?.user_metadata?.first_name || '';
         fetch('/.netlify/functions/send-email', {
             method: 'POST',
@@ -818,8 +843,10 @@ async function handleInvite() {
             body: JSON.stringify({ to: email, template: 'invite', args: [email, currentTeam.name || '', inviterName] })
         }).catch(function(err) { console.error('Invite email error:', err); });
 
-        showToast('Invite sent to ' + email + '.');
-        closeModal('invite-modal');
+        showToast('Invite sent to ' + firstName + ' (' + email + ').');
+        closeModal('add-member-modal');
+        firstNameInput.value = '';
+        lastNameInput.value = '';
         emailInput.value = '';
         roleSelect.value = 'technician';
 
@@ -827,7 +854,7 @@ async function handleInvite() {
         loadHome();
     } catch (err) {
         console.error('Invite error:', err);
-        showToast('Failed to send invite: ' + err.message, 'error');
+        showToast('Failed to add team member: ' + err.message, 'error');
     }
 }
 

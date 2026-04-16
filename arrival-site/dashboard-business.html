@@ -76,7 +76,7 @@
         <div class="dash-section">
             <div class="quick-actions">
                 <button class="btn btn-primary" onclick="showPage('docs')">Upload Documents</button>
-                <button class="btn btn-outline" onclick="openModal('invite-modal')">Invite Team Member</button>
+                <button class="btn btn-outline" onclick="openModal('add-member-modal')">Add Team Member</button>
             </div>
         </div>
 
@@ -146,7 +146,7 @@
         <div class="dash-header">
             <div class="dash-header-row">
                 <h1>Team Activity</h1>
-                <button class="btn btn-primary" onclick="openModal('invite-modal')">+ Invite Team Member</button>
+                <button class="btn btn-primary" onclick="openModal('add-member-modal')">+ Add Team Member</button>
             </div>
         </div>
 
@@ -157,9 +157,9 @@
                 <div class="seat-card-bar">
                     <div class="seat-card-bar-fill" id="seat-bar-fill" style="width:0%"></div>
                 </div>
-                <div class="seat-card-detail">Additional seats: $200/month each</div>
+                <div class="seat-card-detail">Extra seats beyond 10: $200/month each</div>
             </div>
-            <button class="btn btn-outline" onclick="handleAddSeats()">Add Seats</button>
+            <button class="btn btn-primary" onclick="openModal('add-member-modal')">+ Add Team Member</button>
         </div>
 
         <div class="dash-section">
@@ -298,12 +298,15 @@
 </aside>
 
 <!-- ========== MODALS ========== -->
-<div class="modal-overlay" id="invite-modal" onclick="if(event.target===this)closeModal('invite-modal')">
+<div class="modal-overlay" id="add-member-modal" onclick="if(event.target===this)closeModal('add-member-modal')">
     <div class="modal">
-        <h2>Invite Team Member</h2>
+        <h2>Add Team Member</h2>
+        <p id="add-member-seat-note" style="color:var(--text-muted);margin-bottom:16px;display:none;"></p>
+        <div class="form-group"><label>First Name</label><input type="text" id="invite-first-name" placeholder="John"></div>
+        <div class="form-group"><label>Last Name</label><input type="text" id="invite-last-name" placeholder="Smith"></div>
         <div class="form-group"><label>Email Address</label><input type="email" id="invite-email" placeholder="tech@company.com"></div>
         <div class="form-group"><label>Role</label><select id="invite-role"><option value="technician">Technician</option><option value="manager">Manager</option><option value="admin">Admin</option></select></div>
-        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('invite-modal')">Cancel</button><button class="btn btn-primary" id="invite-send-btn">Send Invite</button></div>
+        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('add-member-modal')">Cancel</button><button class="btn btn-primary" id="invite-send-btn">Add & Send Invite</button></div>
     </div>
 </div>
 
@@ -386,17 +389,6 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="add-seats-modal" onclick="if(event.target===this)closeModal('add-seats-modal')">
-    <div class="modal">
-        <h2>Add Seats</h2>
-        <p style="color:var(--text-muted);margin-bottom:16px;">Each additional seat costs <strong>$200/month</strong>, added to your next billing cycle.</p>
-        <div class="form-group">
-            <label>Number of seats to add</label>
-            <input type="number" id="add-seats-count" min="1" max="100" value="1" style="max-width:120px;">
-        </div>
-        <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('add-seats-modal')">Cancel</button><button class="btn btn-primary" id="add-seats-confirm-btn">Add Seats</button></div>
-    </div>
-</div>
 
 <div class="modal-overlay" id="remove-seats-modal" onclick="if(event.target===this)closeModal('remove-seats-modal')">
     <div class="modal">
@@ -470,7 +462,22 @@ window.addEventListener('DOMContentLoaded', function() {
         showPage(hash, false);
     }
 });
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function openModal(id) {
+    document.getElementById(id).classList.add('open');
+    // Show seat charge note if at limit
+    if (id === 'add-member-modal') {
+        var usedSeats = teamMembers ? teamMembers.filter(function(m) { return m.status === 'active' || m.status === 'invited'; }).length : 0;
+        var maxSeats = currentTeam ? (currentTeam.max_seats || 10) : 10;
+        var note = document.getElementById('add-member-seat-note');
+        if (usedSeats >= maxSeats) {
+            note.textContent = 'All ' + maxSeats + ' seats are in use. An extra seat ($200/month) will be added to your subscription.';
+            note.style.display = 'block';
+        } else {
+            note.textContent = (maxSeats - usedSeats) + ' of ' + maxSeats + ' seats available.';
+            note.style.display = 'block';
+        }
+    }
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function toggleBtn(el) {
     el.parentElement.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
