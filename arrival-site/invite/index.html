@@ -280,7 +280,7 @@
       if (userResult.error) throw userResult.error;
 
       // 3. Accept the team invite
-      var accepted = await acceptInvite(userId, email);
+      var accepted = await acceptInvite(email);
 
       if (!accepted) {
         // No pending invite found — create a free subscription
@@ -328,7 +328,7 @@
           }, { onConflict: 'id' });
 
           // Accept the invite
-          var accepted = await acceptInvite(loginUserId, email);
+          var accepted = await acceptInvite(email);
           window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
           return;
         } catch (loginErr) {
@@ -358,47 +358,23 @@
     btn.querySelector('.btn-loading').style.display = on ? 'inline' : 'none';
   }
 
-  // ── Accept invite helper ──
-  async function acceptInvite(userId, email) {
-    // Find the pending invite by email
-    var inviteResult = await sb.from('team_members')
-      .select('id, team_id')
-      .eq('email', email)
-      .eq('status', 'invited')
-      .limit(1);
+  // ── Accept invite helper (server-side to bypass RLS) ──
+  async function acceptInvite(email) {
+    var session = await sb.auth.getSession();
+    if (!session.data.session) return false;
 
-    console.log('Invite lookup for', email, ':', JSON.stringify(inviteResult));
+    var resp = await fetch('/.netlify/functions/accept-invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.data.session.access_token
+      },
+      body: JSON.stringify({ email: email })
+    });
 
-    if (inviteResult.data && inviteResult.data.length > 0) {
-      var invite = inviteResult.data[0];
-
-      // Link user to team
-      var updateResult = await sb.from('team_members').update({
-        user_id: userId,
-        status: 'active',
-        joined_at: new Date().toISOString()
-      }).eq('id', invite.id);
-      console.log('Team member update:', JSON.stringify(updateResult));
-
-      // Set subscription to business
-      var subResult = await sb.from('subscriptions').upsert({
-        user_id: userId,
-        plan: 'business',
-        status: 'active'
-      }, { onConflict: 'user_id' });
-      console.log('Subscription upsert:', JSON.stringify(subResult));
-
-      // Update user account type
-      var userResult = await sb.from('users').update({
-        account_type: 'business'
-      }).eq('id', userId);
-      console.log('User update:', JSON.stringify(userResult));
-
-      return true;
-    }
-
-    console.warn('No pending invite found for', email);
-    return false;
+    var data = await resp.json();
+    console.log('Accept invite response:', JSON.stringify(data));
+    return data.accepted === true;
   }
 
   // ── Login form submit ──
@@ -418,7 +394,7 @@
       var userId = result.data.user.id;
 
       // Accept the invite
-      var accepted = await acceptInvite(userId, email);
+      var accepted = await acceptInvite(email);
 
       // Redirect to appropriate dashboard
       window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';

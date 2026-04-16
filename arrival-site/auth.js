@@ -175,31 +175,25 @@ async function handleSignup(event) {
         }, { onConflict: 'user_id' });
         if (subResult.error) throw subResult.error;
 
-        // 4. Check if this email has a pending team invite
-        var inviteResult = await sb.from('team_members')
-            .select('id, team_id')
-            .eq('email', email)
-            .eq('status', 'invited')
-            .limit(1);
+        // 4. Check if this email has a pending team invite (server-side to bypass RLS)
+        var accessToken = result.data.session ? result.data.session.access_token : '';
+        if (accessToken) {
+            try {
+                var inviteResp = await fetch('/.netlify/functions/accept-invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                    body: JSON.stringify({ email: email })
+                });
+                var inviteData = await inviteResp.json();
+                if (inviteData.accepted) {
+                    selectedPlan = 'business';
+                }
+            } catch (invErr) {
+                console.error('Accept invite error:', invErr);
+            }
+        }
 
-        if (inviteResult.data && inviteResult.data.length > 0) {
-            // Accept the invite — link user to the team
-            var invite = inviteResult.data[0];
-            await sb.from('team_members').update({
-                user_id: userId,
-                status: 'active',
-                joined_at: new Date().toISOString()
-            }).eq('id', invite.id);
-
-            // Update their subscription to business (they're joining a business team)
-            await sb.from('subscriptions').upsert({
-                user_id: userId,
-                plan: 'business',
-                status: 'active'
-            }, { onConflict: 'user_id' });
-
-            selectedPlan = 'business';
-        } else if (selectedPlan === 'business') {
+        if (!inviteData?.accepted && selectedPlan === 'business') {
             // No invite — create their own team
             var teamResult = await sb.from('teams').upsert({
                 owner_id: userId,
@@ -267,32 +261,24 @@ async function handleLogin(event) {
 
         var userId = result.data.user.id;
 
-        // Check for pending invite by email and accept it
-        var pendingInvite = await sb
-            .from('team_members')
-            .select('id, team_id')
-            .eq('email', email)
-            .eq('status', 'invited')
-            .limit(1);
-
-        if (pendingInvite.data && pendingInvite.data.length > 0) {
-            var invite = pendingInvite.data[0];
-            await sb.from('team_members').update({
-                user_id: userId,
-                status: 'active',
-                joined_at: new Date().toISOString()
-            }).eq('id', invite.id);
-
-            // Upgrade their subscription to business
-            await sb.from('subscriptions').upsert({
-                user_id: userId,
-                plan: 'business',
-                status: 'active'
-            }, { onConflict: 'user_id' });
-
-            localStorage.setItem('arrival_dashboard', 'business');
-            window.location.href = '/dashboard-business';
-            return;
+        // Check for pending invite by email and accept it (server-side to bypass RLS)
+        var loginToken = result.data.session ? result.data.session.access_token : '';
+        if (loginToken) {
+            try {
+                var invResp = await fetch('/.netlify/functions/accept-invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + loginToken },
+                    body: JSON.stringify({ email: email })
+                });
+                var invData = await invResp.json();
+                if (invData.accepted) {
+                    localStorage.setItem('arrival_dashboard', 'business');
+                    window.location.href = '/dashboard-business';
+                    return;
+                }
+            } catch (invErr) {
+                console.error('Accept invite error:', invErr);
+            }
         }
 
         // Check if user has an active team membership → business dashboard
