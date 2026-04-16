@@ -903,7 +903,19 @@ async function handleRemoveMember() {
     if (!removeMemberId) return;
 
     try {
-        var result = await sb.from('team_members').update({ status: 'deactivated' }).eq('id', removeMemberId);
+        // Safety: never remove yourself (the admin/owner)
+        var memberToRemove = teamMembers.find(function(m) { return m.id === removeMemberId; });
+        if (memberToRemove && memberToRemove.user_id === currentUser.id) {
+            showToast('You cannot remove yourself from the team.', 'error');
+            closeModal('remove-modal');
+            removeMemberId = null;
+            return;
+        }
+
+        var result = await sb.from('team_members')
+            .update({ status: 'deactivated' })
+            .eq('id', removeMemberId)
+            .eq('team_id', currentTeam.id);  // extra safety: scope to current team only
         if (result.error) throw result.error;
         showToast('Team member removed.');
         closeModal('remove-modal');
