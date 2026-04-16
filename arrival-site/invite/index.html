@@ -250,12 +250,17 @@
       var result = await sb.auth.signUp({
         email: email,
         password: password,
-        options: { data: { first_name: firstName, last_name: lastName } }
+        options: {
+          data: { first_name: firstName, last_name: lastName },
+          emailRedirectTo: window.location.origin + '/invite?email=' + encodeURIComponent(email)
+        }
       });
       if (result.error) throw result.error;
 
       if (!result.data.session) {
-        showSuccess('Check your email to confirm your account, then sign in.');
+        showSuccess('Check your email to confirm your account. After confirming, come back to this invite link to sign in.');
+        // Switch to login tab so they can sign in after confirming
+        switchTab('login');
         setLoading(false);
         return;
       }

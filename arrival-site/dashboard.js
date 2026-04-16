@@ -80,6 +80,26 @@ async function initAuth() {
     currentUser = result.data.session.user;
     await loadProfile();
 
+    // Auto-accept any pending team invite (catches cases where signup flow missed it)
+    var token = result.data.session.access_token;
+    if (token && currentUser.email) {
+        try {
+            var invResp = await fetch('/.netlify/functions/accept-invite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ email: currentUser.email })
+            });
+            var invData = await invResp.json();
+            if (invData.accepted) {
+                // Invite accepted — redirect to business dashboard
+                window.location.href = '/dashboard-business';
+                return;
+            }
+        } catch (invErr) {
+            console.error('Auto accept invite error:', invErr);
+        }
+    }
+
     // Redirect business users to the business dashboard
     // Only redirect if not already bounced back (prevents infinite loop)
     var plan = currentProfile ? currentProfile.account_type : 'pro';
