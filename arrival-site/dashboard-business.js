@@ -211,6 +211,31 @@ async function loadHome() {
     var el = document.getElementById('home-welcome');
     if (el) el.textContent = 'Welcome back, ' + (firstName || 'there') + '.';
 
+    // Show team/business name
+    var teamLabel = document.getElementById('home-team-label');
+    if (teamLabel && currentTeam && currentTeam.name) {
+        var roleName = currentTeamMembership ? currentTeamMembership.role : '';
+        var roleDisplay = roleName === 'admin' ? 'Admin' : roleName.charAt(0).toUpperCase() + roleName.slice(1);
+        teamLabel.textContent = currentTeam.name + ' — ' + roleDisplay;
+        teamLabel.style.display = '';
+    }
+
+    // Sidebar team badge
+    var sidebarBadge = document.getElementById('sidebar-team-badge');
+    var sidebarName = document.getElementById('sidebar-team-name');
+    var sidebarRole = document.getElementById('sidebar-team-role');
+    if (sidebarBadge && currentTeam && currentTeam.name) {
+        sidebarName.textContent = currentTeam.name;
+        sidebarRole.textContent = currentTeamMembership ? (currentTeamMembership.role === 'admin' ? 'Admin' : currentTeamMembership.role.charAt(0).toUpperCase() + currentTeamMembership.role.slice(1)) : '';
+        sidebarBadge.style.display = '';
+    }
+
+    // Hide admin-only buttons for non-admins
+    var isAdmin = currentTeamMembership && currentTeamMembership.role === 'admin';
+    document.querySelectorAll('.admin-only-btn').forEach(function(btn) {
+        btn.style.display = isAdmin ? '' : 'none';
+    });
+
     // Team members count (active)
     var membersResult = await sb.from('team_members')
         .select('id', { count: 'exact', head: true })
