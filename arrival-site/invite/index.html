@@ -309,10 +309,35 @@
       console.error('Invite signup error:', error);
       var msg = error.message || 'Something went wrong. Please try again.';
       if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('users_email_key')) {
-        switchTab('login');
-        showLoginError('This email already has an account. Enter your password to join the team.');
-        setLoading(false);
-        return;
+        // Account exists — auto-try signing in with the password they entered
+        try {
+          var loginResult = await sb.auth.signInWithPassword({ email: email, password: password });
+          if (loginResult.error) throw loginResult.error;
+
+          var loginUserId = loginResult.data.user.id;
+
+          // Update profile with any new info they entered
+          await sb.from('users').upsert({
+            id: loginUserId,
+            email: email,
+            first_name: firstName,
+            last_name: lastName,
+            primary_trade: trade,
+            experience_level: experience,
+            account_type: 'business'
+          }, { onConflict: 'id' });
+
+          // Accept the invite
+          var accepted = await acceptInvite(loginUserId, email);
+          window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
+          return;
+        } catch (loginErr) {
+          console.error('Auto-login failed:', loginErr);
+          switchTab('login');
+          showLoginError('This email already has an account. Enter your password to join the team.');
+          setLoading(false);
+          return;
+        }
       }
       showError(msg);
       setLoading(false);
