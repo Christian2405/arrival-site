@@ -280,7 +280,8 @@
       if (userResult.error) throw userResult.error;
 
       // 3. Accept the team invite
-      var accepted = await acceptInvite(email);
+      var signupToken = result.data.session.access_token;
+      var accepted = await acceptInvite(email, signupToken);
 
       if (!accepted) {
         // No pending invite found — create a free subscription
@@ -328,7 +329,8 @@
           }, { onConflict: 'id' });
 
           // Accept the invite
-          var accepted = await acceptInvite(email);
+          var autoLoginToken = loginResult.data.session.access_token;
+          var accepted = await acceptInvite(email, autoLoginToken);
           window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
           return;
         } catch (loginErr) {
@@ -359,22 +361,31 @@
   }
 
   // ── Accept invite helper (server-side to bypass RLS) ──
-  async function acceptInvite(email) {
-    var session = await sb.auth.getSession();
-    if (!session.data.session) return false;
+  async function acceptInvite(email, token) {
+    if (!token) {
+      var session = await sb.auth.getSession();
+      token = session.data.session ? session.data.session.access_token : null;
+    }
+    if (!token) { console.error('No token for accept-invite'); return false; }
 
-    var resp = await fetch('/.netlify/functions/accept-invite', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + session.data.session.access_token
-      },
-      body: JSON.stringify({ email: email })
-    });
+    try {
+      var resp = await fetch('/.netlify/functions/accept-invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ email: email })
+      });
 
-    var data = await resp.json();
-    console.log('Accept invite response:', JSON.stringify(data));
-    return data.accepted === true;
+      var data = await resp.json();
+      console.log('Accept invite response:', resp.status, JSON.stringify(data));
+      if (!resp.ok) { console.error('Accept invite failed:', data.error); }
+      return data.accepted === true;
+    } catch (err) {
+      console.error('Accept invite fetch error:', err);
+      return false;
+    }
   }
 
   // ── Login form submit ──
@@ -394,7 +405,8 @@
       var userId = result.data.user.id;
 
       // Accept the invite
-      var accepted = await acceptInvite(email);
+      var loginToken = result.data.session.access_token;
+      var accepted = await acceptInvite(email, loginToken);
 
       // Redirect to appropriate dashboard
       window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
@@ -446,29 +458,11 @@
         account_type: 'business'
       }, { onConflict: 'id' });
 
-      // Accept invite
-      var inviteResult = await sb.from('team_members')
-        .select('id, team_id')
-        .eq('email', inviteEmail)
-        .eq('status', 'invited')
-        .limit(1);
+      // Accept invite (server-side)
+      var oauthToken = sessionResult.data.session.access_token;
+      var accepted = await acceptInvite(inviteEmail, oauthToken);
 
-      if (inviteResult.data && inviteResult.data.length > 0) {
-        var invite = inviteResult.data[0];
-        await sb.from('team_members').update({
-          user_id: userId,
-          status: 'active',
-          joined_at: new Date().toISOString()
-        }).eq('id', invite.id);
-
-        await sb.from('subscriptions').upsert({
-          user_id: userId,
-          plan: 'business',
-          status: 'active'
-        }, { onConflict: 'user_id' });
-      }
-
-      window.location.href = '/dashboard-individual';
+      window.location.href = accepted ? '/dashboard-business' : '/dashboard-individual';
     } catch (err) {
       console.error('OAuth invite error:', err);
       showError('Account created but we could not link your team invite. Please contact your team admin.');
