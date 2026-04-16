@@ -818,8 +818,6 @@ async function handleInvite() {
         // Insert the team member
         var result = await sb.from('team_members').insert({
             team_id: currentTeam.id,
-            first_name: firstName,
-            last_name: lastName,
             email: email,
             role: role,
             status: 'invited',
