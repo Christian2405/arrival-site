@@ -723,7 +723,7 @@ function renderTeamTable(members) {
     tbody.innerHTML = members.map(function(m) {
         var name, nameStyle = '';
         if (m.status === 'invited') {
-            name = 'Pending';
+            name = ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || 'Pending';
             nameStyle = ' style="color:var(--text-muted)"';
         } else if (m.users) {
             name = (m.users.first_name || '') + ' ' + (m.users.last_name || '');
@@ -818,6 +818,8 @@ async function handleInvite() {
         // Insert the team member
         var result = await sb.from('team_members').insert({
             team_id: currentTeam.id,
+            first_name: firstName,
+            last_name: lastName,
             email: email,
             role: role,
             status: 'invited',
