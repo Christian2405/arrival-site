@@ -189,25 +189,27 @@ export default function LoginScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Apple Sign-In */}
-            <TouchableOpacity
-              style={[styles.appleButton, appleLoading && styles.buttonDisabled]}
-              onPress={handleAppleSignIn}
-              disabled={isLoading || googleLoading || appleLoading}
-              activeOpacity={0.8}
-            >
-              {appleLoading ? (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#FFF" size="small" />
-                  <Text style={styles.appleButtonText}>Connecting...</Text>
-                </View>
-              ) : (
-                <>
-                  <Ionicons name="logo-apple" size={20} color="#FFF" />
-                  <Text style={styles.appleButtonText}>Continue with Apple</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            {/* Apple Sign-In (iOS only) */}
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={[styles.appleButton, appleLoading && styles.buttonDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={isLoading || googleLoading || appleLoading}
+                activeOpacity={0.8}
+              >
+                {appleLoading ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator color="#FFF" size="small" />
+                    <Text style={styles.appleButtonText}>Connecting...</Text>
+                  </View>
+                ) : (
+                  <>
+                    <Ionicons name="logo-apple" size={20} color="#FFF" />
+                    <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             {/* Google Sign-In */}
             <TouchableOpacity
