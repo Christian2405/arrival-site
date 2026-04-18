@@ -25,3 +25,9 @@
   from = "/delete-data"
   to = "/index.html"
   status = 200
+
+# Smart app download link — QR codes point here
+[[redirects]]
+  from = "/app"
+  to = "/app.html"
+  status = 200
