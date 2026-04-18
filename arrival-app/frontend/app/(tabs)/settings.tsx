@@ -251,6 +251,9 @@ export default function SettingsScreen() {
           </View>
           <Text style={st.profileName}>{displayName}</Text>
           <Text style={st.profileEmail}>{displayEmail}</Text>
+          <View style={st.planPill}>
+            <Text style={st.planPillText}>{planLabel} Plan</Text>
+          </View>
         </View>
 
         {/* Usage */}

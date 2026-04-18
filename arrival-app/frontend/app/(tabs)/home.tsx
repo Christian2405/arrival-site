@@ -1114,6 +1114,15 @@ export default function HomeScreen() {
     ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Arrival User'
     : 'Arrival User';
 
+  // --- Plan label (Free / Pro / Pro (Trial) / Business) ---
+  const isTrial = !!subscription?.trial_ends_at && !subscription?.stripe_subscription_id;
+  const planRaw = (plan || 'free').toString();
+  const planLabel = planRaw === 'free'
+    ? 'Free'
+    : isTrial
+      ? `${planRaw.charAt(0).toUpperCase() + planRaw.slice(1)} (Trial)`
+      : planRaw.charAt(0).toUpperCase() + planRaw.slice(1);
+
   // --- Filtered messages for Text Mode ---
   const textMessages = messages.filter(m => m.displayMode === 'text' || !m.displayMode);
 
@@ -1710,7 +1719,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.drawerName}>{displayName}</Text>
-              <Text style={styles.drawerPlan}>{profile?.primary_trade ? profile.primary_trade.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Trade Worker'}</Text>
+              <Text style={styles.drawerPlan}>{planLabel} Plan</Text>
             </View>
             <Ionicons name="settings-outline" size={18} color={Colors.textMuted} />
           </TouchableOpacity>
