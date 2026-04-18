@@ -7,6 +7,9 @@ uploads to S3, and logs metadata to Supabase.
 import asyncio
 import base64
 import logging
+import os
+import shutil
+import tempfile
 import time
 import uuid
 from datetime import datetime
@@ -32,6 +35,94 @@ _SERVICE_HEADERS = {
     "Content-Type": "application/json",
     "Prefer": "return=representation",
 }
+
+
+def _resolve_ffmpeg_path() -> tuple[str | None, str]:
+    """Return (path, source) for an ffmpeg binary, or (None, error)."""
+    sys_ff = shutil.which("ffmpeg")
+    if sys_ff:
+        return sys_ff, f"system:{sys_ff}"
+    try:
+        import imageio_ffmpeg  # type: ignore
+        path = imageio_ffmpeg.get_ffmpeg_exe()
+        if path and os.path.exists(path):
+            try:
+                os.chmod(path, 0o755)
+            except Exception:
+                pass
+            return path, f"imageio:{path}"
+        return None, f"imageio_ffmpeg returned invalid path: {path}"
+    except ImportError:
+        return None, "imageio-ffmpeg not installed and no system ffmpeg"
+    except Exception as e:
+        return None, f"imageio_ffmpeg error: {e}"
+
+
+async def encode_jpegs_to_mp4(frames: list[bytes], fps: int = 2) -> tuple[bytes | None, str]:
+    """
+    Encode JPEG frames to MP4 via ffmpeg.
+    Returns (mp4_bytes, error_string). On success error_string is "".
+    Writes frames to temp files (more reliable than image2pipe for varied JPEGs).
+    """
+    if not frames:
+        return None, "no frames to encode"
+
+    ffmpeg_path, source = _resolve_ffmpeg_path()
+    if not ffmpeg_path:
+        return None, f"ffmpeg unavailable: {source}"
+
+    tmpdir = tempfile.mkdtemp(prefix="arrival_clip_")
+    try:
+        for i, frame in enumerate(frames, start=1):
+            with open(os.path.join(tmpdir, f"frame_{i:06d}.jpg"), "wb") as f:
+                f.write(frame)
+
+        output_path = os.path.join(tmpdir, "out.mp4")
+
+        cmd = [
+            ffmpeg_path,
+            "-y",
+            "-loglevel", "error",
+            "-framerate", str(fps),
+            "-i", os.path.join(tmpdir, "frame_%06d.jpg"),
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            "-r", str(fps),
+            "-movflags", "+faststart",
+            output_path,
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            err = stderr.decode("utf-8", errors="replace").strip()[:400]
+            return None, f"ffmpeg rc={proc.returncode} via {source}: {err or 'no stderr'}"
+
+        if not os.path.exists(output_path):
+            return None, f"ffmpeg ok but no output file (via {source})"
+
+        with open(output_path, "rb") as f:
+            mp4_data = f.read()
+
+        if not mp4_data:
+            return None, f"ffmpeg produced empty output (via {source})"
+
+        return mp4_data, ""
+
+    except Exception as e:
+        return None, f"encode exception ({type(e).__name__}): {e}"
+    finally:
+        try:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 class SpatialRecorder:
@@ -578,10 +669,13 @@ class SpatialRecorder:
 
             # 3. Encode to MP4 via ffmpeg
             await self._update_clip_status(clip_id, "encoding")
-            mp4_data = await self._encode_mp4(frames, fps=2)
+            mp4_data, encode_error = await self._encode_mp4(frames, fps=2)
 
             if not mp4_data:
-                await self._update_clip_status(clip_id, "failed", error="ffmpeg encoding failed")
+                # Surface the real ffmpeg error into the DB so we can diagnose
+                err_msg = encode_error or "ffmpeg encoding failed (no detail)"
+                await self._update_clip_status(clip_id, "failed", error=err_msg[:500])
+                logger.error(f"Clip {clip_id} encode failed: {err_msg[:300]}")
                 return
 
             logger.info(f"Clip {clip_id}: encoded to {len(mp4_data)} bytes MP4")
@@ -620,45 +714,9 @@ class SpatialRecorder:
         finally:
             self._recording = False
 
-    async def _encode_mp4(self, frames: list[bytes], fps: int = 2) -> bytes | None:
-        """Encode JPEG frames to MP4 via ffmpeg (uses imageio-ffmpeg bundled binary)."""
-        try:
-            # Get ffmpeg binary path from imageio-ffmpeg (pip-installed, no system ffmpeg needed)
-            import imageio_ffmpeg
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-
-            proc = await asyncio.create_subprocess_exec(
-                ffmpeg_path,
-                "-f", "image2pipe",
-                "-framerate", str(fps),
-                "-i", "pipe:0",
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
-                "-f", "mp4",
-                "-y",
-                "pipe:1",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            input_data = b"".join(frames)
-            stdout, stderr = await proc.communicate(input=input_data)
-
-            if proc.returncode != 0:
-                logger.error(f"ffmpeg failed (rc={proc.returncode}): {stderr.decode()[:500]}")
-                return None
-
-            return stdout
-
-        except ImportError:
-            logger.error("imageio-ffmpeg not installed — pip install imageio-ffmpeg")
-            return None
-        except Exception as e:
-            logger.error(f"ffmpeg error: {e}")
-            return None
+    async def _encode_mp4(self, frames: list[bytes], fps: int = 2) -> tuple[bytes | None, str]:
+        """Encode JPEG frames to MP4. Delegates to module-level helper."""
+        return await encode_jpegs_to_mp4(frames, fps=fps)
 
     # --- Supabase helpers ---
 

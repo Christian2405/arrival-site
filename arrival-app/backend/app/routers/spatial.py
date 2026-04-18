@@ -174,33 +174,36 @@ async def _stitch_voice_clip(
         if len(jpeg_frames) < 2:
             return
 
-        # Encode to MP4 via ffmpeg (uses imageio-ffmpeg bundled binary)
-        import imageio_ffmpeg
-        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-        proc = await asyncio.create_subprocess_exec(
-            ffmpeg_path,
-            "-f", "image2pipe",
-            "-framerate", "2",
-            "-i", "pipe:0",
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-pix_fmt", "yuv420p",
-            "-r", "2",           # Force constant frame rate output (CFR) — required for IMU sync
-            "-vsync", "1",       # CFR mode: duplicate/drop frames to maintain exact 2fps
-            "-movflags", "+faststart",
-            "-f", "mp4",
-            "-y", "pipe:1",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        # Encode to MP4 via shared robust helper
+        from app.services.spatial_recorder import encode_jpegs_to_mp4
+        mp4_data, encode_error = await encode_jpegs_to_mp4(jpeg_frames, fps=2)
 
-        input_data = b"".join(jpeg_frames)
-        stdout, stderr = await proc.communicate(input=input_data)
-
-        if proc.returncode != 0 or not stdout:
-            logger.error(f"Voice clip ffmpeg failed: {stderr.decode()[:200]}")
+        if not mp4_data:
+            logger.error(f"Voice clip {clip_id} ffmpeg failed: {encode_error[:300]}")
+            # Log the failure to DB so we can diagnose
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        f"{SUPABASE_URL}/rest/v1/spatial_clips",
+                        headers=_SERVICE_HEADERS,
+                        json={
+                            "id": clip_id,
+                            "s3_key": s3_key,
+                            "s3_bucket": AWS_S3_BUCKET,
+                            "trigger_type": "voice_query",
+                            "trigger_text": (trigger_text or "")[:2000],
+                            "ai_response": (ai_response or "")[:2000],
+                            "status": "failed",
+                            "error_message": encode_error[:500],
+                            "frame_count": len(jpeg_frames),
+                        },
+                        timeout=10,
+                    )
+            except Exception as log_err:
+                logger.error(f"Failed to record voice-clip failure: {log_err}")
             return
+
+        stdout = mp4_data  # rest of function uses 'stdout' variable
 
         # Upload to S3
         await upload_clip(s3_key, stdout)
