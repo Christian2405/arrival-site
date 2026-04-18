@@ -518,16 +518,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   ensureProfileExists: async (user: User, overrideEmail?: string) => {
     try {
       // Check if profile already exists by ID
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('users')
-        .select('id, primary_trade')
+        .select('id, primary_trade, email')
         .eq('id', user.id)
         .maybeSingle();
 
+      // CRITICAL: if the lookup errored, do NOT assume new user — that would
+      // wrongly send existing users to onboarding on every transient network blip.
+      if (existingError) {
+        console.error('[Auth] ensureProfileExists lookup error — not changing onboarding state:', existingError);
+        return;
+      }
+
       if (existing) {
         // Existing profile — check if email is an Apple relay that needs fixing
-        const { data: profile } = await supabase.from('users').select('email').eq('id', user.id).maybeSingle();
-        if (profile?.email?.includes('privaterelay.appleid.com')) {
+        if (existing.email?.includes('privaterelay.appleid.com')) {
           // Show onboarding so user can enter their real email
           set({ needsOnboarding: true });
           return;
@@ -535,8 +541,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
-      // New OAuth user — always show onboarding
-      // Use overrideEmail (Apple's real email) if available, otherwise fall back to user.email
+      // No row exists — genuinely new OAuth user
       const email = overrideEmail || user.email || '';
       console.log('[Auth] New OAuth user, showing onboarding:', email);
       set({ needsOnboarding: true });
