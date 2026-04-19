@@ -228,17 +228,65 @@ async def _reindex_stuck_documents():
         logger.warning(f"[reindex] Startup reindex failed: {e}")
 
 
+async def _smoke_test_anthropic_models():
+    """
+    Verify configured Anthropic models actually exist before serving traffic.
+    A bad model name silently 404s every request (which is what broke Job Mode
+    on April 10 with the fake 'claude-sonnet-4-6'). This logs SUCCESS or
+    FAILURE prominently so deploy regressions are caught immediately.
+
+    Does NOT raise — we don't want to take down the whole backend just because
+    of a model issue. The errors are loud enough in Render logs.
+    """
+    try:
+        from app import config
+        import anthropic
+
+        if not config.ANTHROPIC_API_KEY:
+            logger.warning("[model-smoke] Skipped — ANTHROPIC_API_KEY not set")
+            return
+
+        # Test each unique configured model exactly once
+        models_to_test = list(set([
+            config.ANTHROPIC_MODEL,
+            config.ANTHROPIC_VOICE_MODEL,
+            config.ANTHROPIC_VISION_MODEL,
+        ]))
+
+        client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+
+        for model_name in models_to_test:
+            try:
+                await client.messages.create(
+                    model=model_name,
+                    max_tokens=1,
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+                logger.info(f"[model-smoke] OK — {model_name}")
+            except anthropic.NotFoundError as e:
+                logger.error(
+                    f"[model-smoke] *** MODEL NOT FOUND *** {model_name} — "
+                    f"every LLM call will 404. Update Render env var or app/config.py. Error: {e}"
+                )
+            except Exception as e:
+                logger.error(f"[model-smoke] {model_name} — call failed: {type(e).__name__}: {e}")
+    except Exception as e:
+        logger.error(f"[model-smoke] Unexpected error during smoke test: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle — launches keep-alive + seeds knowledge base."""
     keep_alive_task = asyncio.create_task(_keep_alive())
     seed_task = asyncio.create_task(_seed_knowledge_base())
     reindex_task = asyncio.create_task(_reindex_stuck_documents())
+    smoke_task = asyncio.create_task(_smoke_test_anthropic_models())
     yield
     keep_alive_task.cancel()
     seed_task.cancel()
     reindex_task.cancel()
-    for t in (keep_alive_task, seed_task, reindex_task):
+    smoke_task.cancel()
+    for t in (keep_alive_task, seed_task, reindex_task, smoke_task):
         try:
             await t
         except asyncio.CancelledError:
