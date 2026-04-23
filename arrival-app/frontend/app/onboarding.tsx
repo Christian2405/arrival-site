@@ -43,13 +43,14 @@ export default function OnboardingScreen() {
   const oauthFirst = meta.first_name || oauthFullName.split(' ')[0] || '';
   const oauthLast = meta.last_name || oauthFullName.split(' ').slice(1).join(' ') || '';
 
+  // Apple guideline 4.0.0: after Sign in with Apple, do NOT prompt for name/email.
+  // Accept whatever Apple returned (including privaterelay.appleid.com addresses).
+  const isAppleUser = user?.app_metadata?.provider === 'apple';
   const rawEmail = meta.apple_real_email || user?.email || '';
-  // If it's an Apple relay address, leave blank so user enters their real email
-  const initialEmail = rawEmail.includes('privaterelay.appleid.com') ? '' : rawEmail;
 
   const [firstName, setFirstName] = useState(oauthFirst);
   const [lastName, setLastName] = useState(oauthLast);
-  const [email, setEmail] = useState(initialEmail);
+  const [email, setEmail] = useState(rawEmail);
   const [trade, setTrade] = useState('');
   const [experience, setExperience] = useState('1_3_years');
   const [loading, setLoading] = useState(false);
@@ -58,13 +59,17 @@ export default function OnboardingScreen() {
   const handleComplete = async () => {
     setError('');
 
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('Please enter your name.');
-      return;
-    }
-    if (!email.trim()) {
-      setError('Please enter your email.');
-      return;
+    // For Apple users: name/email already captured from the Apple credential —
+    // don't validate or re-prompt. For other sign-in methods, keep validation.
+    if (!isAppleUser) {
+      if (!firstName.trim() || !lastName.trim()) {
+        setError('Please enter your name.');
+        return;
+      }
+      if (!email.trim()) {
+        setError('Please enter your email.');
+        return;
+      }
     }
     if (!trade) {
       setError('Please select your trade.');
@@ -110,49 +115,53 @@ export default function OnboardingScreen() {
             </View>
           ) : null}
 
-          {/* Name row */}
-          <View style={styles.nameRow}>
-            <View style={[styles.inputGroup, styles.nameField]}>
-              <Text style={styles.label}>First Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="John"
-                placeholderTextColor={Colors.textLight}
-                value={firstName}
-                onChangeText={setFirstName}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-            <View style={[styles.inputGroup, styles.nameField]}>
-              <Text style={styles.label}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Smith"
-                placeholderTextColor={Colors.textLight}
-                value={lastName}
-                onChangeText={setLastName}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-          </View>
+          {/* Name + Email — hidden for Apple users per Apple guideline 4.0.0.
+              Apple already provided these via the credential on first sign-in. */}
+          {!isAppleUser && (
+            <>
+              <View style={styles.nameRow}>
+                <View style={[styles.inputGroup, styles.nameField]}>
+                  <Text style={styles.label}>First Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="John"
+                    placeholderTextColor={Colors.textLight}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    autoCapitalize="words"
+                    editable={!loading}
+                  />
+                </View>
+                <View style={[styles.inputGroup, styles.nameField]}>
+                  <Text style={styles.label}>Last Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Smith"
+                    placeholderTextColor={Colors.textLight}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    autoCapitalize="words"
+                    editable={!loading}
+                  />
+                </View>
+              </View>
 
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={Colors.textLight}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="you@example.com"
+                  placeholderTextColor={Colors.textLight}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                />
+              </View>
+            </>
+          )}
 
           {/* Trade picker */}
           <View style={styles.inputGroup}>

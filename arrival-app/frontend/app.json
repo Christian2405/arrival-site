@@ -15,7 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.arrivalcompany.arrival",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {

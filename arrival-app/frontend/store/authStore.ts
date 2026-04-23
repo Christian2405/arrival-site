@@ -345,26 +345,59 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (data.session) {
         set({ session: data.session, user: data.session.user });
 
-        // Apple only provides name + email on FIRST sign-in — store them
-        const appleEmail = credential.email || '';
+        // Apple only provides name on FIRST sign-in — store it so we have a
+        // display name for the user going forward. We DO NOT capture
+        // credential.email: the iOS SDK returns the user's real address
+        // locally even when they chose "Hide My Email", and storing that
+        // defeats Apple's privacy intent. Instead we trust the ID token's
+        // email claim (already persisted to auth.users by Supabase), which
+        // is the real email if the user shared it, or the relay if hidden.
         const appleFirstName = credential.fullName?.givenName || '';
         const appleLastName = credential.fullName?.familyName || '';
 
-        if (appleFirstName || appleEmail) {
+        // Start with the session user; we'll overlay fresh metadata if Apple
+        // gave us a name this call so ensureProfileExists picks it up.
+        let userForProfile = data.session.user;
+
+        if (appleFirstName) {
           await supabase.auth.updateUser({
             data: {
-              ...(appleFirstName && {
-                first_name: appleFirstName,
-                last_name: appleLastName,
-                full_name: `${appleFirstName} ${appleLastName}`.trim(),
-              }),
-              ...(appleEmail && { apple_real_email: appleEmail }),
+              first_name: appleFirstName,
+              last_name: appleLastName,
+              full_name: `${appleFirstName} ${appleLastName}`.trim(),
             },
           });
+          // Locally overlay — updateUser's returned user often has stale
+          // user_metadata until the next token refresh, so we can't trust it.
+          userForProfile = {
+            ...userForProfile,
+            user_metadata: {
+              ...(userForProfile.user_metadata || {}),
+              first_name: appleFirstName,
+              last_name: appleLastName,
+              full_name: `${appleFirstName} ${appleLastName}`.trim(),
+            },
+          } as typeof userForProfile;
         }
 
-        // Pass Apple's real email so the profile uses it instead of the relay address
-        await get().ensureProfileExists(data.session.user, appleEmail || undefined);
+        // Let ensureProfileExists use session.user.email (what Apple put in
+        // the ID token). No overrideEmail — see privacy note above.
+        await get().ensureProfileExists(userForProfile);
+
+        // If the public.users row was created BEFORE we got the name (existing
+        // row from a previous sign-in, or race condition), force the Apple
+        // name in now. Only runs when Apple gave us a name this call.
+        if (appleFirstName) {
+          await supabase
+            .from('users')
+            .update({
+              first_name: appleFirstName,
+              last_name: appleLastName,
+            })
+            .eq('id', data.session.user.id)
+            .or('first_name.is.null,first_name.eq.');
+        }
+
         await get().loadProfile();
       }
 
@@ -532,12 +565,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (existing) {
-        // Existing profile — check if email is an Apple relay that needs fixing
-        if (existing.email?.includes('privaterelay.appleid.com')) {
-          // Show onboarding so user can enter their real email
-          set({ needsOnboarding: true });
-          return;
-        }
+        // Existing profile — done. Apple privaterelay.appleid.com emails are
+        // accepted as-is (Apple guideline 4.0.0 — cannot prompt user for a
+        // "real" email after Sign in with Apple).
         return;
       }
 
