@@ -10,9 +10,9 @@ const supabase = createClient(
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Price IDs to identify plan type
-const PRICE_PRO = 'price_1T2wkcAO3BMpwX672CsLrhdQ';
-const PRICE_BIZ_BASE = 'price_1T2wlnAO3BMpwX67HZQKSk6R';
-const PRICE_BIZ_SEAT = 'price_1T2wmDAO3BMpwX67JSkM2fkF';
+const PRICE_PRO = 'price_1TPsubAiNZ20TwHnuDPDIauw';
+const PRICE_BIZ_BASE = 'price_1T2wlnAO3BMpwX67HZQKSk6R'; // legacy/unused
+const PRICE_BIZ_SEAT = 'price_1TPsuaAiNZ20TwHnPojM8uHf';
 
 const FROM_EMAIL = 'Arrival <noreply@arrivalcompany.com>';
 

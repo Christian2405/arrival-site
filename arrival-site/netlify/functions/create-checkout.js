@@ -9,9 +9,9 @@ const supabase = createClient(
 
 // Stripe Price IDs
 const PRICES = {
-  pro: 'price_1T2wkcAO3BMpwX672CsLrhdQ',
-  business_base: 'price_1T2wlnAO3BMpwX67HZQKSk6R',
-  business_seat: 'price_1T2wmDAO3BMpwX67JSkM2fkF'
+  pro: 'price_1TPsubAiNZ20TwHnuDPDIauw',
+  business_base: 'price_1T2wlnAO3BMpwX67HZQKSk6R', // legacy/unused (test); business plan uses business_seat × seatCount
+  business_seat: 'price_1TPsuaAiNZ20TwHnPojM8uHf'
 };
 
 exports.handler = async (event) => {

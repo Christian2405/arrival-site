@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const PRICE_BIZ_SEAT = 'price_1T2wmDAO3BMpwX67JSkM2fkF';
+const PRICE_BIZ_SEAT = 'price_1TPsuaAiNZ20TwHnPojM8uHf';
 
 exports.handler = async (event) => {
   const headers = {
